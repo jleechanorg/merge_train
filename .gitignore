@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+.DS_Store
+.idea/
+.vscode/
+*.swp
+# Local lock log artifacts from running tests
+/tmp_lock_test/

@@ -1,0 +1,43 @@
+# merge_train example registry.
+#
+# Maps file paths (glob patterns) to named domains. Two PRs that touch
+# files in the same domain will collide at spawn time.
+#
+# Pattern syntax: fnmatch globs. Leading "./" is stripped before
+# matching. Use "**/x" for any depth via fnmatch (note: fnmatch does
+# NOT recurse like glob; use explicit prefixes if you need that).
+#
+# Owners are advisory metadata (e.g. for routing review requests).
+
+domains:
+  rewards-engine:
+    paths:
+      - "mvp_site/rewards_engine.py"
+      - "mvp_site/tests/test_rewards_engine*.py"
+    owners:
+      - "@rewards-team"
+
+  level-up-pipeline:
+    paths:
+      - "mvp_site/world_logic.py"
+      - "mvp_site/llm_parser.py"
+      - "mvp_site/agents.py"
+    owners:
+      - "@level-up-team"
+
+  game-state:
+    paths:
+      - "mvp_site/game_state.py"
+      - "mvp_site/tests/test_game_state*.py"
+
+  ci-workflows:
+    paths:
+      - ".github/workflows/*.yml"
+      - ".github/workflows/*.yaml"
+    owners:
+      - "@infra"
+
+  docs:
+    paths:
+      - "docs/*.md"
+      - "README.md"
