@@ -47,9 +47,17 @@ fi
 # shellcheck disable=SC2206
 FILES=( ${STAGED} )
 
+# Diff-mode lets two PRs edit the same file but disjoint Python symbols.
+# Set MERGE_TRAIN_DIFF_MODE=0 to fall back to file-level checks.
+DIFF_ARG=()
+if [[ "${MERGE_TRAIN_DIFF_MODE:-1}" != "0" ]]; then
+  DIFF_ARG=( --diff-mode )
+fi
+
 if command -v domain_lock >/dev/null 2>&1; then
-  domain_lock "${REG_ARG[@]}" "${LOG_ARG[@]}" check --files "${FILES[@]}" "${PR_ARG[@]}"
+  domain_lock "${REG_ARG[@]}" "${LOG_ARG[@]}" \
+    check --files "${FILES[@]}" "${PR_ARG[@]}" "${DIFF_ARG[@]}"
 else
   python3 -m merge_train.domain_lock "${REG_ARG[@]}" "${LOG_ARG[@]}" \
-    check --files "${FILES[@]}" "${PR_ARG[@]}"
+    check --files "${FILES[@]}" "${PR_ARG[@]}" "${DIFF_ARG[@]}"
 fi

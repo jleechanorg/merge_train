@@ -17,6 +17,11 @@
 # Optional:
 #   MERGE_TRAIN_REGISTRY path to YAML (default: file_domains.yaml)
 #   MERGE_TRAIN_LOG      path to JSONL (default: pr_domain_locks.jsonl)
+#   MERGE_TRAIN_DIFF_MODE  "1" (default) resolves Python symbols from
+#                        the *staged* diff; "0" falls back to file-level.
+#                        At spawn time there's no staged diff yet, so the
+#                        spawn hook always runs file-level — diff-mode is
+#                        only meaningful at commit time.
 
 set -euo pipefail
 
