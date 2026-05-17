@@ -138,7 +138,7 @@ class LockLog:
         with self.path.open("r", encoding="utf-8") as fh:
             for raw in fh:
                 raw = raw.strip()
-                if not raw:
+                if not raw or raw.startswith("#"):
                     continue
                 out.append(LockEntry.from_json(raw))
         return out

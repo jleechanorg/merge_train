@@ -396,6 +396,19 @@ def test_cli_audit_json(tmp_path: Path):
     assert "d1" in payload["active_locks"]
 
 
+def test_entries_skips_comment_lines(tmp_path: Path):
+    log_path = tmp_path / "log.jsonl"
+    entry = LockEntry(domain="d1", pr=1, agent="a", branch="b", opened_at="2026-01-01T00:00:00Z", status="reserved")
+    log_path.write_text(
+        "# this is a comment\n" + entry.to_json() + "\n# another comment\n",
+        encoding="utf-8",
+    )
+    log = LockLog(log_path)
+    entries = log.entries()
+    assert len(entries) == 1
+    assert entries[0].domain == "d1"
+
+
 def test_cli_missing_registry_exit2(tmp_path: Path):
     cmd = [
         sys.executable, "-m", "merge_train.domain_lock",
