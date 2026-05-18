@@ -804,3 +804,48 @@ def test_cli_subcommand_global_opts_override_top_level(tmp_path: Path):
     assert r.returncode == 0, f"stderr={r.stderr!r}"
     assert log_sub.exists(), "sub-level --log should override top-level"
     assert not log_top.exists(), "top-level --log should NOT have been used"
+
+
+def test_cli_subcommand_registry_override_top_level(tmp_path: Path):
+    """Sub-level --registry overrides top-level --registry. Prevents regression
+    where _add_global_opts_to_subparser silently dropped --registry."""
+    reg_top = tmp_path / "reg_top.yaml"
+    reg_sub = tmp_path / "reg_sub.yaml"
+    log = tmp_path / "log.jsonl"
+    # reg_top has ONLY d1; reg_sub has ONLY d2 — issuing a `reserve --domain d2`
+    # must succeed via reg_sub and fail via reg_top.
+    reg_top.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
+    reg_sub.write_text(yaml.safe_dump({"domains": {"d2": {"paths": ["b.py"]}}}))
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg_top), "--log", str(log),
+        "reserve",
+        "--domain", "d2", "--pr", "4", "--agent", "a", "--branch", "b",
+        "--registry", str(reg_sub),  # override
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr={r.stderr!r}"
+    assert "RESERVED" in r.stdout
+    assert "d2" in r.stdout
+
+
+def test_cli_reserve_plan_accepts_global_opts_after_subcommand(tmp_path: Path):
+    """`reserve-plan` (hyphenated subcommand) must also accept globals at sub-level."""
+    reg, log = _global_opts_fixture(tmp_path)
+    plan = tmp_path / "plan.yaml"
+    plan.write_text(yaml.safe_dump({
+        "plan": [
+            {"domain": "d1", "symbols": []},
+            {"domain": "d2", "symbols": []},
+        ]
+    }))
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "reserve-plan",
+        "--pr", "11", "--agent", "a", "--branch", "b",
+        "--plan", str(plan),
+        "--registry", str(reg), "--log", str(log),
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr={r.stderr!r}"
+    assert log.exists()
