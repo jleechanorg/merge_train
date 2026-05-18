@@ -66,6 +66,8 @@ class Domain:
     name: str
     paths: tuple[str, ...]
     owners: tuple[str, ...] = ()
+    per_pr_unique: bool = False  # files are per-PR unique; never block each other
+    advisory: bool = False       # log conflict but don't block spawning
 
 
 @dataclass
@@ -80,7 +82,12 @@ class Registry:
         for name, body in (data.get("domains") or {}).items():
             paths = tuple(body.get("paths") or ())
             owners = tuple(body.get("owners") or ())
-            domains[name] = Domain(name=name, paths=paths, owners=owners)
+            per_pr_unique = bool(body.get("per_pr_unique", False))
+            advisory = bool(body.get("advisory", False))
+            domains[name] = Domain(
+                name=name, paths=paths, owners=owners,
+                per_pr_unique=per_pr_unique, advisory=advisory,
+            )
         return cls(domains=domains)
 
     def domain_for_path(self, path: str) -> Optional[str]:
@@ -658,8 +665,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="dry-run: predict pairwise conflicts + recommend merge order for a "
              "set of PRs declared in a YAML plan",
     )
-    pr_pc.add_argument("--plan", required=True,
+    pr_pc.add_argument("--plan",
                        help="path to YAML/JSON file with a 'prs' list")
+    pr_pc.add_argument("--from-prs", metavar="N,M,...",
+                       help="comma-separated PR numbers; bypasses --plan, "
+                            "fetches file lists from GitHub via gh")
+    pr_pc.add_argument("--repo", metavar="OWNER/REPO",
+                       help="GitHub repo for --from-prs / --enrich-symbols "
+                            "(e.g. jleechanorg/worldarchitect.ai)")
+    pr_pc.add_argument("--enrich-symbols", action="store_true",
+                       help="auto-populate symbols_by_file from gh pr diff "
+                            "for PRs that declare no symbols")
     pr_pc.add_argument("--no-textual", action="store_true",
                        help="skip git merge-tree textual conflict check")
     pr_pc.add_argument("--git-base", default="origin/main",
@@ -817,13 +833,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.cmd == "predict-conflicts":
         from merge_train.predict import cli_predict_conflicts
         cwd = Path(args.git_cwd) if args.git_cwd else None
+        plan_path = getattr(args, "plan", None)
+        from_prs = getattr(args, "from_prs", None)
+        if not plan_path and not from_prs:
+            print("error: one of --plan or --from-prs is required",
+                  file=sys.stderr)
+            return 2
         return cli_predict_conflicts(
-            plan_path=args.plan,
+            plan_path=plan_path,
             registry=registry,
             include_textual=not args.no_textual,
             git_base=args.git_base,
             git_cwd=cwd,
             json_output=args.json,
+            from_prs=from_prs,
+            repo=getattr(args, "repo", None),
+            enrich_symbols=getattr(args, "enrich_symbols", False),
         )
 
     return 2

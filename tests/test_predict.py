@@ -304,8 +304,8 @@ def test_plan_to_json_dict_shape(reg: Registry):
     plan = predict_conflicts(specs, reg, include_textual=False)
     j = plan.to_json_dict()
     assert set(j) == {
-        "input_prs", "pairwise_conflicts", "parallel_batches",
-        "recommended_order", "unmapped_files_by_pr", "disclaimer",
+        "input_prs", "pairwise_conflicts", "advisory_conflicts",
+        "parallel_batches", "recommended_order", "unmapped_files_by_pr", "disclaimer",
     }
     assert j["disclaimer"] == DISCLAIMER
     assert j["pairwise_conflicts"][0]["prs"] == [1, 2]
@@ -725,3 +725,203 @@ def test_cli_predict_conflicts_exit_codes_pin_contract(tmp_path: Path):
         "--no-textual",
     ], capture_output=True, text=True)
     assert r2.returncode == 2
+
+
+# --------------------------------------------------------------------------- #
+# v0.2: per_pr_unique + advisory registry flags
+# --------------------------------------------------------------------------- #
+
+
+def _make_registry_with_flags(**domain_extras) -> Registry:
+    """Build a Registry where 'docs' domain has the given extra flags."""
+    return Registry.from_dict({
+        "domains": {
+            "world": {"paths": ["mvp_site/world_logic.py"]},
+            "docs": {"paths": ["docs/design/pr-designs/*.md"], **domain_extras},
+        }
+    })
+
+
+def test_per_pr_unique_domain_not_flagged_as_conflict():
+    """Two PRs touching the same per_pr_unique domain must NOT conflict."""
+    reg = _make_registry_with_flags(per_pr_unique=True)
+    specs = [
+        PRSpec(pr=1, branch="b1", files=("docs/design/pr-designs/pr-1.md",)),
+        PRSpec(pr=2, branch="b2", files=("docs/design/pr-designs/pr-2.md",)),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    assert not any(pc.is_conflict for pc in plan.pairwise_conflicts)
+
+
+def test_per_pr_unique_domain_not_in_pair_conflicts():
+    """per_pr_unique conflicts must be absent from pairwise_conflicts output."""
+    reg = _make_registry_with_flags(per_pr_unique=True)
+    specs = [
+        PRSpec(pr=1, branch="b1", files=("docs/design/pr-designs/pr-1.md",)),
+        PRSpec(pr=2, branch="b2", files=("docs/design/pr-designs/pr-2.md",)),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    json_d = plan.to_json_dict()
+    assert json_d["pairwise_conflicts"] == []
+
+
+def test_per_pr_unique_domain_does_not_affect_unrelated_conflict():
+    """per_pr_unique only suppresses the per-pr-unique domain, not others."""
+    reg = Registry.from_dict({
+        "domains": {
+            "world": {"paths": ["mvp_site/world_logic.py"]},
+            "docs": {"paths": ["docs/design/pr-designs/*.md"], "per_pr_unique": True},
+        }
+    })
+    specs = [
+        PRSpec(pr=1, branch="b1",
+               files=("mvp_site/world_logic.py", "docs/design/pr-designs/pr-1.md")),
+        PRSpec(pr=2, branch="b2",
+               files=("mvp_site/world_logic.py", "docs/design/pr-designs/pr-2.md")),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    blocking = [pc for pc in plan.pairwise_conflicts if pc.is_conflict]
+    assert len(blocking) == 1
+    assert blocking[0].domain_conflicts[0].domain == "world"
+
+
+def test_advisory_domain_not_counted_as_blocking_conflict():
+    """advisory: true domain flagged but must NOT set is_conflict."""
+    reg = _make_registry_with_flags(advisory=True)
+    specs = [
+        PRSpec(pr=1, branch="b1", files=("docs/design/pr-designs/pr-1.md",)),
+        PRSpec(pr=2, branch="b2", files=("docs/design/pr-designs/pr-2.md",)),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    pair = plan.pairwise_conflicts[0]
+    assert not pair.is_conflict
+    assert pair.domain_conflicts[0].advisory is True
+
+
+def test_advisory_domain_appears_in_advisory_conflicts_json():
+    """advisory_conflicts JSON key must list advisory-only pairs."""
+    reg = _make_registry_with_flags(advisory=True)
+    specs = [
+        PRSpec(pr=1, branch="b1", files=("docs/design/pr-designs/pr-1.md",)),
+        PRSpec(pr=2, branch="b2", files=("docs/design/pr-designs/pr-2.md",)),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    j = plan.to_json_dict()
+    assert j["pairwise_conflicts"] == []
+    assert len(j["advisory_conflicts"]) == 1
+    assert j["advisory_conflicts"][0]["prs"] == [1, 2]
+
+
+def test_advisory_domain_does_not_affect_batch_scheduling():
+    """advisory-only conflicts must not appear as edges in the conflict graph."""
+    reg = _make_registry_with_flags(advisory=True)
+    specs = [
+        PRSpec(pr=1, branch="b1", files=("docs/design/pr-designs/pr-1.md",)),
+        PRSpec(pr=2, branch="b2", files=("docs/design/pr-designs/pr-2.md",)),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    # Both PRs should fit in a single parallel batch since advisory ≠ blocking
+    assert [1, 2] in plan.parallel_batches or plan.parallel_batches == [[1, 2]]
+
+
+def test_per_pr_unique_domain_parsed_from_yaml(tmp_path):
+    """Registry.from_dict correctly parses per_pr_unique: true from YAML."""
+    import yaml
+    data = yaml.safe_load("""
+domains:
+  docs:
+    paths: ["docs/*.md"]
+    per_pr_unique: true
+  world:
+    paths: ["mvp_site/world_logic.py"]
+    advisory: false
+""")
+    reg = Registry.from_dict(data)
+    assert reg.domains["docs"].per_pr_unique is True
+    assert reg.domains["docs"].advisory is False
+    assert reg.domains["world"].per_pr_unique is False
+
+
+def test_advisory_domain_parsed_from_yaml(tmp_path):
+    """Registry.from_dict correctly parses advisory: true from YAML."""
+    import yaml
+    data = yaml.safe_load("""
+domains:
+  beads:
+    paths: [".beads/issues.jsonl"]
+    advisory: true
+""")
+    reg = Registry.from_dict(data)
+    assert reg.domains["beads"].advisory is True
+    assert reg.domains["beads"].per_pr_unique is False
+
+
+def test_pair_domain_conflicts_skips_per_pr_unique():
+    """_pair_domain_conflicts skips conflicts in per_pr_unique domains."""
+    reg = _make_registry_with_flags(per_pr_unique=True)
+    # Build fake entries for the 'docs' domain
+    from merge_train.domain_lock import LockEntry
+    a_entries = [
+        LockEntry(domain="docs", pr=1, agent="a", branch="b1",
+                  opened_at="t", status="active")
+    ]
+    b_entries = [
+        LockEntry(domain="docs", pr=2, agent="b", branch="b2",
+                  opened_at="t", status="active")
+    ]
+    result = _pair_domain_conflicts(a_entries, b_entries, registry=reg)
+    assert result == []
+
+
+def test_pair_domain_conflicts_marks_advisory():
+    """_pair_domain_conflicts marks advisory flag correctly."""
+    reg = _make_registry_with_flags(advisory=True)
+    from merge_train.domain_lock import LockEntry
+    a_entries = [
+        LockEntry(domain="docs", pr=1, agent="a", branch="b1",
+                  opened_at="t", status="active")
+    ]
+    b_entries = [
+        LockEntry(domain="docs", pr=2, agent="b", branch="b2",
+                  opened_at="t", status="active")
+    ]
+    result = _pair_domain_conflicts(a_entries, b_entries, registry=reg)
+    assert len(result) == 1
+    assert result[0].advisory is True
+
+
+# --------------------------------------------------------------------------- #
+# v0.2: symbol_discovery module
+# --------------------------------------------------------------------------- #
+
+
+def test_split_diff_by_file_basic():
+    """_split_diff_by_file correctly splits a two-file diff."""
+    from merge_train.symbol_discovery import _split_diff_by_file
+    diff = (
+        "diff --git a/foo.py b/foo.py\n"
+        "--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-x\n+y\n"
+        "diff --git a/bar.py b/bar.py\n"
+        "--- a/bar.py\n+++ b/bar.py\n@@ -1 +1 @@\n-a\n+b\n"
+    )
+    result = _split_diff_by_file(diff)
+    assert set(result) == {"foo.py", "bar.py"}
+    assert "@@ -1 +1 @@" in result["foo.py"]
+
+
+def test_split_diff_by_file_empty():
+    """_split_diff_by_file returns empty dict on empty input."""
+    from merge_train.symbol_discovery import _split_diff_by_file
+    assert _split_diff_by_file("") == {}
+
+
+def test_symbols_from_staged_diff_no_git(tmp_path, monkeypatch):
+    """symbols_from_staged_diff returns {} when git is not available."""
+    import subprocess as _sp
+    monkeypatch.setattr(
+        _sp, "run",
+        lambda *a, **kw: type("P", (), {"returncode": 1, "stdout": "", "stderr": ""})(),
+    )
+    from merge_train import symbol_discovery
+    result = symbol_discovery.symbols_from_staged_diff(cwd=tmp_path)
+    assert result == {}

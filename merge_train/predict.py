@@ -140,6 +140,7 @@ def load_plan(path: str | Path) -> list[PRSpec]:
 class DomainConflict:
     domain: str
     symbols: tuple[str, ...]  # symbols *both* PRs touched in the domain (empty = whole-domain)
+    advisory: bool = False    # True when domain has advisory: true — informational only
 
 
 @dataclass(frozen=True)
@@ -156,7 +157,8 @@ class PairConflict:
 
     @property
     def is_conflict(self) -> bool:
-        return bool(self.domain_conflicts) or bool(self.textual_conflicts)
+        real_domain = any(not dc.advisory for dc in self.domain_conflicts)
+        return real_domain or bool(self.textual_conflicts)
 
 
 def _spec_as_lock_entries(spec: PRSpec, registry: Registry) -> list[LockEntry]:
@@ -195,21 +197,31 @@ def _spec_as_lock_entries(spec: PRSpec, registry: Registry) -> list[LockEntry]:
 def _pair_domain_conflicts(
     a_entries: list[LockEntry],
     b_entries: list[LockEntry],
+    registry: Optional["Registry"] = None,
 ) -> list[DomainConflict]:
-    """Compute symbol-domain conflicts between two PRs' would-be reservations."""
+    """Compute symbol-domain conflicts between two PRs' would-be reservations.
+
+    Registry flags applied when *registry* is provided:
+    - ``per_pr_unique``: domain files are per-PR unique; skip the pair.
+    - ``advisory``: conflict is informational only (doesn't block spawning).
+    """
     by_domain_a = {e.domain: e for e in a_entries}
     out: list[DomainConflict] = []
     for b in b_entries:
         a = by_domain_a.get(b.domain)
         if a is None:
             continue
+        dom = registry.domains.get(a.domain) if registry else None
+        if dom and dom.per_pr_unique:
+            continue  # each PR's files are unique; no real conflict
+        advisory = bool(dom and dom.advisory)
         # Whole-domain on either side => whole-domain conflict
         if not a.symbols or not b.symbols:
-            out.append(DomainConflict(domain=a.domain, symbols=()))
+            out.append(DomainConflict(domain=a.domain, symbols=(), advisory=advisory))
             continue
         overlap = sorted(set(a.symbols) & set(b.symbols))
         if overlap:
-            out.append(DomainConflict(domain=a.domain, symbols=tuple(overlap)))
+            out.append(DomainConflict(domain=a.domain, symbols=tuple(overlap), advisory=advisory))
     return out
 
 
@@ -364,21 +376,40 @@ class Plan:
     disclaimer: str = DISCLAIMER
 
     def to_json_dict(self) -> dict:
+        blocking = [pc for pc in self.pairwise_conflicts if pc.is_conflict]
+        advisory_only = [
+            pc for pc in self.pairwise_conflicts
+            if not pc.is_conflict
+            and any(dc.advisory for dc in pc.domain_conflicts)
+        ]
         return {
             "input_prs": self.input_prs,
             "pairwise_conflicts": [
                 {
                     "prs": [pc.pr_a, pc.pr_b],
                     "domain_conflicts": [
-                        {"domain": dc.domain, "symbols": list(dc.symbols)}
+                        {
+                            "domain": dc.domain,
+                            "symbols": list(dc.symbols),
+                            **({"advisory": True} if dc.advisory else {}),
+                        }
                         for dc in pc.domain_conflicts
                     ],
                     "textual_conflicts": [
                         {"file": tc.file} for tc in pc.textual_conflicts
                     ],
                 }
-                for pc in self.pairwise_conflicts
-                if pc.is_conflict
+                for pc in blocking
+            ],
+            "advisory_conflicts": [
+                {
+                    "prs": [pc.pr_a, pc.pr_b],
+                    "domain_conflicts": [
+                        {"domain": dc.domain, "symbols": list(dc.symbols)}
+                        for dc in pc.domain_conflicts if dc.advisory
+                    ],
+                }
+                for pc in advisory_only
             ],
             "parallel_batches": self.parallel_batches,
             "recommended_order": self.recommended_order,
@@ -469,7 +500,7 @@ def predict_conflicts(
     spec_by_pr = {s.pr: s for s in specs}
     for i, a_pr in enumerate(ids):
         for b_pr in ids[i + 1:]:
-            doms = _pair_domain_conflicts(pr_entries[a_pr], pr_entries[b_pr])
+            doms = _pair_domain_conflicts(pr_entries[a_pr], pr_entries[b_pr], registry)
             tex: list[TextualConflict] = []
             if include_textual:
                 tex = _git_merge_tree_conflicts(
@@ -516,14 +547,76 @@ def predict_conflicts(
 # --------------------------------------------------------------------------- #
 
 
+def _load_specs_from_github(
+    pr_numbers: list[int],
+    repo: Optional[str],
+) -> list["PRSpec"]:
+    """Fetch file lists for each PR from GitHub via ``gh pr diff --name-only``."""
+    import subprocess as _sp
+    specs: list[PRSpec] = []
+    for pr in pr_numbers:
+        cmd = ["gh", "pr", "diff", str(pr), "--name-only"]
+        if repo:
+            cmd = ["gh", "pr", "diff", str(pr), "--repo", repo, "--name-only"]
+        try:
+            proc = _sp.run(cmd, capture_output=True, text=True, check=False)
+        except FileNotFoundError:
+            print(f"warning: gh CLI not found; skipping PR#{pr}", file=__import__("sys").stderr)
+            continue
+        if proc.returncode != 0:
+            print(f"warning: gh pr diff failed for PR#{pr}: {proc.stderr.strip()}",
+                  file=__import__("sys").stderr)
+            continue
+        files = tuple(f.strip() for f in proc.stdout.splitlines() if f.strip())
+        branch_cmd = ["gh", "pr", "view", str(pr), "--json", "headRefName", "--jq", ".headRefName"]
+        if repo:
+            branch_cmd = ["gh", "pr", "view", str(pr), "--repo", repo,
+                          "--json", "headRefName", "--jq", ".headRefName"]
+        try:
+            br = _sp.run(branch_cmd, capture_output=True, text=True, check=False)
+            branch = br.stdout.strip() or f"pr-{pr}"
+        except FileNotFoundError:
+            branch = f"pr-{pr}"
+        specs.append(PRSpec(pr=pr, branch=branch, files=files))
+    return specs
+
+
+def _enrich_specs_with_symbols(
+    specs: list["PRSpec"],
+    repo: Optional[str],
+) -> list["PRSpec"]:
+    """Auto-populate ``symbols_by_file`` for specs that declare no symbols."""
+    from merge_train.symbol_discovery import symbols_from_files_in_pr
+
+    enriched: list[PRSpec] = []
+    for spec in specs:
+        if spec.symbols_by_file:
+            enriched.append(spec)
+            continue
+        py_files = [f for f in spec.files if f.endswith(".py")]
+        if not py_files:
+            enriched.append(spec)
+            continue
+        sym_map = symbols_from_files_in_pr(spec.pr, py_files, repo)
+        if not sym_map:
+            enriched.append(spec)
+            continue
+        frozen = {path: frozenset(syms) for path, syms in sym_map.items()}
+        enriched.append(dataclasses.replace(spec, symbols_by_file=frozen))
+    return enriched
+
+
 def cli_predict_conflicts(
     *,
-    plan_path: str,
+    plan_path: Optional[str],
     registry: Registry,
     include_textual: bool,
     git_base: str,
     git_cwd: Optional[Path],
     json_output: bool,
+    from_prs: Optional[str] = None,
+    repo: Optional[str] = None,
+    enrich_symbols: bool = False,
 ) -> int:
     """Implementation of ``domain_lock predict-conflicts``.
 
@@ -532,18 +625,34 @@ def cli_predict_conflicts(
     - 1 if at least one pair conflicts
     - 2 on plan-file errors (FileNotFoundError, malformed YAML)
     """
-    try:
-        specs = load_plan(plan_path)
-    except FileNotFoundError as exc:
-        print(f"error: {exc}", file=__import__("sys").stderr)
-        return 2
-    except (yaml.YAMLError, ValueError, KeyError, TypeError) as exc:
-        print(f"error: malformed plan: {exc}", file=__import__("sys").stderr)
-        return 2
-    except OSError as exc:
-        # PermissionError, IsADirectoryError, etc.
-        print(f"error: cannot read plan: {exc}", file=__import__("sys").stderr)
-        return 2
+    import sys as _sys
+
+    if from_prs:
+        try:
+            pr_numbers = [int(x.strip()) for x in from_prs.split(",") if x.strip()]
+        except ValueError as exc:
+            print(f"error: --from-prs must be comma-separated integers: {exc}",
+                  file=_sys.stderr)
+            return 2
+        specs = _load_specs_from_github(pr_numbers, repo)
+        if not specs:
+            print("error: no PRs could be loaded from GitHub", file=_sys.stderr)
+            return 2
+    else:
+        try:
+            specs = load_plan(plan_path)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=_sys.stderr)
+            return 2
+        except (yaml.YAMLError, ValueError, KeyError, TypeError) as exc:
+            print(f"error: malformed plan: {exc}", file=_sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"error: cannot read plan: {exc}", file=_sys.stderr)
+            return 2
+
+    if enrich_symbols:
+        specs = _enrich_specs_with_symbols(specs, repo)
 
     plan = predict_conflicts(
         specs, registry,
@@ -566,21 +675,32 @@ def _print_human(plan: Plan) -> None:
         for pr, files in plan.unmapped_files_by_pr.items():
             print(f"  WARN: PR#{pr} touches unmapped files: {', '.join(files)}")
     conflicts = [pc for pc in plan.pairwise_conflicts if pc.is_conflict]
+    advisory = [
+        pc for pc in plan.pairwise_conflicts
+        if not pc.is_conflict and any(dc.advisory for dc in pc.domain_conflicts)
+    ]
     if not conflicts:
-        print("No pairwise conflicts detected.")
+        print("No blocking pairwise conflicts detected.")
     else:
-        print(f"\n{len(conflicts)} pairwise conflict(s):")
+        print(f"\n{len(conflicts)} blocking conflict(s):")
         for pc in conflicts:
             print(f"  PR#{pc.pr_a} <-> PR#{pc.pr_b}:")
             for dc in pc.domain_conflicts:
+                tag = " [advisory]" if dc.advisory else ""
                 if dc.symbols:
-                    print(
-                        f"    domain={dc.domain} symbols={','.join(dc.symbols)}"
-                    )
+                    print(f"    domain={dc.domain} symbols={','.join(dc.symbols)}{tag}")
                 else:
-                    print(f"    domain={dc.domain} (whole-domain)")
+                    print(f"    domain={dc.domain} (whole-domain){tag}")
             for tc in pc.textual_conflicts:
                 print(f"    textual conflict: {tc.file}")
+    if advisory:
+        print(f"\n{len(advisory)} advisory conflict(s) (informational — won't block spawning):")
+        for pc in advisory:
+            print(f"  PR#{pc.pr_a} <-> PR#{pc.pr_b}:")
+            for dc in pc.domain_conflicts:
+                if dc.advisory:
+                    label = f"symbols={','.join(dc.symbols)}" if dc.symbols else "(whole-domain)"
+                    print(f"    domain={dc.domain} {label} [advisory]")
     print(f"\nParallel batches: {plan.parallel_batches}")
     print(f"Recommended order: {plan.recommended_order}")
     print(f"\n{plan.disclaimer}")
