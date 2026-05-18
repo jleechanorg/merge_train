@@ -570,6 +570,20 @@ def audit(log: LockLog, registry: Registry) -> dict:
 # --------------------------------------------------------------------------- #
 
 
+def _add_global_opts_to_subparser(sp: argparse.ArgumentParser) -> None:
+    """Re-register the top-level globals on a subparser so the legacy
+    ``domain_lock <cmd> ... --registry/--log/--git-cwd`` form still parses.
+
+    ``default=argparse.SUPPRESS`` is critical: it leaves the attribute
+    unset in the Namespace when the user does NOT pass the flag at the
+    subcommand level, so the value parsed at the top-level parser is
+    preserved instead of being clobbered by ``None``.
+    """
+    sp.add_argument("--registry", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    sp.add_argument("--log", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    sp.add_argument("--git-cwd", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="domain_lock",
@@ -637,7 +651,10 @@ def _build_parser() -> argparse.ArgumentParser:
                        choices=["active", "released", "all"])
     pr_ls.add_argument("--json", action="store_true")
 
-    sub.add_parser("audit", help="dump full registry + lock-log audit JSON")
+    pr_au = sub.add_parser("audit", help="dump full registry + lock-log audit JSON")
+
+    for _sp in (pr_re, pr_rp, pr_rl, pr_ck, pr_ls, pr_au):
+        _add_global_opts_to_subparser(_sp)
     return p
 
 

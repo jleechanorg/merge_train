@@ -687,3 +687,120 @@ def test_concurrent_reserve_only_one_wins(tmp_path: Path):
     assert "denied" in statuses
     log = LockLog(log_path)
     assert len(log.active_all()) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Backward-compat: global flags accepted after the subcommand
+# --------------------------------------------------------------------------- #
+
+
+def _global_opts_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    reg = tmp_path / "reg.yaml"
+    log = tmp_path / "log.jsonl"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"d1": {"paths": ["a.py"]}, "d2": {"paths": ["b.py"]}}
+    }))
+    return reg, log
+
+
+def test_cli_check_accepts_git_cwd_after_subcommand(tmp_path: Path):
+    """Regression: ``check --files X --git-cwd Y`` (sub-level) used to fail with
+    ``unrecognized arguments: --git-cwd``. Both positions must parse."""
+    reg, log = _global_opts_fixture(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init")
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "check", "--files", "a.py",
+        "--registry", str(reg), "--log", str(log), "--git-cwd", str(repo),
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr={r.stderr!r} stdout={r.stdout!r}"
+    assert "FREE" in r.stdout
+
+
+def test_cli_check_accepts_git_cwd_before_subcommand(tmp_path: Path):
+    reg, log = _global_opts_fixture(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init")
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log), "--git-cwd", str(repo),
+        "check", "--files", "a.py",
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr={r.stderr!r}"
+    assert "FREE" in r.stdout
+
+
+def test_cli_reserve_accepts_global_opts_after_subcommand(tmp_path: Path):
+    reg, log = _global_opts_fixture(tmp_path)
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "reserve",
+        "--domain", "d1", "--pr", "1", "--agent", "a", "--branch", "b",
+        "--registry", str(reg), "--log", str(log),
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr={r.stderr!r}"
+    assert "RESERVED" in r.stdout
+    assert log.exists()
+
+
+def test_cli_release_accepts_global_opts_after_subcommand(tmp_path: Path):
+    reg, log = _global_opts_fixture(tmp_path)
+    subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "reserve", "--domain", "d1", "--pr", "7",
+        "--agent", "a", "--branch", "b",
+    ], check=True, capture_output=True)
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "release", "--pr", "7",
+        "--registry", str(reg), "--log", str(log),
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr={r.stderr!r}"
+
+
+def test_cli_list_accepts_global_opts_after_subcommand(tmp_path: Path):
+    reg, log = _global_opts_fixture(tmp_path)
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "list",
+        "--registry", str(reg), "--log", str(log),
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr={r.stderr!r}"
+
+
+def test_cli_audit_accepts_global_opts_after_subcommand(tmp_path: Path):
+    reg, log = _global_opts_fixture(tmp_path)
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "audit",
+        "--registry", str(reg), "--log", str(log),
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr={r.stderr!r}"
+
+
+def test_cli_subcommand_global_opts_override_top_level(tmp_path: Path):
+    """When the user passes a global flag on BOTH sides, the sub-level value
+    wins (last-wins) — but more importantly, it must not raise."""
+    reg, log_top = _global_opts_fixture(tmp_path)
+    log_sub = tmp_path / "log_sub.jsonl"
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log_top),
+        "reserve",
+        "--domain", "d1", "--pr", "3", "--agent", "a", "--branch", "b",
+        "--log", str(log_sub),
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, f"stderr={r.stderr!r}"
+    assert log_sub.exists(), "sub-level --log should override top-level"
+    assert not log_top.exists(), "top-level --log should NOT have been used"
