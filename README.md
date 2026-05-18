@@ -1,5 +1,9 @@
 # merge_train
 
+[![tests](https://github.com/jleechanorg/merge_train/actions/workflows/tests.yml/badge.svg)](https://github.com/jleechanorg/merge_train/actions/workflows/tests.yml)
+[![Python ≥ 3.10](https://img.shields.io/badge/python-%E2%89%A53.10-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Spawn-time file-domain lock registry for AI-agent PR pipelines.
 
 Stops two agents from grabbing the same files when they're spawned in parallel — before either writes a line of code. Symbol-level locks let two agents edit disjoint functions inside the same file.
@@ -291,6 +295,7 @@ python -m pytest tests/ -q     # 134 passed
 
 - [`docs/AGENTS.md`](docs/AGENTS.md) — recipes for AI agents using or modifying this repo (paste-in integration snippets)
 - [`docs/CLAUDE.md`](docs/CLAUDE.md) — repo-local Claude Code policy (test discipline, evidence, adversarial review)
+- [`CHANGELOG.md`](CHANGELOG.md) — release notes
 - [`roadmap/README.md`](roadmap/README.md) — rolling activity log
 - [`examples/file_domains.yaml`](examples/file_domains.yaml) — sample registry
 

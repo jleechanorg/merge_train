@@ -5,12 +5,43 @@ description = "Spawn-time file-domain lock registry for AI-agent PR pipelines"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
+authors = [
+    { name = "jleechan2015", email = "jleechan2015@users.noreply.github.com" },
+]
+keywords = [
+    "merge-queue",
+    "spawn-gate",
+    "ai-agents",
+    "pr-automation",
+    "conflict-prediction",
+    "file-locks",
+    "symbol-locks",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Build Tools",
+]
 dependencies = [
     "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage      = "https://github.com/jleechanorg/merge_train"
+Repository    = "https://github.com/jleechanorg/merge_train"
+Issues        = "https://github.com/jleechanorg/merge_train/issues"
+Documentation = "https://github.com/jleechanorg/merge_train/blob/main/README.md"
 
 [project.scripts]
 domain_lock = "merge_train.domain_lock:main"
