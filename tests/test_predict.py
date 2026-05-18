@@ -21,12 +21,17 @@ from merge_train.predict import (
     DomainConflict,
     PRSpec,
     Plan,
-    _greedy_max_independent_set,
+    _git_merge_tree_conflicts,
+    _greedy_maximal_independent_set,
     _pair_domain_conflicts,
+    _parse_merge_tree_z,
     _spec_as_lock_entries,
     load_plan,
     predict_conflicts,
 )
+
+# Backward-compat alias for tests written before the maximal-rename.
+_greedy_max_independent_set = _greedy_maximal_independent_set
 
 
 # --------------------------------------------------------------------------- #
@@ -446,3 +451,277 @@ def test_textual_conflict_mocked(reg: Registry, monkeypatch):
     # PRs 1 and 2 must end up in different batches due to textual edge
     batches = plan.parallel_batches
     assert not any({1, 2}.issubset(set(b)) for b in batches)
+
+
+# --------------------------------------------------------------------------- #
+# _parse_merge_tree_z — parser unit tests (no git required)
+# --------------------------------------------------------------------------- #
+
+
+def test_parse_merge_tree_z_no_conflict():
+    """Empty stdout -> no paths."""
+    assert _parse_merge_tree_z("") == []
+
+
+def test_parse_merge_tree_z_single_file():
+    """Realistic stdout: tree-OID \\0 path \\0 \\0 messages..."""
+    stdout = "abc123def456\0pyproject.toml\0\0Auto-merging pyproject.toml\nCONFLICT (content): Merge conflict in pyproject.toml\n"
+    out = _parse_merge_tree_z(stdout)
+    assert len(out) == 1
+    assert out[0].file == "pyproject.toml"
+
+
+def test_parse_merge_tree_z_multiple_files():
+    """OID + multiple conflict paths in the first block."""
+    stdout = "abc123\0f.txt\0g.txt\0h.txt\0\0Auto-merging f.txt\nCONFLICT (content): Merge conflict in f.txt"
+    out = _parse_merge_tree_z(stdout)
+    assert [c.file for c in out] == ["f.txt", "g.txt", "h.txt"]
+
+
+def test_parse_merge_tree_z_rejects_log_message_lines():
+    """Regression: pre-fix parser used .splitlines() + filter on '.', so
+    'Auto-merging f.txt' and 'CONFLICT (content): Merge conflict in f.txt'
+    leaked into the conflict list. The -z parser uses NUL boundaries
+    and must NOT include log-message lines."""
+    stdout = "abc\0f.txt\0\0Auto-merging f.txt\nCONFLICT (content): Merge conflict in f.txt"
+    out = _parse_merge_tree_z(stdout)
+    assert [c.file for c in out] == ["f.txt"]
+    assert "Auto-merging f.txt" not in [c.file for c in out]
+    assert not any("CONFLICT" in c.file for c in out)
+
+
+def test_parse_merge_tree_z_no_double_nul_block():
+    """If git emits only tree-OID + paths and EOF (no \\0\\0 boundary),
+    everything before EOF is the first block."""
+    stdout = "abc\0only-one.txt"
+    out = _parse_merge_tree_z(stdout)
+    assert [c.file for c in out] == ["only-one.txt"]
+
+
+# --------------------------------------------------------------------------- #
+# Real-subprocess test for _git_merge_tree_conflicts (the CRITICAL bugs)
+# --------------------------------------------------------------------------- #
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=repo, check=True,
+                   capture_output=True, text=True)
+
+
+def _make_conflicting_repo(tmp_path: Path) -> Path:
+    """Create a tiny git repo with two branches that conflict on one file."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@e.com")
+    _git(repo, "config", "user.name", "T")
+    (repo / "conflict.txt").write_text("base\nshared\nbase\n")
+    _git(repo, "add", "conflict.txt")
+    _git(repo, "commit", "-q", "-m", "base")
+    _git(repo, "checkout", "-q", "-b", "br_a")
+    (repo / "conflict.txt").write_text("A-edit\nshared\nbase\n")
+    _git(repo, "commit", "-q", "-am", "a")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "checkout", "-q", "-b", "br_b")
+    (repo / "conflict.txt").write_text("B-edit\nshared\nbase\n")
+    _git(repo, "commit", "-q", "-am", "b")
+    return repo
+
+
+def test_git_merge_tree_real_subprocess_detects_conflict(tmp_path: Path):
+    """End-to-end: real git merge-tree on a real conflicting repo must
+    identify the conflicting file. Covers the modern (>=2.40) path on
+    machines with new git AND the legacy fallback on machines with old
+    git — whichever the test host runs."""
+    repo = _make_conflicting_repo(tmp_path)
+    conflicts = _git_merge_tree_conflicts(
+        "br_a", "br_b", base="main", cwd=repo,
+    )
+    assert len(conflicts) == 1, f"expected 1 conflict, got {conflicts}"
+    assert conflicts[0].file == "conflict.txt"
+
+
+def test_git_merge_tree_real_subprocess_no_conflict(tmp_path: Path):
+    """Disjoint edits on disjoint files must report no textual conflict."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@e.com")
+    _git(repo, "config", "user.name", "T")
+    (repo / "a.txt").write_text("a")
+    (repo / "b.txt").write_text("b")
+    _git(repo, "add", "a.txt", "b.txt")
+    _git(repo, "commit", "-q", "-m", "base")
+    _git(repo, "checkout", "-q", "-b", "br_a")
+    (repo / "a.txt").write_text("a2")
+    _git(repo, "commit", "-q", "-am", "a2")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "checkout", "-q", "-b", "br_b")
+    (repo / "b.txt").write_text("b2")
+    _git(repo, "commit", "-q", "-am", "b2")
+    assert _git_merge_tree_conflicts("br_a", "br_b", base="main", cwd=repo) == []
+
+
+# --------------------------------------------------------------------------- #
+# JSON int-key coercion + larger conflict graph
+# --------------------------------------------------------------------------- #
+
+
+def test_to_json_dict_stringifies_unmapped_pr_keys(reg: Registry):
+    """Regression: json.dumps would silently coerce int dict keys to
+    strings. We stringify in to_json_dict() so the contract is explicit."""
+    specs = [PRSpec(pr=42, branch="b1", files=("unmapped.py",))]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    j = plan.to_json_dict()
+    assert "42" in j["unmapped_files_by_pr"]
+    assert 42 not in j["unmapped_files_by_pr"]
+    # And the JSON round-trips cleanly (no coercion surprise).
+    round_tripped = json.loads(json.dumps(j))
+    assert "42" in round_tripped["unmapped_files_by_pr"]
+
+
+def test_predict_triangle_graph(reg: Registry):
+    """3 PRs all pairwise-conflicting (a triangle K3 in the conflict graph).
+    Greedy MIS must pick exactly 1 PR per batch (3 batches total)."""
+    specs = [
+        PRSpec(pr=1, branch="b1", files=("mvp_site/world_logic.py",)),
+        PRSpec(pr=2, branch="b2", files=("mvp_site/world_logic.py",)),
+        PRSpec(pr=3, branch="b3", files=("mvp_site/world_logic.py",)),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    conflicts = [pc for pc in plan.pairwise_conflicts if pc.is_conflict]
+    assert len(conflicts) == 3  # 3-choose-2
+    # Triangle => MIS of size 1 each batch => 3 batches
+    assert len(plan.parallel_batches) == 3
+    assert all(len(b) == 1 for b in plan.parallel_batches)
+    assert sorted(plan.recommended_order) == [1, 2, 3]
+
+
+def test_predict_larger_graph_5_prs_2_batches(reg: Registry):
+    """5 PRs: {1,2} conflict on world; {3,4} conflict on rewards; 5 alone
+    on agents. Optimal MIS is {1 or 2, 3 or 4, 5} => 2 batches max."""
+    specs = [
+        PRSpec(pr=1, branch="b1", files=("mvp_site/world_logic.py",)),
+        PRSpec(pr=2, branch="b2", files=("mvp_site/world_logic.py",)),
+        PRSpec(pr=3, branch="b3", files=("mvp_site/rewards_engine.py",)),
+        PRSpec(pr=4, branch="b4", files=("mvp_site/rewards_engine.py",)),
+        PRSpec(pr=5, branch="b5", files=("mvp_site/agents.py",)),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    assert len(plan.parallel_batches) == 2
+    # PR 5 must be in the first batch (no conflicts, max scheduling freedom)
+    assert 5 in plan.parallel_batches[0]
+    assert sorted(plan.recommended_order) == [1, 2, 3, 4, 5]
+
+
+# --------------------------------------------------------------------------- #
+# load_plan error-path coverage (load_plan accepted prs:null silently)
+# --------------------------------------------------------------------------- #
+
+
+def test_load_plan_rejects_null_prs(tmp_path: Path):
+    p = tmp_path / "plan.yaml"
+    p.write_text("prs: null\n")
+    with pytest.raises(ValueError, match="missing required key 'prs'"):
+        load_plan(p)
+
+
+def test_load_plan_rejects_missing_prs(tmp_path: Path):
+    p = tmp_path / "plan.yaml"
+    p.write_text("other_key: value\n")
+    with pytest.raises(ValueError, match="missing required key 'prs'"):
+        load_plan(p)
+
+
+def test_load_plan_rejects_missing_pr_field(tmp_path: Path):
+    p = tmp_path / "plan.yaml"
+    p.write_text(yaml.safe_dump({
+        "prs": [{"branch": "no-pr-number", "files": ["a.py"]}]
+    }))
+    with pytest.raises(ValueError, match="missing required 'pr' field"):
+        load_plan(p)
+
+
+def test_load_plan_rejects_null_pr_value(tmp_path: Path):
+    p = tmp_path / "plan.yaml"
+    p.write_text("prs:\n  - pr: null\n    branch: b\n")
+    with pytest.raises(ValueError, match="pr must not be null"):
+        load_plan(p)
+
+
+def test_load_plan_rejects_non_int_pr(tmp_path: Path):
+    p = tmp_path / "plan.yaml"
+    p.write_text("prs:\n  - pr: not-a-number\n    branch: b\n")
+    with pytest.raises(ValueError):
+        load_plan(p)
+
+
+def test_load_plan_rejects_top_level_list(tmp_path: Path):
+    p = tmp_path / "plan.yaml"
+    p.write_text("- pr: 1\n")
+    with pytest.raises(ValueError, match="top-level must be a mapping"):
+        load_plan(p)
+
+
+def test_cli_predict_conflicts_malformed_yaml_exit2(tmp_path: Path):
+    """Regression: yaml.YAMLError must produce exit 2 with a useful message."""
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
+    plan = tmp_path / "plan.yaml"
+    plan.write_text("prs: [\nbroken yaml: : :\n")  # bogus
+    log = tmp_path / "log.jsonl"
+    r = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "predict-conflicts", "--plan", str(plan), "--no-textual",
+    ], capture_output=True, text=True)
+    assert r.returncode == 2
+    assert "malformed plan" in r.stderr
+
+
+def test_cli_predict_conflicts_exit_codes_pin_contract(tmp_path: Path):
+    """Pin the documented exit-code table: 0 no conflict, 1 conflict, 2 plan error."""
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {
+            "d1": {"paths": ["a.py"]},
+            "d2": {"paths": ["b.py"]},
+        }
+    }))
+    log = tmp_path / "log.jsonl"
+    # 0: all disjoint
+    plan0 = tmp_path / "p0.yaml"
+    plan0.write_text(yaml.safe_dump({
+        "prs": [
+            {"pr": 1, "branch": "b", "files": ["a.py"]},
+            {"pr": 2, "branch": "b", "files": ["b.py"]},
+        ]
+    }))
+    r0 = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "predict-conflicts", "--plan", str(plan0), "--no-textual",
+    ], capture_output=True, text=True)
+    assert r0.returncode == 0, r0.stderr
+    # 1: conflict
+    plan1 = tmp_path / "p1.yaml"
+    plan1.write_text(yaml.safe_dump({
+        "prs": [
+            {"pr": 1, "branch": "b", "files": ["a.py"]},
+            {"pr": 2, "branch": "b", "files": ["a.py"]},
+        ]
+    }))
+    r1 = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "predict-conflicts", "--plan", str(plan1), "--no-textual",
+    ], capture_output=True, text=True)
+    assert r1.returncode == 1, r1.stderr
+    # 2: missing plan
+    r2 = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "predict-conflicts", "--plan", str(tmp_path / "nope.yaml"),
+        "--no-textual",
+    ], capture_output=True, text=True)
+    assert r2.returncode == 2

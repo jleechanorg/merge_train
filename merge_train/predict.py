@@ -9,7 +9,8 @@ this module:
 2. Optionally augments that with **textual conflicts** detected by
    running ``git merge-tree`` between each pair of PR branches.
 3. Builds a conflict graph and emits:
-   - the **maximum parallel batch** (greedy maximal independent set)
+   - an **approximate-maximum parallel batch** (greedy *maximal*
+     independent set — heuristic, not the optimum)
    - a **recommended merge order** (iteratively peel off the next MIS)
 
 Output is intentionally framed as a **risk-reduction signal, not a
@@ -98,13 +99,36 @@ def load_plan(path: str | Path) -> list[PRSpec]:
             branch: feat/foo
             files: [a.py, b.py]
             symbols: {a.py: [foo], b.py: [bar]}
+
+    Raises ``ValueError`` for:
+    - missing/null ``prs`` (or ``plan``) key
+    - non-list ``prs`` value
+    - PR entries missing the required ``pr`` field
     """
     with open(path, "r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
-    items = data.get("prs") or data.get("plan") or []
-    if not isinstance(items, list):
-        raise ValueError(f"{path}: expected a 'prs' list, got {type(items).__name__}")
-    return [PRSpec.from_dict(item) for item in items]
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: top-level must be a mapping, got {type(data).__name__}")
+    raw_items = data.get("prs", data.get("plan"))
+    if raw_items is None:
+        raise ValueError(f"{path}: missing required key 'prs' (or legacy 'plan')")
+    if not isinstance(raw_items, list):
+        raise ValueError(
+            f"{path}: 'prs' must be a list, got {type(raw_items).__name__}"
+        )
+    out: list[PRSpec] = []
+    for i, item in enumerate(raw_items):
+        if not isinstance(item, dict):
+            raise ValueError(f"{path}: prs[{i}] must be a mapping")
+        if "pr" not in item:
+            raise ValueError(f"{path}: prs[{i}] missing required 'pr' field")
+        if item.get("pr") is None:
+            raise ValueError(f"{path}: prs[{i}].pr must not be null")
+        try:
+            out.append(PRSpec.from_dict(item))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{path}: prs[{i}]: {exc}") from exc
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -198,36 +222,131 @@ def _git_merge_tree_conflicts(
 ) -> list[TextualConflict]:
     """Run ``git merge-tree`` to detect textual conflict files between two refs.
 
-    Returns the list of files with conflict hunks. On modern git
-    (>=2.38) ``git merge-tree --write-tree --name-only`` reports the
-    conflicted paths directly via stderr/stdout. On older git, the
-    pre-2.38 form is parsed for ``<<<<<<<`` markers.
+    Two git-version contracts:
+
+    - **Modern (git >= 2.40)**: ``git merge-tree --write-tree
+      --name-only -z --merge-base=BASE A B``. Exit 0 = no conflict;
+      exit 1 = conflict, stdout = ``<tree-oid>\\0<path>\\0<path>\\0...\\0\\0<log>``.
+      We parse the first NUL-separated block.
+
+    - **Legacy (git < 2.40, including Apple git 2.39 on macOS)**:
+      ``--merge-base=`` is unknown; rc is typically 128/129. Fall back
+      to the legacy positional form ``git merge-tree BASE A B`` which
+      emits a custom diff format. Conflicted hunks are bracketed by
+      ``<<<<<<< ... >>>>>>>``; we extract the file each hunk applies to
+      from the preceding ``merged`` section. Less precise but available
+      everywhere.
 
     Silently returns ``[]`` on any subprocess failure (refs not found,
-    unrelated histories, git missing) — textual prediction is a
+    git missing, both forms rejected) — textual prediction is a
     best-effort augmentation, not a gate.
     """
+    # ----- Modern form -----
     try:
-        # Modern git: --write-tree + --name-only emits conflicted paths on stdout.
         r = subprocess.run(
-            ["git", "merge-tree", "--write-tree", "--name-only",
+            ["git", "merge-tree", "--write-tree", "--name-only", "-z",
              "--merge-base=" + base, a_branch, b_branch],
             cwd=str(cwd) if cwd else None,
             capture_output=True, text=True, check=False,
         )
-        if r.returncode == 0:
-            return []
-        # returncode 1 = conflict; stdout lists the OID then files
-        out_lines = [ln for ln in r.stdout.splitlines() if ln.strip()]
-        # First line is the resulting tree OID; subsequent lines are files.
-        files = out_lines[1:] if len(out_lines) >= 2 else []
-        # Some versions emit additional info sections separated by blank lines;
-        # filter to lines that look like paths.
-        return [TextualConflict(file=p) for p in files if "/" in p or "." in p]
     except FileNotFoundError:
         return []
     except subprocess.SubprocessError:
         return []
+
+    if r.returncode == 0:
+        return []
+    if r.returncode == 1:
+        return _parse_merge_tree_z(r.stdout)
+    # Other rc (typically 128/129 = "unknown option" on older git): fall
+    # back to the legacy positional form.
+    return _git_merge_tree_legacy(a_branch, b_branch, base=base, cwd=cwd)
+
+
+def _parse_merge_tree_z(stdout: str) -> list[TextualConflict]:
+    """Parse ``git merge-tree --write-tree --name-only -z`` output.
+
+    Output shape:
+        <tree-oid>\\0<path1>\\0<path2>\\0...\\0\\0<info-messages-block>
+
+    We split on NUL, take the first block (everything before the first
+    empty token, which marks the \\0\\0 boundary), skip the leading
+    tree-OID, and return the remaining paths.
+    """
+    parts = stdout.split("\0")
+    # Walk until the first empty token (== the \0\0 boundary) OR end-of-stream.
+    first_block: list[str] = []
+    for p in parts:
+        if p == "":
+            break
+        first_block.append(p)
+    # First entry is the tree OID, subsequent entries are filenames.
+    paths = first_block[1:] if len(first_block) > 1 else []
+    return [TextualConflict(file=p) for p in paths if p]
+
+
+def _git_merge_tree_legacy(
+    a_branch: str,
+    b_branch: str,
+    *,
+    base: str,
+    cwd: Optional[Path],
+) -> list[TextualConflict]:
+    """Pre-2.40 fallback. Parse the legacy custom-diff format for files
+    that contain conflict markers.
+
+    Legacy output (git 2.39 and earlier, including Apple Git on macOS)::
+
+        changed in both
+          base   100644 <hash> path/to/file.py
+          our    100644 <hash> path/to/file.py
+          their  100644 <hash> path/to/file.py
+        @@ -L,N +L,N @@
+         ...
+        +<<<<<<< .our
+         ...
+        +=======
+         ...
+        +>>>>>>> .their
+
+    Note the conflict markers appear as **diff-added** lines (``+<<<<<<<``)
+    not bare ``<<<<<<<`` — the legacy form emits a synthetic unified diff
+    of the would-be merge against an empty base.
+
+    We track the most-recent file-header path (from ``base/our/their/result``
+    rows) and record it when we see a conflict-marker line.
+    """
+    try:
+        r = subprocess.run(
+            ["git", "merge-tree", base, a_branch, b_branch],
+            cwd=str(cwd) if cwd else None,
+            capture_output=True, text=True, check=False,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return []
+    if r.returncode not in (0, 1):
+        return []
+    conflicts: list[str] = []
+    seen: set[str] = set()
+    current_path: Optional[str] = None
+    for line in r.stdout.splitlines():
+        stripped = line.strip()
+        # File-header rows under "changed in both" / "merged" sections.
+        # First token is the role: base | our | their | result.
+        if stripped.startswith(("base ", "our ", "their ", "result ")):
+            tokens = stripped.split(None, 3)
+            if len(tokens) == 4:
+                current_path = tokens[3]
+        # Conflict markers appear with diff "+" prefix in the legacy form,
+        # or bare in the rarer no-prefix variants. Match either.
+        elif (
+            (line.startswith("+<<<<<<<") or line.startswith("<<<<<<<"))
+            and current_path
+            and current_path not in seen
+        ):
+            seen.add(current_path)
+            conflicts.append(current_path)
+    return [TextualConflict(file=p) for p in conflicts]
 
 
 # --------------------------------------------------------------------------- #
@@ -263,20 +382,31 @@ class Plan:
             ],
             "parallel_batches": self.parallel_batches,
             "recommended_order": self.recommended_order,
-            "unmapped_files_by_pr": self.unmapped_files_by_pr,
+            # JSON object keys are always strings; ``json.dumps`` would coerce
+            # int PR numbers silently. Stringify here so downstream consumers
+            # see a stable contract.
+            "unmapped_files_by_pr": {
+                str(pr): files for pr, files in self.unmapped_files_by_pr.items()
+            },
             "disclaimer": self.disclaimer,
         }
 
 
-def _greedy_max_independent_set(
+def _greedy_maximal_independent_set(
     nodes: list[int],
     edges: set[frozenset[int]],
 ) -> list[int]:
-    """Greedy maximal independent set.
+    """Greedy **maximal** (not maximum-optimal) independent set.
 
     Picks the lowest-degree node first (ties broken by node id ascending
     for determinism), adds it to the set, removes it and all its
     neighbors. Repeat until no candidates remain. Deterministic.
+
+    This is a heuristic: the output is a *maximal* IS (no node can be
+    added without creating an edge) but not necessarily a *maximum* IS
+    (the globally largest possible). Computing the true maximum IS is
+    NP-hard; the min-degree-first greedy gives reasonable results in
+    practice for the sparse conflict graphs typical of PR batches.
     """
     remaining = set(nodes)
     adj: dict[int, set[int]] = {n: set() for n in nodes}
@@ -360,7 +490,7 @@ def predict_conflicts(
     remaining = list(ids)
     batches: list[list[int]] = []
     while remaining:
-        batch = _greedy_max_independent_set(remaining, edges)
+        batch = _greedy_maximal_independent_set(remaining, edges)
         if not batch:
             batches.append(sorted(remaining))  # degenerate guard
             break
@@ -407,8 +537,12 @@ def cli_predict_conflicts(
     except FileNotFoundError as exc:
         print(f"error: {exc}", file=__import__("sys").stderr)
         return 2
-    except (yaml.YAMLError, ValueError) as exc:
+    except (yaml.YAMLError, ValueError, KeyError, TypeError) as exc:
         print(f"error: malformed plan: {exc}", file=__import__("sys").stderr)
+        return 2
+    except OSError as exc:
+        # PermissionError, IsADirectoryError, etc.
+        print(f"error: cannot read plan: {exc}", file=__import__("sys").stderr)
         return 2
 
     plan = predict_conflicts(
