@@ -653,7 +653,20 @@ def _build_parser() -> argparse.ArgumentParser:
 
     pr_au = sub.add_parser("audit", help="dump full registry + lock-log audit JSON")
 
-    for _sp in (pr_re, pr_rp, pr_rl, pr_ck, pr_ls, pr_au):
+    pr_pc = sub.add_parser(
+        "predict-conflicts",
+        help="dry-run: predict pairwise conflicts + recommend merge order for a "
+             "set of PRs declared in a YAML plan",
+    )
+    pr_pc.add_argument("--plan", required=True,
+                       help="path to YAML/JSON file with a 'prs' list")
+    pr_pc.add_argument("--no-textual", action="store_true",
+                       help="skip git merge-tree textual conflict check")
+    pr_pc.add_argument("--git-base", default="origin/main",
+                       help="base ref for git merge-tree (default: origin/main)")
+    pr_pc.add_argument("--json", action="store_true", help="JSON output")
+
+    for _sp in (pr_re, pr_rp, pr_rl, pr_ck, pr_ls, pr_au, pr_pc):
         _add_global_opts_to_subparser(_sp)
     return p
 
@@ -800,6 +813,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.cmd == "audit":
         print(json.dumps(audit(log, registry), indent=2))
         return 0
+
+    if args.cmd == "predict-conflicts":
+        from merge_train.predict import cli_predict_conflicts
+        cwd = Path(args.git_cwd) if args.git_cwd else None
+        return cli_predict_conflicts(
+            plan_path=args.plan,
+            registry=registry,
+            include_textual=not args.no_textual,
+            git_base=args.git_base,
+            git_cwd=cwd,
+            json_output=args.json,
+        )
 
     return 2
 

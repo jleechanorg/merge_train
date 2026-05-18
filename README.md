@@ -21,7 +21,8 @@ AI-agent PR pipelines (Aider, OpenHands, Devin, custom AO setups) spawn many age
 | Mergify | merge time | rule-based merge queue |
 | Graphite / ghstack | commit time | stacked PR cascade |
 | jj (Jujutsu) | commit time | conflict-tolerant rebase |
-| Gas Town Refinery | merge time | bisecting merge queue |
+| Uber SubmitQueue | merge time | speculative-tree CI batching |
+| Aviator MergeQueue | merge time | affected-targets parallel queues |
 | OpenHands Large Codebase SDK | spawn time | dep-graph partitioning (intra-SDK) |
 | **merge_train** | **spawn time** | **declarative file→domain registry (any pipeline)** |
 
@@ -38,12 +39,14 @@ Requires Python ≥ 3.10, `PyYAML`, and `git` on `PATH`.
 ## CLI surface
 
 ```
-domain_lock reserve       reserve a domain for a PR/agent (--symbols for sub-file locks)
-domain_lock reserve-plan  atomically reserve multiple (domain, symbols) legs for one PR
-domain_lock release       release a PR's reservations
-domain_lock check         check files against active reservations (--diff-mode for symbol res.)
-domain_lock list          list locks (active|released|all)
-domain_lock audit         dump full registry + lock-log audit JSON
+domain_lock reserve            reserve a domain for a PR/agent (--symbols for sub-file locks)
+domain_lock reserve-plan       atomically reserve multiple (domain, symbols) legs for one PR
+domain_lock release            release a PR's reservations
+domain_lock check              check files against active reservations (--diff-mode for symbol res.)
+domain_lock list               list locks (active|released|all)
+domain_lock audit              dump full registry + lock-log audit JSON
+domain_lock predict-conflicts  dry-run: predict pairwise conflicts + recommend merge order
+                               for a set of PRs declared in a YAML plan
 ```
 
 Global flags work **both** before and after the subcommand:
@@ -107,6 +110,49 @@ domain_lock check --files mvp_site/world_logic.py --pr 7000 --diff-mode
 # Non-Python files, parse errors, and missing AST fall back fail-closed
 # to the whole-domain lock (printed as `WARN: symbol-resolution fallback`).
 ```
+
+## Dry-run conflict prediction (`predict-conflicts`)
+
+Replay a set of PRs through `merge_train` to see how they'd merge, what order to land them, and what conflicts to expect — before any agent spawns.
+
+```yaml
+# prs.yaml
+prs:
+  - pr: 100
+    branch: feat/level-up
+    files: [mvp_site/world_logic.py]
+    symbols: {mvp_site/world_logic.py: [level_up]}
+  - pr: 101
+    branch: feat/dice-fix
+    files: [mvp_site/world_logic.py]
+    symbols: {mvp_site/world_logic.py: [compute_dice]}
+  - pr: 103
+    branch: feat/rewards-overhaul
+    files: [mvp_site/rewards_engine.py, mvp_site/world_logic.py]  # whole-file
+```
+
+```bash
+domain_lock predict-conflicts --plan prs.yaml --no-textual
+```
+
+Output:
+
+```
+2 pairwise conflict(s):
+  PR#100 <-> PR#103: domain=level-up-pipeline (whole-domain)
+  PR#101 <-> PR#103: domain=level-up-pipeline (whole-domain)
+
+Parallel batches: [[100, 101], [103]]
+Recommended order: [100, 101, 103]
+
+Risk-reduction signal, not a merge guarantee. Run CI + human review before merging.
+```
+
+Drop `--no-textual` to additionally run `git merge-tree` between each pair and catch textual conflicts (imports, configs) that symbol analysis misses. `--json` emits machine-readable output.
+
+The recommended-order algorithm is a greedy maximal-independent-set sweep on the symbol-domain conflict graph: pick the largest batch of disjoint PRs, peel them off, repeat. Deterministic, polynomial-time, and tie-broken by PR id for reproducibility.
+
+Exit codes: `0` (no conflicts), `1` (at least one pair conflicts), `2` (plan file missing/malformed).
 
 ## Atomic multi-domain reservation (`reserve-plan`)
 
@@ -219,7 +265,10 @@ python -m pytest tests/ -q     # 134 passed
 - [x] Symbol-level (Python AST) domains
 - [x] Atomic multi-domain `reserve-plan`
 - [x] Concurrency safety (flock)
-- [ ] Dry-run / replay mode (take a set of PRs, recommend merge order, surface conflicts ahead of time)
+- [x] Dry-run / replay mode (`predict-conflicts` — greedy MIS + optional `git merge-tree`)
+- [ ] `predict-conflicts --from-active` (derive plan from live `LockLog` instead of YAML)
+- [ ] `predict-conflicts --prs N,M,P` (gh-cli integration — fetch files/symbols from open PRs)
+- [ ] Refactoring-aware semantic edges (callers-of-deleted-symbol)
 - [ ] MCP server wrapper (agent-native schema'd tools — same lib)
 - [ ] Post-merge cascade rebase webhook
 - [ ] AO integration reference (live deployment)
