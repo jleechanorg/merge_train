@@ -10,6 +10,7 @@ import pytest
 from merge_train.symbols import (
     HunkRange,
     Symbol,
+    SymbolResolutionError,
     UnsupportedLanguageError,
     extract_symbols,
     is_python_path,
@@ -213,13 +214,39 @@ def test_touched_symbols_empty_diff():
     assert touched_symbols(new_source=_src_two_funcs(), diff_text="") == set()
 
 
-def test_touched_symbols_syntax_error_returns_empty():
-    # Parse fails => caller should fall back to whole-domain (empty set
-    # signals "no symbol resolution").
-    assert touched_symbols(
-        new_source="def broken(:\n    pass",
-        diff_text="@@ -1 +1 @@\n+def broken(:\n",
-    ) == set()
+def test_touched_symbols_syntax_error_raises():
+    with pytest.raises(SymbolResolutionError):
+        touched_symbols(
+            new_source="def broken(:\n    pass",
+            diff_text="@@ -1 +1 @@\n+def broken(:\n",
+        )
+
+
+def test_touched_symbols_empty_symbols_nonempty_source_raises():
+    with pytest.raises(SymbolResolutionError):
+        touched_symbols(
+            new_source="x = 1\ny = 2\n",
+            diff_text="@@ -1 +1 @@\n-x = 1\n+x = 10\n",
+        )
+
+
+def test_touched_symbols_empty_source_empty_diff_ok():
+    assert touched_symbols(new_source="", diff_text="") == set()
+
+
+def test_resolve_touched_symbols_parse_failure_goes_to_fallback(git_repo: Path):
+    src_broken = "def broken(:\n    pass\n"
+    (git_repo / "broken.py").write_text(src_broken)
+    _git(git_repo, "add", "broken.py")
+    _git(git_repo, "commit", "-q", "-m", "init")
+
+    src_still_broken = "def broken(:\n    pass\nx = 1\n"
+    (git_repo / "broken.py").write_text(src_still_broken)
+    _git(git_repo, "add", "broken.py")
+
+    per_file, fallback = resolve_touched_symbols(["broken.py"], cwd=git_repo)
+    assert "broken.py" not in per_file
+    assert "broken.py" in fallback
 
 
 def test_touched_symbols_class_method_only():

@@ -349,8 +349,9 @@ def test_cli_check_diff_mode_disjoint_is_free(tmp_path: Path):
     r = subprocess.run([
         sys.executable, "-m", "merge_train.domain_lock",
         "--registry", str(reg), "--log", str(log),
+        "--git-cwd", str(repo),
         "check", "--files", "shared.py", "--pr", "2",
-        "--diff-mode", "--git-cwd", str(repo),
+        "--diff-mode",
     ], capture_output=True, text=True)
     assert r.returncode == 0, f"stdout={r.stdout} stderr={r.stderr}"
     assert "FREE" in r.stdout
@@ -373,11 +374,28 @@ def test_cli_check_diff_mode_overlap_is_held(tmp_path: Path):
     r = subprocess.run([
         sys.executable, "-m", "merge_train.domain_lock",
         "--registry", str(reg), "--log", str(log),
+        "--git-cwd", str(repo),
         "check", "--files", "shared.py", "--pr", "2",
-        "--diff-mode", "--git-cwd", str(repo), "--json",
+        "--diff-mode", "--json",
     ], capture_output=True, text=True)
     assert r.returncode == 1
     payload = json.loads(r.stdout)
     assert payload["ok"] is False
     assert payload["held"][0]["domain"] == "shared"
     assert "beta" in payload["touched_symbols"]["shared"]
+
+
+def test_cli_check_diff_mode_json_includes_fallback(tmp_path: Path):
+    repo, reg, log = _make_diff_repo(tmp_path)
+    (repo / "config.yaml").write_text("key: value\n")
+    _git(repo, "add", "config.yaml")
+    r = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "--git-cwd", str(repo),
+        "check", "--files", "shared.py", "config.yaml",
+        "--diff-mode", "--json",
+    ], capture_output=True, text=True)
+    payload = json.loads(r.stdout)
+    assert "fallback_files" in payload
+    assert "config.yaml" in payload["fallback_files"]

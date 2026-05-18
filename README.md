@@ -29,7 +29,7 @@ AI-agent PR pipelines (Aider, OpenHands, Devin, custom AO setups) spawn many age
 
 - `merge_train/domain_lock.py` — CLI (`reserve | release | list | check | audit`)
 - `file_domains.yaml` — declarative file → domain map
-- `pr_domain_locks.jsonl` — append-only lock log
+- `~/.merge_train/locks/<repo-hash>/pr_domain_locks.jsonl` — append-only lock log (outside repo tree)
 - `hooks/ao-spawn-domain-check.sh` — pre-spawn gate
 - `hooks/pre-commit.sh` — local gate
 
@@ -78,6 +78,10 @@ domains:
 
 ## Lock log (JSONL, append-only)
 
+The lock log lives **outside the repo tree** at `~/.merge_train/locks/<repo-hash>/pr_domain_locks.jsonl` by default, where `<repo-hash>` is a short SHA-256 of the git remote URL. This prevents the JSONL file from becoming a merge-conflict hotspot when two PRs both reserve domains.
+
+Override with `MERGE_TRAIN_LOG` env var or `--log` flag to use a different path (e.g. the legacy `pr_domain_locks.jsonl` in-repo path).
+
 ```json
 {"domain":"level_up_core","pr":6926,"agent":"claude-1","branch":"feat/level-up","opened_at":"2026-05-16T12:34:56Z","status":"active"}
 {"domain":"level_up_core","pr":6926,"closed_at":"2026-05-16T14:01:00Z","status":"released"}
@@ -100,6 +104,7 @@ ln -s ../../hooks/pre-commit.sh .git/hooks/pre-commit
 ## Roadmap
 
 - [x] MVP: CLI + YAML + JSONL + spawn hook + pre-commit hook
+- [x] Move lock state out of PR branches (default log path outside repo tree)
 - [ ] MCP server wrapper (agent-native schema'd tools — same lib)
 - [ ] Post-merge cascade rebase webhook
 - [ ] Per-region AST-level domains (function-granularity locks)

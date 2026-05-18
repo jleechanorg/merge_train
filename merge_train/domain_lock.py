@@ -12,20 +12,45 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import fnmatch
+import hashlib
 import json
 import os
+import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
+try:
+    import fcntl
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
+
 import yaml
 
 
 DEFAULT_REGISTRY = "file_domains.yaml"
-DEFAULT_LOG = "pr_domain_locks.jsonl"
+
+
+DEFAULT_LOG = "<auto>"
+
+
+def _resolve_default_log(cwd: Path | str | None = None) -> str:
+    base = Path.home() / ".merge_train" / "locks"
+    try:
+        remote = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True, text=True, check=False,
+            cwd=str(cwd) if cwd is not None else None,
+        ).stdout.strip()
+    except FileNotFoundError:
+        remote = ""
+    slug = hashlib.sha256(remote.encode()).hexdigest()[:12] if remote else "default"
+    return str(base / slug / "pr_domain_locks.jsonl")
 
 
 class DomainHeldError(Exception):
@@ -126,6 +151,23 @@ class LockLog:
     def __init__(self, path: str | os.PathLike):
         self.path = Path(path)
 
+    @contextmanager
+    def lock(self):
+        """Acquire an exclusive flock on the log file for atomic read-modify-write.
+
+        On platforms without fcntl (e.g. Windows), this is a no-op.
+        """
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd = self.path.open("a", encoding="utf-8")
+        try:
+            if _HAS_FCNTL:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            yield fd
+        finally:
+            if _HAS_FCNTL:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            fd.close()
+
     def append(self, entry: LockEntry) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as fh:
@@ -196,6 +238,58 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _reserve_locked(
+    log: LockLog,
+    registry: Registry,
+    *,
+    domain: str,
+    pr: int,
+    agent: str,
+    branch: str,
+    symbols: Iterable[str] = (),
+    now: Optional[str] = None,
+) -> LockEntry:
+    """Core reserve logic — caller must hold log.lock()."""
+    if domain not in registry.domains:
+        raise UnknownPathError(f"unknown domain: {domain}")
+    syms = tuple(sorted(set(symbols)))
+
+    active_on_domain = [e for e in log.active_all() if e.domain == domain]
+    for held in active_on_domain:
+        if held.is_whole_domain:
+            raise DomainHeldError(
+                f"domain '{domain}' is fully held by PR #{held.pr} "
+                f"(agent={held.agent}, branch={held.branch}, "
+                f"opened_at={held.opened_at})"
+            )
+        if not syms:
+            raise DomainHeldError(
+                f"domain '{domain}' has symbol locks held by "
+                f"PR #{held.pr} (symbols={','.join(held.symbols)}) — "
+                "whole-domain reservation refused"
+            )
+        held_set = set(held.symbols)
+        overlap = held_set.intersection(syms)
+        if overlap:
+            raise DomainHeldError(
+                f"symbol(s) {','.join(sorted(overlap))} in domain "
+                f"'{domain}' held by PR #{held.pr} (agent={held.agent}, "
+                f"branch={held.branch})"
+            )
+
+    entry = LockEntry(
+        domain=domain,
+        pr=pr,
+        agent=agent,
+        branch=branch,
+        opened_at=now or _utcnow(),
+        status="active",
+        symbols=syms,
+    )
+    log.append(entry)
+    return entry
+
+
 def reserve(
     log: LockLog,
     registry: Registry,
@@ -222,47 +316,12 @@ def reserve(
     Raises :class:`DomainHeldError` on conflict, :class:`UnknownPathError`
     on unknown domain.
     """
-    if domain not in registry.domains:
-        raise UnknownPathError(f"unknown domain: {domain}")
-    syms = tuple(sorted(set(symbols)))
-
-    active_on_domain = [e for e in log.active_all() if e.domain == domain]
-    for held in active_on_domain:
-        # Whole-domain held — refuse everything.
-        if held.is_whole_domain:
-            raise DomainHeldError(
-                f"domain '{domain}' is fully held by PR #{held.pr} "
-                f"(agent={held.agent}, branch={held.branch}, "
-                f"opened_at={held.opened_at})"
-            )
-        # Requested whole-domain — refuse if any symbol lock exists.
-        if not syms:
-            raise DomainHeldError(
-                f"domain '{domain}' has symbol locks held by "
-                f"PR #{held.pr} (symbols={','.join(held.symbols)}) — "
-                "whole-domain reservation refused"
-            )
-        # Symbol-level: refuse on overlap.
-        held_set = set(held.symbols)
-        overlap = held_set.intersection(syms)
-        if overlap:
-            raise DomainHeldError(
-                f"symbol(s) {','.join(sorted(overlap))} in domain "
-                f"'{domain}' held by PR #{held.pr} (agent={held.agent}, "
-                f"branch={held.branch})"
-            )
-
-    entry = LockEntry(
-        domain=domain,
-        pr=pr,
-        agent=agent,
-        branch=branch,
-        opened_at=now or _utcnow(),
-        status="active",
-        symbols=syms,
-    )
-    log.append(entry)
-    return entry
+    with log.lock():
+        return _reserve_locked(
+            log, registry,
+            domain=domain, pr=pr, agent=agent, branch=branch,
+            symbols=symbols, now=now,
+        )
 
 
 @dataclass(frozen=True)
@@ -305,30 +364,31 @@ def reserve_plan(
 
     written: list[LockEntry] = []
     rollback_note = "rollback:reserve_plan"
-    for item in items:
-        try:
-            entry = reserve(
-                log, registry,
-                domain=item.domain, pr=pr,
-                agent=agent, branch=branch,
-                symbols=item.symbols, now=now,
-            )
-        except (DomainHeldError, UnknownPathError):
-            # Roll back everything we wrote in this call.
-            for done in written:
-                log.append(LockEntry(
-                    domain=done.domain,
-                    pr=done.pr,
-                    agent=done.agent,
-                    branch=done.branch,
-                    opened_at=done.opened_at,
-                    status="released",
-                    closed_at=now or _utcnow(),
-                    note=rollback_note,
-                    symbols=done.symbols,
-                ))
-            raise
-        written.append(entry)
+    with log.lock():
+        for item in items:
+            try:
+                entry = _reserve_locked(
+                    log, registry,
+                    domain=item.domain, pr=pr,
+                    agent=agent, branch=branch,
+                    symbols=item.symbols, now=now,
+                )
+            except (DomainHeldError, UnknownPathError):
+                # Roll back everything we wrote in this call.
+                for done in written:
+                    log.append(LockEntry(
+                        domain=done.domain,
+                        pr=done.pr,
+                        agent=done.agent,
+                        branch=done.branch,
+                        opened_at=done.opened_at,
+                        status="released",
+                        closed_at=now or _utcnow(),
+                        note=rollback_note,
+                        symbols=done.symbols,
+                    ))
+                raise
+            written.append(entry)
     return written
 
 
@@ -347,24 +407,25 @@ def release(
     ``symbols`` tuple so the (domain, pr, symbols) key matches.
     """
     released: list[LockEntry] = []
-    for entry in log.active_all():
-        if entry.pr != pr:
-            continue
-        if domain and entry.domain != domain:
-            continue
-        rel = LockEntry(
-            domain=entry.domain,
-            pr=entry.pr,
-            agent=entry.agent,
-            branch=entry.branch,
-            opened_at=entry.opened_at,
-            status="released",
-            closed_at=now or _utcnow(),
-            note=note,
-            symbols=entry.symbols,
-        )
-        log.append(rel)
-        released.append(rel)
+    with log.lock():
+        for entry in log.active_all():
+            if entry.pr != pr:
+                continue
+            if domain and entry.domain != domain:
+                continue
+            rel = LockEntry(
+                domain=entry.domain,
+                pr=entry.pr,
+                agent=entry.agent,
+                branch=entry.branch,
+                opened_at=entry.opened_at,
+                status="released",
+                closed_at=now or _utcnow(),
+                note=note,
+                symbols=entry.symbols,
+            )
+            log.append(rel)
+            released.append(rel)
     return released
 
 
@@ -386,7 +447,7 @@ def check(
     *,
     files: Iterable[str],
     pr: Optional[int] = None,
-    touched_symbols_by_path: Optional[dict[str, set[str]]] = None,
+    touched_symbols_by_path: Optional[dict[str, Optional[set[str]]]] = None,
 ) -> CheckResult:
     """Check whether *files* collide with any active reservation.
 
@@ -400,8 +461,12 @@ def check(
        file to its set of touched symbol names. A whole-domain
        reservation always collides. A symbol-level reservation collides
        only if the requested touched-symbols intersect the held set.
-       Files absent from the mapping are treated as whole-domain edits
-       (safe fallback for non-Python or unknown).
+
+       Three states per path in the mapping:
+       - **Not in dict** → whole-domain fallback (unknown/unresolvable)
+       - **In dict, value ``None``** → whole-domain fallback (parse failure)
+       - **In dict, value ``set``** → symbol-level result; even an empty
+         set means "resolution succeeded, no symbols touched" (genuinely free)
     """
     grouped = registry.domains_for_paths(files)
     active_all = log.active_all()
@@ -409,8 +474,10 @@ def check(
     held: list[tuple[str, LockEntry]] = []
     unmapped = grouped.pop("__unmapped__", [])
 
-    # Aggregate touched symbols per domain. Missing or empty entry =>
-    # whole-domain edit semantics.
+    # Aggregate touched symbols per domain. Three states per path:
+    #   not in dict          → whole-domain fallback (unknown/unresolvable)
+    #   in dict, value None  → whole-domain fallback (parse failure)
+    #   in dict, value set   → symbol-level (even empty = genuinely no overlap)
     per_domain_symbols: dict[str, Optional[set[str]]] = {}
     for domain, dpaths in grouped.items():
         if touched_symbols_by_path is None:
@@ -422,7 +489,11 @@ def check(
             if path not in touched_symbols_by_path:
                 whole_domain = True
                 break
-            agg.update(touched_symbols_by_path[path])
+            sym_set = touched_symbols_by_path[path]
+            if sym_set is None:
+                whole_domain = True
+                break
+            agg.update(sym_set)
         per_domain_symbols[domain] = None if whole_domain else agg
 
     for domain in grouped:
@@ -514,6 +585,10 @@ def _build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("MERGE_TRAIN_LOG", DEFAULT_LOG),
         help="path to JSONL lock log (default: %(default)s)",
     )
+    p.add_argument(
+        "--git-cwd", default=None,
+        help="git working tree for default log-path resolution (default: cwd)",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     pr_re = sub.add_parser("reserve", help="reserve a domain for a PR/agent")
@@ -555,10 +630,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="resolve touched Python symbols from staged git diff "
              "(allows symbol-level co-tenancy on the same file)",
     )
-    pr_ck.add_argument(
-        "--git-cwd", default=None,
-        help="git working tree to run --diff-mode against (default: cwd)",
-    )
+
 
     pr_ls = sub.add_parser("list", help="list locks")
     pr_ls.add_argument("--status", default="active",
@@ -580,6 +652,9 @@ def _fmt_entry(e: LockEntry) -> str:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = _build_parser().parse_args(argv)
+    if args.log == DEFAULT_LOG:
+        cwd = Path(args.git_cwd) if args.git_cwd else None
+        args.log = _resolve_default_log(cwd)
     try:
         registry = load_registry(args.registry)
     except FileNotFoundError as exc:
@@ -643,12 +718,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.cmd == "check":
-        touched_map: Optional[dict[str, set[str]]] = None
+        touched_map: Optional[dict[str, Optional[set[str]]]] = None
+        diff_fallback: list[str] = []
         if args.diff_mode:
             from merge_train.symbols import resolve_touched_symbols
             cwd = Path(args.git_cwd) if args.git_cwd else None
-            per_file, _fallback = resolve_touched_symbols(args.files, cwd=cwd)
+            per_file, fallback = resolve_touched_symbols(args.files, cwd=cwd)
             touched_map = per_file
+            diff_fallback = fallback
+            for fb_path in fallback:
+                touched_map[fb_path] = None
         result = check(
             log, registry,
             files=args.files, pr=args.pr,
@@ -667,11 +746,16 @@ def main(argv: Optional[list[str]] = None) -> int:
                     d: sorted(s) for d, s in result.touched_symbols.items()
                 },
             }
+            if diff_fallback:
+                payload["fallback_files"] = diff_fallback
             print(json.dumps(payload, indent=2))
         else:
             if result.unmapped:
                 print(f"WARN: unmapped files (no domain): "
                       f"{', '.join(result.unmapped)}", file=sys.stderr)
+            if diff_fallback:
+                print(f"WARN: symbol-resolution fallback (whole-domain): "
+                      f"{', '.join(diff_fallback)}", file=sys.stderr)
             if not result.held:
                 print(f"FREE: {len(result.free)} domain(s) clear "
                       f"({', '.join(result.free) or 'none'})")

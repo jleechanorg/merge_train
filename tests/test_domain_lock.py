@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 import yaml
 
 from merge_train.domain_lock import (
+    DEFAULT_LOG,
     DomainHeldError,
     LockEntry,
     LockLog,
     Registry,
     UnknownPathError,
+    _resolve_default_log,
     audit,
     check,
     list_locks,
@@ -263,6 +267,56 @@ def test_check_unmapped_files_warned_not_held(tmp_path: Path):
     assert result.free == ["d1"]
 
 
+def test_check_symbol_level_no_overlap_is_free(tmp_path: Path):
+    log, reg = _two_domains(tmp_path)
+    reserve(log, reg, domain="d1", pr=10, agent="a", branch="b",
+            symbols={"alpha"})
+    result = check(log, reg, files=["a.py"], pr=20,
+                   touched_symbols_by_path={"a.py": {"beta"}})
+    assert result.ok
+    assert "d1" in result.free
+
+
+def test_check_symbol_level_overlap_is_held(tmp_path: Path):
+    log, reg = _two_domains(tmp_path)
+    reserve(log, reg, domain="d1", pr=10, agent="a", branch="b",
+            symbols={"alpha"})
+    result = check(log, reg, files=["a.py"], pr=20,
+                   touched_symbols_by_path={"a.py": {"alpha"}})
+    assert not result.ok
+    assert result.held[0][0] == "d1"
+
+
+def test_check_missing_symbol_entry_is_whole_domain(tmp_path: Path):
+    log, reg = _two_domains(tmp_path)
+    reserve(log, reg, domain="d1", pr=10, agent="a", branch="b",
+            symbols={"alpha"})
+    result = check(log, reg, files=["a.py"], pr=20,
+                   touched_symbols_by_path={})
+    assert not result.ok
+    assert result.held[0][0] == "d1"
+
+
+def test_check_explicit_empty_set_is_genuinely_free(tmp_path: Path):
+    log, reg = _two_domains(tmp_path)
+    reserve(log, reg, domain="d1", pr=10, agent="a", branch="b",
+            symbols={"alpha"})
+    result = check(log, reg, files=["a.py"], pr=20,
+                   touched_symbols_by_path={"a.py": set()})
+    assert result.ok
+    assert "d1" in result.free
+
+
+def test_check_none_value_is_whole_domain_fallback(tmp_path: Path):
+    log, reg = _two_domains(tmp_path)
+    reserve(log, reg, domain="d1", pr=10, agent="a", branch="b",
+            symbols={"alpha"})
+    result = check(log, reg, files=["a.py"], pr=20,
+                   touched_symbols_by_path={"a.py": None})
+    assert not result.ok
+    assert result.held[0][0] == "d1"
+
+
 # --------------------------------------------------------------------------- #
 # list_locks / audit
 # --------------------------------------------------------------------------- #
@@ -318,6 +372,11 @@ def _run_cli(tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=repo, check=True,
+                   capture_output=True, text=True)
+
+
 def test_cli_check_free(tmp_path: Path):
     r = _run_cli(tmp_path, "check", "--files", "a.py")
     assert r.returncode == 0
@@ -355,6 +414,59 @@ def test_cli_check_json_output(tmp_path: Path):
     payload = json.loads(r.stdout)
     assert payload["ok"] is False
     assert payload["held"][0]["domain"] == "d1"
+
+
+def test_cli_check_diff_mode_syntax_error_is_held(tmp_path: Path):
+    import tempfile
+    with tempfile.TemporaryDirectory() as repo_dir:
+        repo = Path(repo_dir)
+        _git(repo, "init", "-q", "--initial-branch=main")
+        _git(repo, "config", "user.email", "t@t.test")
+        _git(repo, "config", "user.name", "t")
+        (repo / "a.py").write_text("def alpha():\n    return 1\n")
+        _git(repo, "add", "a.py")
+        _git(repo, "commit", "-q", "-m", "init")
+        (repo / "a.py").write_text("def broken(:\n    pass\n")
+        _git(repo, "add", "a.py")
+
+        reg = tmp_path / "reg.yaml"
+        log = tmp_path / "log.jsonl"
+        reg.write_text(yaml.safe_dump({
+            "domains": {"d1": {"paths": ["a.py"]}}
+        }))
+        _run_cli(tmp_path, "reserve",
+                 "--domain", "d1", "--pr", "1",
+                 "--agent", "alice", "--branch", "b")
+        cmd = [
+            sys.executable, "-m", "merge_train.domain_lock",
+            "--registry", str(reg), "--log", str(log),
+            "--git-cwd", str(repo),
+            "check", "--files", "a.py", "--pr", "2",
+            "--diff-mode",
+        ]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        assert r.returncode == 1
+        assert "HELD" in r.stdout
+
+
+def test_cli_git_cwd_affects_reserve_log_path(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init")
+    subprocess.run(["git", "remote", "add", "origin", "https://example.com/myrepo.git"],
+                   cwd=repo, check=True, capture_output=True)
+    reg = repo / "reg.yaml"
+    log = tmp_path / "isolated_log.jsonl"
+    reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
+    r = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "--git-cwd", str(repo),
+        "reserve", "--domain", "d1", "--pr", "1",
+        "--agent", "a", "--branch", "b",
+    ], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "RESERVED" in r.stdout
 
 
 def test_cli_double_reserve_exit1(tmp_path: Path):
@@ -418,3 +530,160 @@ def test_cli_missing_registry_exit2(tmp_path: Path):
     ]
     r = subprocess.run(cmd, capture_output=True, text=True)
     assert r.returncode == 2
+
+
+# --------------------------------------------------------------------------- #
+# External lock path (orch-i7uv)
+# --------------------------------------------------------------------------- #
+
+
+def test_default_log_path_under_merge_train_locks():
+    path = Path(_resolve_default_log())
+    assert path.parent.parent == Path.home() / ".merge_train" / "locks"
+    assert path.name == "pr_domain_locks.jsonl"
+
+
+def test_resolve_default_log_uses_remote_hash():
+    with mock.patch("subprocess.run", return_value=mock.Mock(
+        stdout="https://github.com/example/repo.git\n",
+    )):
+        path = Path(_resolve_default_log())
+    assert path.parent.parent == Path.home() / ".merge_train" / "locks"
+    import hashlib
+    expected = hashlib.sha256(b"https://github.com/example/repo.git").hexdigest()[:12]
+    assert path.parent.name == expected
+
+
+def test_resolve_default_log_fallback_when_no_git():
+    with mock.patch("subprocess.run", side_effect=FileNotFoundError):
+        path = Path(_resolve_default_log())
+    assert path.parent.name == "default"
+    assert path.parent.parent == Path.home() / ".merge_train" / "locks"
+
+
+def test_resolve_default_log_fallback_when_no_origin():
+    with mock.patch("subprocess.run", return_value=mock.Mock(stdout="")):
+        path = Path(_resolve_default_log())
+    assert path.parent.name == "default"
+
+
+def test_default_log_is_sentinel():
+    assert DEFAULT_LOG == "<auto>"
+
+
+def test_resolve_default_log_uses_cwd(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "--initial-branch=main")
+    _git(repo, "config", "user.email", "t@t.test")
+    _git(repo, "config", "user.name", "t")
+    _git(repo, "remote", "add", "origin", "https://example.com/test.git")
+    result = _resolve_default_log(cwd=repo)
+    assert "test.git" not in result
+    assert ".merge_train/locks" in result
+
+
+def test_resolve_default_log_fallback_no_git(tmp_path: Path):
+    with mock.patch("subprocess.run", side_effect=FileNotFoundError):
+        result = _resolve_default_log(cwd=tmp_path)
+    assert "default" in result
+    assert ".merge_train/locks" in result
+
+
+def test_env_var_overrides_default(tmp_path: Path, monkeypatch):
+    custom_log = tmp_path / "custom.jsonl"
+    monkeypatch.setenv("MERGE_TRAIN_LOG", str(custom_log))
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "reserve", "--domain", "d1", "--pr", "1", "--agent", "a", "--branch", "b",
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0
+    assert custom_log.exists()
+
+
+def test_log_flag_overrides_default(tmp_path: Path):
+    custom_log = tmp_path / "flag_override.jsonl"
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "--log", str(custom_log),
+        "reserve", "--domain", "d1", "--pr", "1", "--agent", "a", "--branch", "b",
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0
+    assert custom_log.exists()
+
+
+def test_concurrent_append_same_external_log(tmp_path: Path):
+    log_path = tmp_path / "shared.jsonl"
+    log = LockLog(log_path)
+    e1 = LockEntry("d1", 1, "a", "b", "t1", "active")
+    e2 = LockEntry("d2", 2, "a2", "b2", "t2", "active")
+    log.append(e1)
+    log.append(e2)
+    entries = log.entries()
+    assert len(entries) == 2
+    assert entries[0].domain == "d1"
+    assert entries[1].domain == "d2"
+
+
+def test_backward_compat_env_var_in_repo_path(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("MERGE_TRAIN_LOG", str(tmp_path / "pr_domain_locks.jsonl"))
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "reserve", "--domain", "d1", "--pr", "1", "--agent", "a", "--branch", "b",
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0
+    assert (tmp_path / "pr_domain_locks.jsonl").exists()
+
+
+# --------------------------------------------------------------------------- #
+# Concurrency safety (orch-xxvz)
+# --------------------------------------------------------------------------- #
+
+
+def test_lock_log_lock_context_manager(tmp_path: Path):
+    log = LockLog(tmp_path / "log.jsonl")
+    with log.lock() as fh:
+        assert fh is not None
+
+
+def _worker_reserve(args):
+    log_path, reg_data, domain, pr, agent, branch = args
+    from merge_train.domain_lock import LockLog, Registry, reserve, DomainHeldError
+    log = LockLog(log_path)
+    reg = Registry.from_dict(reg_data)
+    try:
+        reserve(log, reg, domain=domain, pr=pr, agent=agent, branch=branch,
+                now="2026-05-17T00:00:00Z")
+        return ("ok", pr)
+    except DomainHeldError:
+        return ("denied", pr)
+
+
+def test_concurrent_reserve_only_one_wins(tmp_path: Path):
+    import multiprocessing
+
+    reg_data = {"domains": {"d1": {"paths": ["a.py"]}}}
+    log_path = tmp_path / "log.jsonl"
+    args_list = [
+        (log_path, reg_data, "d1", 1, "a1", "b1"),
+        (log_path, reg_data, "d1", 2, "a2", "b2"),
+    ]
+    with multiprocessing.Pool(2) as pool:
+        results = pool.map(_worker_reserve, args_list)
+    statuses = [r[0] for r in results]
+    assert "ok" in statuses
+    assert "denied" in statuses
+    log = LockLog(log_path)
+    assert len(log.active_all()) == 1

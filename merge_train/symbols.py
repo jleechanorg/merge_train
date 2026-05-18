@@ -24,6 +24,10 @@ class UnsupportedLanguageError(Exception):
     """Raised when symbol extraction is requested for a non-Python file."""
 
 
+class SymbolResolutionError(Exception):
+    """Raised when symbol extraction fails — caller should fall back to file-level."""
+
+
 @dataclass(frozen=True)
 class Symbol:
     """A named code region with an inclusive line range.
@@ -154,15 +158,24 @@ def touched_symbols(
     """Return the set of symbol names whose line range intersects any hunk.
 
     *new_source* is the post-edit file content; *diff_text* is the
-    unified-diff text (``git diff -U0`` style). If parsing fails or no
-    symbols are present, returns an empty set.
+    unified-diff text (``git diff -U0`` style).
+
+    Raises :class:`SymbolResolutionError` if the source cannot be parsed
+    (SyntaxError) or if the file is non-empty but contains no top-level
+    symbols — callers should fall back to file-level collision semantics.
     """
     try:
         symbols = extract_symbols(new_source)
-    except SyntaxError:
-        return set()
+    except SyntaxError as exc:
+        raise SymbolResolutionError(
+            f"cannot parse source: {exc}"
+        ) from exc
+    if new_source.strip() and not symbols:
+        raise SymbolResolutionError(
+            "non-empty source yielded no symbols — falling back to file-level"
+        )
     hunks = parse_hunks(diff_text)
-    if not symbols or not hunks:
+    if not hunks:
         return set()
     out: set[str] = set()
     for sym in symbols:
@@ -219,6 +232,9 @@ def touched_symbols_for_staged_file(
 
     Raises :class:`UnsupportedLanguageError` for non-Python files —
     callers should treat that as a file-level collision.
+
+    Also raises :class:`UnsupportedLanguageError` when symbol resolution
+    fails (parse error, empty symbols) — same file-level fallback.
     """
     if not is_python_path(path):
         raise UnsupportedLanguageError(f"symbol extraction supports .py only: {path}")
@@ -226,7 +242,12 @@ def touched_symbols_for_staged_file(
     if not diff.strip():
         return set()
     new_source = staged_content_for_file(path, cwd=cwd)
-    return touched_symbols(new_source=new_source, diff_text=diff)
+    try:
+        return touched_symbols(new_source=new_source, diff_text=diff)
+    except SymbolResolutionError as exc:
+        raise UnsupportedLanguageError(
+            f"symbol resolution failed for {path}: {exc}"
+        ) from exc
 
 
 def resolve_touched_symbols(

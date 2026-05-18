@@ -12,7 +12,7 @@
 # Env overrides:
 #   MERGE_TRAIN_PR       override detected PR number
 #   MERGE_TRAIN_REGISTRY YAML path
-#   MERGE_TRAIN_LOG      JSONL path
+#   MERGE_TRAIN_LOG      JSONL path (default: ~/.merge_train/locks/<repo-hash>/pr_domain_locks.jsonl)
 
 set -euo pipefail
 
@@ -58,6 +58,6 @@ if command -v domain_lock >/dev/null 2>&1; then
   domain_lock "${REG_ARG[@]}" "${LOG_ARG[@]}" \
     check --files "${FILES[@]}" "${PR_ARG[@]}" "${DIFF_ARG[@]}"
 else
-  python3 -m merge_train.domain_lock "${REG_ARG[@]}" "${LOG_ARG[@]}" \
+  python3 -c "import sys; from merge_train.domain_lock import main; sys.exit(main())" "${REG_ARG[@]}" "${LOG_ARG[@]}" \
     check --files "${FILES[@]}" "${PR_ARG[@]}" "${DIFF_ARG[@]}"
 fi

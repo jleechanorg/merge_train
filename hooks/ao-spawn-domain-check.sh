@@ -16,7 +16,7 @@
 #   MERGE_TRAIN_PR       PR number (optional — own-PR re-checks are free)
 # Optional:
 #   MERGE_TRAIN_REGISTRY path to YAML (default: file_domains.yaml)
-#   MERGE_TRAIN_LOG      path to JSONL (default: pr_domain_locks.jsonl)
+#   MERGE_TRAIN_LOG      path to JSONL (default: ~/.merge_train/locks/<repo-hash>/pr_domain_locks.jsonl)
 #   MERGE_TRAIN_DIFF_MODE  "1" (default) resolves Python symbols from
 #                        the *staged* diff; "0" falls back to file-level.
 #                        At spawn time there's no staged diff yet, so the
@@ -49,4 +49,4 @@ if command -v domain_lock >/dev/null 2>&1; then
 fi
 
 # Fallback: run as module from repo root
-exec python3 -m merge_train.domain_lock "${ARGS[@]}"
+exec python3 -c "import sys; from merge_train.domain_lock import main; sys.exit(main())" "${ARGS[@]}"
