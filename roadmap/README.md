@@ -1,0 +1,6 @@
+# merge_train Roadmap
+
+## Recent activity (rolling)
+
+- 2026-05-18 — Fixed parser backward-compat: `domain_lock <cmd> --files X --git-cwd Y` (global flags after the subcommand) was rejected with `unrecognized arguments`. Fix in [`ce47114`](https://github.com/jleechanorg/merge_train/commit/ce47114) re-registers `--registry`, `--log`, `--git-cwd` on every subparser with `default=argparse.SUPPRESS`; follow-up [`15e2d0c`](https://github.com/jleechanorg/merge_train/commit/15e2d0c) added `reserve-plan` + `--registry` override coverage after adversarial code-review. Tests: 125 → 134. Evidence bundle: `/tmp/merge_train_evidence/proofs/parser_compat_fix/`. `/es` evidence-standards review and `/er` evidence-reviewer subagent both **PASS**.
+- 2026-05-17 — Ran `/nextsteps` after a strict evidence review of `/tmp/merge_train_evidence/`. Current verdict: `merge_train` is a promising conflict-reduction primitive, but not yet proven as reliable pipeline infrastructure. Follow-up priorities are tracked as `orch-i7uv`, `orch-xxvz`, `orch-jf9s`, and `orch-66my`.
