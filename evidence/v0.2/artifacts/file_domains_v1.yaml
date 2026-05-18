@@ -1,0 +1,115 @@
+# Registry for worldarchitect.ai dry-run (top 30 open PRs as of 2026-05-18)
+domains:
+  level-up-pipeline:
+    paths:
+      - "mvp_site/rewards_engine.py"
+      - "mvp_site/world_logic.py"
+      - "mvp_site/tests/test_rewards_engine*.py"
+      - "mvp_site/tests/test_world_logic*.py"
+      - "mvp_site/prompts/level_up_instruction.md"
+      - "mvp_site/prompts/rewards_system_instruction.md"
+
+  llm-parser:
+    paths:
+      - "mvp_site/llm_parser.py"
+      - "mvp_site/tests/test_llm_parser*.py"
+
+  agents:
+    paths:
+      - "mvp_site/agents.py"
+      - "mvp_site/tests/test_agents*.py"
+
+  llm-service:
+    paths:
+      - "mvp_site/llm_service.py"
+      - "mvp_site/tests/test_llm_service*.py"
+
+  narrative-response:
+    paths:
+      - "mvp_site/narrative_response_schema.py"
+      - "mvp_site/tests/test_narrative_response_schema*.py"
+
+  prompt-contracts:
+    paths:
+      - "mvp_site/schemas/prompt_tool_contracts.json"
+
+  firestore:
+    paths:
+      - "mvp_site/firestore_service.py"
+      - "mvp_site/tests/test_firestore*.py"
+
+  campaign:
+    paths:
+      - "mvp_site/campaign_service.py"
+      - "mvp_site/tests/test_campaign*.py"
+
+  dice:
+    paths:
+      - "mvp_site/dice.py"
+      - "mvp_site/tests/test_dice*.py"
+
+  constants:
+    paths:
+      - "mvp_site/constants.py"
+
+  preventive-guards:
+    paths:
+      - "mvp_site/preventive_guards.py"
+
+  main:
+    paths:
+      - "mvp_site/main.py"
+      - "mvp_site/tests/test_main*.py"
+
+  frontend:
+    paths:
+      - "mvp_site/frontend_v1/app.js"
+      - "mvp_site/frontend_v1/*.js"
+      - "mvp_site/frontend_v1/*.css"
+      - "mvp_site/frontend_v1/*.html"
+
+  ci-workflows:
+    paths:
+      - ".github/workflows/*.yml"
+      - ".github/workflows/*.yaml"
+
+  ci-scripts:
+    paths:
+      - ".github/scripts/*.sh"
+      - ".github/scripts/*.py"
+
+  prompts:
+    paths:
+      - "mvp_site/prompts/planning_protocol.md"
+      - "mvp_site/prompts/*.md"
+
+  testing-mcp:
+    paths:
+      - "testing_mcp/*.py"
+      - "testing_mcp/lib/*.py"
+
+  agent-instructions:
+    paths:
+      - "CLAUDE.md"
+      - "GEMINI.md"
+      - "README.md"
+
+  roadmap-docs:
+    paths:
+      - "roadmap/README.md"
+      - "roadmap/*.md"
+
+  beads:
+    paths:
+      - ".beads/issues.jsonl"
+      - ".beads/beads.left.jsonl"
+
+  pyproject:
+    paths:
+      - "pyproject.toml"
+      - "requirements*.txt"
+
+  pr-design-docs:
+    paths:
+      - "docs/design/pr-designs/*.md"
+      - "docs/design/pr-designs/*.html"

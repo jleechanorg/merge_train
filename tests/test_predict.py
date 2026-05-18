@@ -925,3 +925,144 @@ def test_symbols_from_staged_diff_no_git(tmp_path, monkeypatch):
     from merge_train import symbol_discovery
     result = symbol_discovery.symbols_from_staged_diff(cwd=tmp_path)
     assert result == {}
+
+
+# --------------------------------------------------------------------------- #
+# v0.2.1: codex-review follow-ups
+# --------------------------------------------------------------------------- #
+
+
+def test_detect_repo_from_git_remote_ssh(monkeypatch):
+    """_detect_repo_from_git_remote parses git@github.com:owner/repo.git form."""
+    import subprocess as _sp
+
+    def fake_run(*args, **kw):
+        return type("P", (), {
+            "returncode": 0,
+            "stdout": "git@github.com:jleechanorg/merge_train.git\n",
+            "stderr": "",
+        })()
+
+    monkeypatch.setattr(_sp, "run", fake_run)
+    from merge_train.symbol_discovery import _detect_repo_from_git_remote
+    assert _detect_repo_from_git_remote() == "jleechanorg/merge_train"
+
+
+def test_detect_repo_from_git_remote_https(monkeypatch):
+    """_detect_repo_from_git_remote parses https://github.com/owner/repo form."""
+    import subprocess as _sp
+
+    def fake_run(*args, **kw):
+        return type("P", (), {
+            "returncode": 0,
+            "stdout": "https://github.com/jleechanorg/merge_train\n",
+            "stderr": "",
+        })()
+
+    monkeypatch.setattr(_sp, "run", fake_run)
+    from merge_train.symbol_discovery import _detect_repo_from_git_remote
+    assert _detect_repo_from_git_remote() == "jleechanorg/merge_train"
+
+
+def test_detect_repo_from_git_remote_no_match(monkeypatch):
+    """_detect_repo_from_git_remote returns None for non-github remotes."""
+    import subprocess as _sp
+
+    def fake_run(*args, **kw):
+        return type("P", (), {
+            "returncode": 0,
+            "stdout": "https://gitlab.com/foo/bar.git\n",
+            "stderr": "",
+        })()
+
+    monkeypatch.setattr(_sp, "run", fake_run)
+    from merge_train.symbol_discovery import _detect_repo_from_git_remote
+    assert _detect_repo_from_git_remote() is None
+
+
+def test_detect_repo_from_git_remote_no_git(monkeypatch):
+    """_detect_repo_from_git_remote returns None when git is missing."""
+    import subprocess as _sp
+
+    def fake_run(*args, **kw):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(_sp, "run", fake_run)
+    from merge_train.symbol_discovery import _detect_repo_from_git_remote
+    assert _detect_repo_from_git_remote() is None
+
+
+def test_enrich_symbols_errors_without_repo_or_remote(tmp_path, monkeypatch):
+    """CLI --enrich-symbols without --repo and no git remote returns exit 2."""
+    import subprocess as _sp
+    import sys as _sys
+
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
+    }))
+    plan = tmp_path / "plan.yaml"
+    plan.write_text(yaml.safe_dump({
+        "prs": [{"pr": 1, "branch": "b1", "files": ["mvp_site/world_logic.py"]}]
+    }))
+
+    # Stub git remote get-url origin → rc=1 (no remote)
+    real_run = _sp.run
+    def fake_run(cmd, *a, **kw):
+        if isinstance(cmd, list) and cmd[:3] == ["git", "remote", "get-url"]:
+            return type("P", (), {"returncode": 1, "stdout": "", "stderr": "no remote"})()
+        return real_run(cmd, *a, **kw)
+    monkeypatch.setattr(_sp, "run", fake_run)
+
+    r = subprocess.run([
+        _sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "predict-conflicts", "--plan", str(plan), "--no-textual",
+        "--enrich-symbols", "--git-cwd", str(tmp_path),
+    ], capture_output=True, text=True)
+    assert r.returncode == 2, r.stderr
+    assert "--enrich-symbols requires --repo" in r.stderr
+
+
+def test_gh_file_content_at_ref_uses_raw_accept_header(monkeypatch):
+    """_gh_file_content_at_ref calls gh api with Accept: application/vnd.github.raw."""
+    import subprocess as _sp
+    captured = {}
+
+    def fake_run(cmd, *a, **kw):
+        captured["cmd"] = cmd
+        return type("P", (), {
+            "returncode": 0,
+            "stdout": "def foo():\n    pass\n",
+            "stderr": "",
+        })()
+
+    monkeypatch.setattr(_sp, "run", fake_run)
+    from merge_train.symbol_discovery import _gh_file_content_at_ref
+    result = _gh_file_content_at_ref("foo.py", "abc123", "owner/repo")
+    assert result == "def foo():\n    pass\n"
+    assert "Accept: application/vnd.github.raw" in captured["cmd"]
+
+
+def test_gh_file_content_at_ref_handles_encoding_none(monkeypatch, caplog):
+    """When raw fails AND contents API returns encoding=none, return '' + warning."""
+    import subprocess as _sp
+
+    call_count = {"n": 0}
+    def fake_run(cmd, *a, **kw):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            # First call: raw Accept — pretend it fails
+            return type("P", (), {"returncode": 1, "stdout": "", "stderr": "raw nope"})()
+        # Second call: contents API → returns encoding=none (large file)
+        import json as _j
+        body = {"content": "", "encoding": "none", "size": 5_000_000}
+        return type("P", (), {"returncode": 0, "stdout": _j.dumps(body), "stderr": ""})()
+
+    monkeypatch.setattr(_sp, "run", fake_run)
+    from merge_train.symbol_discovery import _gh_file_content_at_ref
+    import logging as _logging
+    with caplog.at_level(_logging.WARNING, logger="merge_train.symbol_discovery"):
+        result = _gh_file_content_at_ref("big.py", "abc", "owner/repo")
+    assert result == ""
+    assert any("no inline content" in r.message for r in caplog.records)

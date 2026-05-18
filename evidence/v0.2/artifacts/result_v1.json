@@ -1,0 +1,7647 @@
+{
+  "input_prs": [
+    6947,
+    6946,
+    6944,
+    6943,
+    6941,
+    6940,
+    6938,
+    6937,
+    6936,
+    6933,
+    6932,
+    6931,
+    6930,
+    6927,
+    6926,
+    6922,
+    6920,
+    6912,
+    6911,
+    6910,
+    6909,
+    6906,
+    6904,
+    6902,
+    6896,
+    6877,
+    6873,
+    6856,
+    6840,
+    6779
+  ],
+  "pairwise_conflicts": [
+    {
+      "prs": [
+        6946,
+        6944
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6943
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6941
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6940
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6938
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6936
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6933
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6932
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6930
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6946,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6943
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6941
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6940
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6938
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6937
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6936
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6933
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6932
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6930
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6944,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6941
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6940
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6938
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6936
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6933
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6932
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6930
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6943,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6940
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6938
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6936
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6933
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6932
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6930
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6941,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6938
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6936
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6933
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6932
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6930
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6940,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6937
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6936
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6933
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6932
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6930
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6938,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6936
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6933
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "preventive-guards",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "preventive-guards",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6937,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6933
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6932
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6930
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-service",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-service",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-service",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6936,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6932
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6930
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6933,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6930
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6932,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6931,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "frontend",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6931,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "frontend",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6931,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "frontend",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6931,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "frontend",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6927
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6930,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6926
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6927,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6922
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompts",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "prompts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6926,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6920
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompts",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        },
+        {
+          "domain": "prompts",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "constants",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "constants",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6922,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "constants",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6912
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6920,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6911
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "main",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "frontend",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-service",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "main",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-scripts",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "frontend",
+          "symbols": []
+        },
+        {
+          "domain": "llm-service",
+          "symbols": []
+        },
+        {
+          "domain": "main",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6912,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "frontend",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6910
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6911,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6909
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6910,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6909,
+        6906
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6909,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6909,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6909,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6909,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6909,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6909,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6909,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6909,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6906,
+        6904
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6906,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6906,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "narrative-response",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6906,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "main",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6906,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6906,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "narrative-response",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6906,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "main",
+          "symbols": []
+        },
+        {
+          "domain": "narrative-response",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6906,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6904,
+        6902
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6904,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6904,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6904,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6904,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6904,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "frontend",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6904,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "frontend",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6902,
+        6896
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6902,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6902,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6902,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6902,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6902,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6896,
+        6877
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6896,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6896,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "constants",
+          "symbols": []
+        },
+        {
+          "domain": "firestore",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "narrative-response",
+          "symbols": []
+        },
+        {
+          "domain": "preventive-guards",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "pyproject",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6896,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "llm-service",
+          "symbols": []
+        },
+        {
+          "domain": "narrative-response",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "pyproject",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6896,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "constants",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6877,
+        6873
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6877,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6877,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "main",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6877,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6873,
+        6856
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6873,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "agent-instructions",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6873,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6856,
+        6840
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "beads",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "llm-parser",
+          "symbols": []
+        },
+        {
+          "domain": "narrative-response",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "pyproject",
+          "symbols": []
+        },
+        {
+          "domain": "roadmap-docs",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6856,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "constants",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    },
+    {
+      "prs": [
+        6840,
+        6779
+      ],
+      "domain_conflicts": [
+        {
+          "domain": "ci-workflows",
+          "symbols": []
+        },
+        {
+          "domain": "pr-design-docs",
+          "symbols": []
+        },
+        {
+          "domain": "agents",
+          "symbols": []
+        },
+        {
+          "domain": "frontend",
+          "symbols": []
+        },
+        {
+          "domain": "prompt-contracts",
+          "symbols": []
+        },
+        {
+          "domain": "level-up-pipeline",
+          "symbols": []
+        },
+        {
+          "domain": "testing-mcp",
+          "symbols": []
+        }
+      ],
+      "textual_conflicts": []
+    }
+  ],
+  "parallel_batches": [
+    [
+      6873,
+      6931,
+      6937,
+      6947
+    ],
+    [
+      6779
+    ],
+    [
+      6840
+    ],
+    [
+      6856
+    ],
+    [
+      6877
+    ],
+    [
+      6896
+    ],
+    [
+      6902
+    ],
+    [
+      6904
+    ],
+    [
+      6906
+    ],
+    [
+      6909
+    ],
+    [
+      6910
+    ],
+    [
+      6911
+    ],
+    [
+      6912
+    ],
+    [
+      6920
+    ],
+    [
+      6922
+    ],
+    [
+      6926
+    ],
+    [
+      6927
+    ],
+    [
+      6930
+    ],
+    [
+      6932
+    ],
+    [
+      6933
+    ],
+    [
+      6936
+    ],
+    [
+      6938
+    ],
+    [
+      6940
+    ],
+    [
+      6941
+    ],
+    [
+      6943
+    ],
+    [
+      6944
+    ],
+    [
+      6946
+    ]
+  ],
+  "recommended_order": [
+    6873,
+    6931,
+    6937,
+    6947,
+    6779,
+    6840,
+    6856,
+    6877,
+    6896,
+    6902,
+    6904,
+    6906,
+    6909,
+    6910,
+    6911,
+    6912,
+    6920,
+    6922,
+    6926,
+    6927,
+    6930,
+    6932,
+    6933,
+    6936,
+    6938,
+    6940,
+    6941,
+    6943,
+    6944,
+    6946
+  ],
+  "unmapped_files_by_pr": {
+    "6947": [
+      "package-lock.json"
+    ],
+    "6944": [
+      ".codex/automation/pr-6944/responses.json"
+    ],
+    "6940": [
+      "scripts/validate_imports.py"
+    ],
+    "6938": [
+      "docs/evidence/pr-6938/evidence.md",
+      "docs/evidence/pr-6938/evidence.md.sha256",
+      "docs/evidence/pr-6938/test_output.txt",
+      "docs/evidence/pr-6938/test_output.txt.sha256",
+      "mvp_site/tests/test_pr6938_debug_strip_state_fix.py"
+    ],
+    "6937": [
+      "mvp_site/admin_override_contracts.py",
+      "mvp_site/tests/test_state_intersection_matrix.py"
+    ],
+    "6936": [
+      ".claude/skills/evidence-standards.md",
+      "mvp_site/llm_response.py",
+      "mvp_site/tests/test_model_identity_not_leaked.py"
+    ],
+    "6932": [
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_attack_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_back_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_cast_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_complete_animation_spritesheet_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_complete_animation_spritesheet_256.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_death_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_front_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_hurt_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_idle_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_left_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_right_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_spritesheet_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_spritesheet_256.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_walk_back_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_walk_cycle.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_walk_front_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_walk_left_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/alexiel_walk_right_1024.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_attack.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_attack_1024.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_cast.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_cast_1024.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_death.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_death_1024.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_hurt.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_hurt_1024.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_idle.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_idle_1024.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_walk_back.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_walk_back_1024.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_walk_front.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_walk_front_1024.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_walk_left.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_walk_left_1024.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_walk_right.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/animations/alexiel_walk_right_1024.gif",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/attack/frame_001.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/attack/frame_002.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/attack/frame_003.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/attack/frame_004.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/attack/frame_005.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/attack/frame_006.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/attack/frame_007.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/attack/frame_008.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/cast/frame_001.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/cast/frame_002.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/cast/frame_003.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/cast/frame_004.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/cast/frame_005.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/cast/frame_006.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/cast/frame_007.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/cast/frame_008.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/death/death_01.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/death/death_02.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/death/death_03.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/death/death_04.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/hurt/hurt_01.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/hurt/hurt_02.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/hurt/hurt_03.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/idle/idle_01.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/idle/idle_02.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/idle/idle_03.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/idle/idle_04.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_back/frame_001.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_back/frame_002.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_back/frame_003.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_back/frame_004.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_back/frame_005.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_back/frame_006.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_back/frame_007.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_back/frame_008.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_front/frame_001.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_front/frame_002.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_front/frame_003.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_front/frame_004.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_front/frame_005.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_front/frame_006.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_front/frame_007.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_front/frame_008.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_left/frame_001.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_left/frame_002.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_left/frame_003.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_left/frame_004.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_left/frame_005.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_left/frame_006.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_left/frame_007.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_left/frame_008.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_right/frame_001.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_right/frame_002.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_right/frame_003.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_right/frame_004.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_right/frame_005.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_right/frame_006.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_right/frame_007.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/frames/walk_right/frame_008.png",
+      "mvp_site/frontend_v1/static/sprites/alexiel/walk_cycle.mp4",
+      "mvp_site/frontend_v1/static/sprites/alexiel/walk_frames/walk_001.jpeg",
+      "mvp_site/frontend_v1/static/sprites/alexiel/walk_frames/walk_002.jpeg"
+    ],
+    "6930": [
+      ".codex/automation/pr-6907/README.md",
+      ".codex/automation/pr-6907/responses.json"
+    ],
+    "6927": [
+      "mvp_site/tests/test_end2end/fixtures/organic_level_up_replay/manifest.json",
+      "mvp_site/tests/test_end2end/fixtures/organic_level_up_replay/stage_01_threshold.json",
+      "mvp_site/tests/test_end2end/test_level_up_replay_end2end.py"
+    ],
+    "6926": [
+      "mvp_site/agent_prompts.py",
+      "mvp_site/tests/test_canonicalize_invariants.py",
+      "mvp_site/tests/test_modal_routing_fixtures.py",
+      "mvp_site/tests/test_prompts.py"
+    ],
+    "6922": [
+      ".codex/automation/pr-6922/responses.json",
+      "mvp_site/game_state.py",
+      "mvp_site/tests/test_delete_fix.py",
+      "mvp_site/tests/test_npc_death_state_persistence.py"
+    ],
+    "6912": [
+      ".claude/commands/conv.md",
+      ".claude/commands/converge.md",
+      ".claude/commands/gene.md",
+      ".claude/commands/goalexec.md",
+      ".claude/commands/orchconverge.md",
+      ".claude/skills/babysit/SKILL.md",
+      ".claude/skills/github-cli-reference.md",
+      ".claude/skills/goalexec-define/SKILL.md",
+      ".github/skeptic-cron-checklist.md",
+      "docs/design/pr-designs/pr-6935-responses.json",
+      "docs/design/system-architecture.md",
+      "docs/slim-mode-quality-report.md",
+      "mvp_site/debug_hybrid_system.py",
+      "mvp_site/llm_response.py",
+      "scripts/goalexec-loop-cmux.sh",
+      "scripts/goalexec-loop.sh",
+      "tests/test_mcp_global_installation.py"
+    ],
+    "6911": [
+      "mvp_site/tests/test_freeze_time_choices.py"
+    ],
+    "6910": [
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645033.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645034.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645035.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645036.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645037.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645244.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645292.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645293.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645294.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645295.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645296.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645412.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645426.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645640.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645809.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645818.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645819.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645820.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645821.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645943.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645954.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645976.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645987.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646049.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646059.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646073.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646098.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646107.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646115.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646133.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646301.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646302.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646303.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646304.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646305.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646306.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647862.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647863.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647864.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647865.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647866.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642468.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642487.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642519.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642555.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642573.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645038.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645057.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645104.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645110.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645144.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645297.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645304.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645315.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645347.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645370.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645822.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645846.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645870.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645889.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645912.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646307.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646339.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646356.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646384.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646394.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647867.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647883.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647902.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647934.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647954.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642237.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642245.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642252.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642266.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642276.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778640810.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778645038.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778645297.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778645822.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646143.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646152.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646194.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646248.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646291.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646306.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778647867.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778640809.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778645038.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778645296.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778645822.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778646258.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778646290.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778646306.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778647866.csv"
+    ],
+    "6909": [
+      "docs/evidence/pr-6909/README.md",
+      "docs/evidence/pr-6909/README.md.sha256",
+      "docs/evidence/pr-6909/artifacts/local_server_startup.log",
+      "docs/evidence/pr-6909/artifacts/parser_pipe_bypass_repro.py",
+      "docs/evidence/pr-6909/artifacts/parser_pipe_bypass_repro.txt",
+      "docs/evidence/pr-6909/artifacts/pytest_god_mode_data.log",
+      "docs/evidence/pr-6909/artifacts/ruff_check.log",
+      "docs/evidence/pr-6909/changed_files.txt",
+      "docs/evidence/pr-6909/changed_files.txt.sha256",
+      "docs/evidence/pr-6909/evidence.md",
+      "docs/evidence/pr-6909/evidence.md.sha256",
+      "docs/evidence/pr-6909/git_commit_info.txt",
+      "docs/evidence/pr-6909/git_commit_info.txt.sha256",
+      "docs/evidence/pr-6909/git_head.txt",
+      "docs/evidence/pr-6909/git_head.txt.sha256",
+      "docs/evidence/pr-6909/metadata.json",
+      "docs/evidence/pr-6909/metadata.json.sha256",
+      "docs/evidence/pr-6909/methodology.md",
+      "docs/evidence/pr-6909/methodology.md.sha256",
+      "docs/evidence/pr-6909/run.json",
+      "docs/evidence/pr-6909/run.json.sha256"
+    ],
+    "6906": [
+      ".claude/commands/zfc.md",
+      ".claude/hooks/PreToolUse.sh",
+      ".claude/skills/harness-guardrails.md",
+      ".claude/skills/testing-layers/SKILL.md",
+      ".claude/skills/zero-framework-cognition/SKILL.md",
+      ".claude/skills/zfc-leveling-roadmap/SKILL.md",
+      ".codex/skills/learn",
+      ".codex/skills/learn/SKILL.md",
+      ".codex/skills/root-cause-first",
+      ".codex/skills/root-cause-first/SKILL.md",
+      ".codex/skills/testing-layers",
+      ".codex/skills/testing-layers/SKILL.md",
+      ".codex/skills/zero-framework-cognition",
+      ".codex/skills/zero-framework-cognition/SKILL.md",
+      "evidence/worktree_level_choices/prompt_only_attempt.md",
+      "mvp_site/agent_prompts.py",
+      "mvp_site/game_state.py",
+      "mvp_site/tests/test_bug_rewards_box_atomicity.py",
+      "mvp_site/tests/test_canonicalize_invariants.py",
+      "mvp_site/tests/test_end2end/test_continue_story_end2end.py",
+      "mvp_site/tests/test_end2end/test_level_up_replay_end2end.py",
+      "mvp_site/tests/test_end2end/test_opaque_choice_contract_end2end.py",
+      "mvp_site/tests/test_end2end/test_opaque_level_up_intent_end2end.py",
+      "mvp_site/tests/test_end2end/test_visit_campaign_end2end.py",
+      "mvp_site/tests/test_freeze_time_choices.py",
+      "mvp_site/tests/test_game_state.py",
+      "mvp_site/tests/test_level_up_stale_flags.py",
+      "mvp_site/tests/test_level_up_stale_guards.py",
+      "mvp_site/tests/test_modal_integration.py",
+      "mvp_site/tests/test_planning_block_streaming_passthrough.py",
+      "mvp_site/tests/test_prompts.py",
+      "mvp_site/tests/test_streaming_orchestrator.py"
+    ],
+    "6904": [
+      ".codex/automation/pr-6904/README.md",
+      ".codex/automation/pr-6904/responses.json",
+      "docs/evidence/pr-6904/evidence.md",
+      "docs/evidence/pr-6904/metadata.json",
+      "mvp_site/tests/test_end2end/fixtures/streaming_gemini_encounter_xp_v1.json",
+      "mvp_site/tests/test_end2end/test_streaming_contract_end2end.py",
+      "mvp_site/tests/test_planning_choice_custom_action_node.py",
+      "mvp_site/tests/test_prompts.py",
+      "mvp_site/tests/test_streaming_orchestrator.py",
+      "prototype/validators/narrative_sync_validator.py"
+    ],
+    "6902": [
+      "docs/ab-evidence/origin_main_comparative_output.txt",
+      "docs/ab-evidence/origin_main_output.txt",
+      "docs/ab-evidence/slim_output.txt",
+      "docs/ab-evidence/test_ab6_slim_latency.py",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645033.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645034.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645035.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645036.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645037.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645244.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645292.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645293.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645294.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645295.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645296.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645412.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645426.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645640.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645809.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645818.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645819.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645820.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645821.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645943.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645954.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645976.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778645987.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646049.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646059.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646073.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646098.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646107.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646115.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646133.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646301.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646302.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646303.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646304.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646305.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778646306.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647862.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647863.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647864.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647865.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_campaign-streaming-contract_1778647866.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642468.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642487.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642519.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642555.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778642468_1778642573.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645038.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645057.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645104.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645110.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645038_1778645144.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645297.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645304.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645315.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645347.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645297_1778645370.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645822.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645846.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645870.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645889.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778645822_1778645912.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646307.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646339.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646356.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646384.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778646307_1778646394.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647867.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647883.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647902.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647934.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_journey-test-1778647867_1778647954.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642237.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642245.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642252.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642266.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_perf-test-1778642237_1778642276.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778640810.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778645038.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778645297.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778645822.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646143.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646152.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646194.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646248.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646291.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778646306.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_active_1778647867.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778640809.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778645038.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778645296.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778645822.csv",
+      "docs/evidence/latency-ab6/llm_chunk_log_test_ab6_encounter_inactive_1778646258.csv"
+    ],
+    "6896": [
+      "mvp_site/context_compaction.py",
+      "mvp_site/living_world_contract.py",
+      "mvp_site/memory_utils.py",
+      "mvp_site/schemas/entities_pydantic.py",
+      "mvp_site/tests/test_adaptive_truncation.py",
+      "mvp_site/tests/test_bug_rewards_box_atomicity.py",
+      "mvp_site/tests/test_cache_prompt_structure.py",
+      "mvp_site/tests/test_context_budgeting.py",
+      "mvp_site/tests/test_end2end/test_core_memories_final_context_end2end.py",
+      "mvp_site/tests/test_end2end/test_embedded_json_narrative_end2end.py",
+      "mvp_site/tests/test_end2end/test_living_world_end2end.py",
+      "mvp_site/tests/test_end2end/test_non_streaming_cooldown_strip_end2end.py",
+      "mvp_site/tests/test_evidence_utils_steps_conversion.py",
+      "mvp_site/tests/test_game_state.py",
+      "mvp_site/tests/test_intent_classifier.py",
+      "mvp_site/tests/test_living_world_contract.py",
+      "mvp_site/tests/test_narrative_response_extraction.py",
+      "mvp_site/tests/test_output_token_budget_regression.py",
+      "mvp_site/tests/test_preventive_guards.py"
+    ],
+    "6877": [
+      "docs/evidence/pr-6877/README.md",
+      "docs/evidence/pr-6877/README.md.sha256",
+      "docs/evidence/pr-6877/artifacts/collection_log.txt",
+      "docs/evidence/pr-6877/artifacts/collection_log.txt.sha256",
+      "docs/evidence/pr-6877/artifacts/latency_benchmark.json",
+      "docs/evidence/pr-6877/artifacts/latency_benchmark.json.sha256",
+      "docs/evidence/pr-6877/artifacts/latency_benchmark.py",
+      "docs/evidence/pr-6877/artifacts/latency_benchmark.py.sha256",
+      "docs/evidence/pr-6877/artifacts/latency_benchmark.txt",
+      "docs/evidence/pr-6877/artifacts/latency_benchmark.txt.sha256",
+      "docs/evidence/pr-6877/artifacts/leak_repro.py",
+      "docs/evidence/pr-6877/artifacts/leak_repro.py.sha256",
+      "docs/evidence/pr-6877/artifacts/leak_repro.txt",
+      "docs/evidence/pr-6877/artifacts/leak_repro.txt.sha256",
+      "docs/evidence/pr-6877/artifacts/llm_chunk_log.csv",
+      "docs/evidence/pr-6877/artifacts/llm_chunk_log.csv.sha256",
+      "docs/evidence/pr-6877/artifacts/ruff_check.log",
+      "docs/evidence/pr-6877/artifacts/ruff_check.log.sha256",
+      "docs/evidence/pr-6877/artifacts/server.log",
+      "docs/evidence/pr-6877/artifacts/server.log.sha256",
+      "docs/evidence/pr-6877/artifacts/stream_capture_5Y8sfIim2OyjaQBIiroX_1779127394.json",
+      "docs/evidence/pr-6877/artifacts/stream_capture_5Y8sfIim2OyjaQBIiroX_1779127394.json.sha256",
+      "docs/evidence/pr-6877/artifacts/stream_capture_5Y8sfIim2OyjaQBIiroX_1779127409.json",
+      "docs/evidence/pr-6877/artifacts/stream_capture_5Y8sfIim2OyjaQBIiroX_1779127409.json.sha256",
+      "docs/evidence/pr-6877/artifacts/streaming_evidence.json",
+      "docs/evidence/pr-6877/artifacts/streaming_evidence.json.sha256",
+      "docs/evidence/pr-6877/artifacts/streaming_run.json",
+      "docs/evidence/pr-6877/artifacts/streaming_run.json.sha256",
+      "docs/evidence/pr-6877/artifacts/test_main_state_helper.log",
+      "docs/evidence/pr-6877/artifacts/test_main_state_helper.log.sha256",
+      "docs/evidence/pr-6877/artifacts/test_stream_executor_cleanup.log",
+      "docs/evidence/pr-6877/artifacts/test_stream_executor_cleanup.log.sha256",
+      "docs/evidence/pr-6877/artifacts/thread_count_proof.json",
+      "docs/evidence/pr-6877/artifacts/thread_count_proof.json.sha256",
+      "docs/evidence/pr-6877/artifacts/thread_count_proof.py",
+      "docs/evidence/pr-6877/artifacts/thread_count_proof.py.sha256",
+      "docs/evidence/pr-6877/changed_files.txt",
+      "docs/evidence/pr-6877/changed_files.txt.sha256",
+      "docs/evidence/pr-6877/evidence.md",
+      "docs/evidence/pr-6877/evidence.md.sha256",
+      "docs/evidence/pr-6877/git_commit_info.txt",
+      "docs/evidence/pr-6877/git_commit_info.txt.sha256",
+      "docs/evidence/pr-6877/git_head.txt",
+      "docs/evidence/pr-6877/git_head.txt.sha256",
+      "docs/evidence/pr-6877/metadata.json",
+      "docs/evidence/pr-6877/metadata.json.sha256",
+      "docs/evidence/pr-6877/methodology.md",
+      "docs/evidence/pr-6877/methodology.md.sha256",
+      "docs/evidence/pr-6877/run.json",
+      "docs/evidence/pr-6877/run.json.sha256",
+      "mvp_site/tests/test_stream_executor_cleanup.py"
+    ],
+    "6873": [
+      ".claude/commands/ao.md",
+      ".claude/commands/auton.md",
+      ".claude/commands/browserclaw.md",
+      ".claude/commands/cancel-ralph.md",
+      ".claude/commands/cmux-steer.md",
+      ".claude/commands/converge.md",
+      ".claude/commands/eloop.md",
+      ".claude/commands/evolve_loop.md",
+      ".claude/commands/harness.md",
+      ".claude/commands/memory_search.md",
+      ".claude/commands/ms.md",
+      ".claude/commands/nextsteps.md",
+      ".claude/commands/pair-protocol.md",
+      ".claude/commands/pairv1.md",
+      ".claude/commands/pairv2.md",
+      ".claude/commands/plan.md",
+      ".claude/commands/pr-media.md",
+      ".claude/commands/ralph-loop.md",
+      ".claude/commands/roadmap_orch.md",
+      ".claude/commands/roadmapo.md",
+      ".claude/commands/skillify.md",
+      ".claude/commands/up.md",
+      ".claude/commands/validate-e2e.md",
+      ".claude/commands/wiki-evolve.md",
+      ".claude/commands/wiki-search.md",
+      ".claude/skills/harness-guardrails.md",
+      ".gitignore",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/README.md",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/mcp_repro_full_bar_evidence.gif",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/mcp_repro_full_bar_evidence.mp4",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/mcp_repro_full_bar_evidence.vtt",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/sanitized_snippets/level_up_exits.txt",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/sanitized_snippets/merge_brief.md",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/sanitized_snippets/pr_target.md",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/sanitized_snippets/recon_post.json",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/sanitized_snippets/run_meta.txt",
+      "docs/evidence/2026-04-22-mcp-repro-smoke-assets/sanitized_snippets/smoke_results.json",
+      "docs/evidence/2026-04-22-pr-6404-level-up-assets/README.md",
+      "docs/evidence/2026-04-22-pr-6404-level-up-assets/checksums.sha256",
+      "docs/evidence/2026-04-22-pr-6404-level-up-assets/pr_6404_level_up_atomicity.gif",
+      "docs/evidence/2026-04-22-pr-6404-level-up-assets/pr_6404_level_up_atomicity.mp4",
+      "docs/evidence/2026-04-22-pr-6404-level-up-assets/pr_6404_level_up_atomicity.vtt",
+      "docs/evidence/2026-04-22-pr-6404-level-up-assets/pr_6404_level_up_atomicity.webm",
+      "docs/evidence/pr-6373/terminal-evidence-20260419.md",
+      "docs/evidence/pr-6402/terminal-evidence-20260420.md",
+      "docs/evidence/pr-6443/README.md",
+      "docs/evidence/pr-6443/README.md.sha256",
+      "docs/evidence/pr-6443/campaigns/c4P8D4DRAwfeUPr9ssRL.json",
+      "docs/evidence/pr-6443/campaigns/c4P8D4DRAwfeUPr9ssRL.json.sha256",
+      "docs/evidence/pr-6443/doctor_report.json",
+      "docs/evidence/pr-6443/doctor_report.json.sha256",
+      "docs/evidence/pr-6443/evidence.md",
+      "docs/evidence/pr-6443/evidence.md.sha256",
+      "docs/evidence/pr-6443/gemini_http_request_responses.jsonl",
+      "docs/evidence/pr-6443/gemini_http_request_responses.jsonl.sha256",
+      "docs/evidence/pr-6443/gemini_http_request_responses_1776807212520.jsonl",
+      "docs/evidence/pr-6443/http_request_responses.jsonl",
+      "docs/evidence/pr-6443/http_request_responses.jsonl.sha256",
+      "docs/evidence/pr-6443/http_request_responses_1776807212520.jsonl",
+      "docs/evidence/pr-6443/llm_request_responses.jsonl",
+      "docs/evidence/pr-6443/llm_request_responses.jsonl.sha256",
+      "docs/evidence/pr-6443/llm_request_responses_1776807212520.jsonl",
+      "docs/evidence/pr-6443/metadata.json",
+      "docs/evidence/pr-6443/metadata.json.sha256",
+      "docs/evidence/pr-6443/methodology.md",
+      "docs/evidence/pr-6443/methodology.md.sha256",
+      "docs/evidence/pr-6443/notes.md",
+      "docs/evidence/pr-6443/notes.md.sha256",
+      "docs/evidence/pr-6443/raw_gemini-3-flash-preview_dice_roll_action.txt",
+      "docs/evidence/pr-6443/raw_gemini-3-flash-preview_dice_roll_action.txt.sha256",
+      "docs/evidence/pr-6443/raw_gemini-3-flash-preview_god_mode_action.txt",
+      "docs/evidence/pr-6443/raw_gemini-3-flash-preview_god_mode_action.txt.sha256",
+      "docs/evidence/pr-6443/raw_gemini-3-flash-preview_thinking_mode_action.txt",
+      "docs/evidence/pr-6443/raw_gemini-3-flash-preview_thinking_mode_action.txt.sha256",
+      "docs/evidence/pr-6443/raw_unknown_model_campaign_creation.txt",
+      "docs/evidence/pr-6443/raw_unknown_model_campaign_creation.txt.sha256"
+    ],
+    "6856": [
+      "docs/evidence/pr-6856/evidence.md",
+      "docs/evidence/pr-6856/metadata.json",
+      "docs/evidence/pr-6856/test_output.txt",
+      "mvp_site/admin_override_contracts.py",
+      "mvp_site/structured_fields_utils.py",
+      "mvp_site/tests/test_state_intersection_matrix.py"
+    ],
+    "6840": [
+      ".codex/automation/pr-6907/README.md",
+      ".codex/automation/pr-6907/responses.json",
+      "docs/conflicts/rebase-origin-main-6840.md",
+      "docs/evidence/pr-6840/README.md",
+      "docs/evidence/pr-6840/README.md.sha256",
+      "docs/evidence/pr-6840/cache_async_streaming_flow.cast",
+      "docs/evidence/pr-6840/campaigns/9SeTxY9o2sOtQIny1QBl.json",
+      "docs/evidence/pr-6840/campaigns/9SeTxY9o2sOtQIny1QBl.json.sha256",
+      "docs/evidence/pr-6840/campaigns/Cache Async Streaming Flow - PR6840_9SeTxY9o.txt",
+      "docs/evidence/pr-6840/campaigns/Cache Async Streaming Flow - PR6840_9SeTxY9o_game_state.json",
+      "docs/evidence/pr-6840/evidence.md",
+      "docs/evidence/pr-6840/evidence.md.sha256",
+      "docs/evidence/pr-6840/gemini_http_request_responses.jsonl",
+      "docs/evidence/pr-6840/gemini_http_request_responses.jsonl.sha256",
+      "docs/evidence/pr-6840/gemini_http_request_responses_1778437563429.jsonl",
+      "docs/evidence/pr-6840/http_request_responses.jsonl",
+      "docs/evidence/pr-6840/http_request_responses.jsonl.sha256",
+      "docs/evidence/pr-6840/http_request_responses_1778437563429.jsonl",
+      "docs/evidence/pr-6840/llm_request_responses.jsonl",
+      "docs/evidence/pr-6840/llm_request_responses.jsonl.sha256",
+      "docs/evidence/pr-6840/llm_request_responses_1778437563429.jsonl",
+      "docs/evidence/pr-6840/metadata.json",
+      "docs/evidence/pr-6840/metadata.json.sha256",
+      "docs/evidence/pr-6840/methodology.md",
+      "docs/evidence/pr-6840/methodology.md.sha256",
+      "docs/evidence/pr-6840/notes.md",
+      "docs/evidence/pr-6840/notes.md.sha256",
+      "docs/evidence/pr-6840/raw_gemini-3-flash-preview_n_minus_1_cache_pattern.txt",
+      "docs/evidence/pr-6840/raw_gemini-3-flash-preview_n_minus_1_cache_pattern.txt.sha256",
+      "docs/evidence/pr-6840/raw_gemini-3-flash-preview_no_async_path_errors.txt",
+      "docs/evidence/pr-6840/raw_gemini-3-flash-preview_no_async_path_errors.txt.sha256",
+      "docs/evidence/pr-6840/raw_unknown_model_evidence_signature_guard.txt",
+      "docs/evidence/pr-6840/raw_unknown_model_evidence_signature_guard.txt.sha256",
+      "docs/evidence/pr-6840/replay_fixture_source_manifest.json",
+      "docs/evidence/pr-6840/request_responses.jsonl",
+      "docs/evidence/pr-6840/request_responses.jsonl.sha256",
+      "docs/evidence/pr-6840/run.json",
+      "docs/evidence/pr-6840/run.json.sha256",
+      "docs/evidence/pr-6840/scenario_results_checkpoint.json",
+      "docs/evidence/pr-6840/scenario_results_checkpoint.json.sha256",
+      "docs/evidence/pr-6840/streaming_evidence.json",
+      "docs/evidence/pr-6840/streaming_evidence.json.sha256",
+      "docs/evidence/pr-6840/test_console_output.txt",
+      "docs/evidence/pr-6840/test_console_output.txt.sha256",
+      "mvp_site/gemini_cache_manager.py",
+      "mvp_site/tests/test_cache_n_minus_1.py",
+      "mvp_site/tests/test_explicit_cache_enabled.py",
+      "mvp_site/tests/test_streaming_firestore_optimization.py"
+    ],
+    "6779": [
+      "docs/evidence/pr-6779-campaign-wizard.mp4",
+      "docs/evidence/pr-6779-wizard-test_complete.json",
+      "testing_ui/config.py",
+      "testing_ui/core/test_llm_wizard_flow_e2e.py",
+      "testing_ui/core_tests/test_campaign_creation_browser.py",
+      "testing_ui/visual_gate/baselines/fantasy/03_new_campaign.png",
+      "testing_ui/visual_gate/baselines/light/03_new_campaign.png"
+    ]
+  },
+  "disclaimer": "Risk-reduction signal, not a merge guarantee. Conflict detection is based on declared file/symbol scopes + optional `git merge-tree`. Run CI and human review before merging."
+}

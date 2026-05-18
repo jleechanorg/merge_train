@@ -1,0 +1,35 @@
+{
+  "subject": "merge_train v0.2 — registry expressivity flags + symbol discovery",
+  "bundle_version": "v0.2",
+  "bundle_timestamp": "2026-05-18T16:30:00-07:00",
+  "git_head": "7b0c154ab6da8aa21902bdd74e15b4a240eb064d",
+  "merge_base": "af86c4c746f22ead40c4f864f552aabae8b8dd09",
+  "branch": "main",
+  "remote": "origin",
+  "repo": "jleechanorg/merge_train",
+  "git_version": "2.39.5 (Apple Git-154)",
+  "python_test_result": "200 passed (193 + 7 codex-review follow-ups)",
+  "artifacts": {
+    "file_domains_v1.yaml": "v1 worldarchitect.ai registry — 23 domains, no expressivity flags",
+    "file_domains_v2.yaml": "v2 worldarchitect.ai registry — 27 domains, per_pr_unique + advisory flags + 4 new domains",
+    "prs.yaml": "30 open PRs from worldarchitect.ai snapshot on 2026-05-18, file lists from gh pr diff --name-only",
+    "result_v1.json": "predict-conflicts JSON output using v1 registry — 371 blocking conflicts (85% of pairs)",
+    "result_v2.json": "predict-conflicts JSON output using v2 registry — 217 blocking + 46 advisory conflicts (50% / 11%)"
+  },
+  "headline_metrics": {
+    "blocking_conflicts_v1": 371,
+    "blocking_conflicts_v2": 217,
+    "advisory_conflicts_v2": 46,
+    "blocking_reduction_pct": 41.5,
+    "first_parallel_batch_v1": 4,
+    "first_parallel_batch_v2": 8,
+    "total_batches_v1": 27,
+    "total_batches_v2": 17,
+    "input_prs": 30,
+    "total_pairs": 435
+  },
+  "review_results": {
+    "evidence_reviewer": "PASS (minor NEEDS-WORK on bundle shape, addressed in this revision)",
+    "codex_consultant": "PASS post-fix (initial: 0 BLOCKER, 2 MAJOR, 2 MINOR — all 4 addressed)"
+  }
+}

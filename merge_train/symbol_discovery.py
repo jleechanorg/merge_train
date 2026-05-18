@@ -17,10 +17,13 @@ Non-Python files and files that fail to parse are silently omitted
 from __future__ import annotations
 
 import base64
+import logging
 import re
 import subprocess
 from pathlib import Path
 from typing import Optional
+
+_log = logging.getLogger(__name__)
 
 from merge_train.symbols import (
     UnsupportedLanguageError,
@@ -146,19 +149,78 @@ def _gh_file_content_at_ref(
     ref: str,
     repo: str,
 ) -> str:
-    """Fetch file content at *ref* from GitHub via ``gh api``."""
+    """Fetch file content at *ref* from GitHub via ``gh api``.
+
+    Uses ``Accept: application/vnd.github.raw`` to get raw bytes directly,
+    bypassing the Contents API's ~1 MB inline-content limit. Falls back to
+    base64-decoding ``.content`` only if the raw accept fails (older gh
+    versions, etc).
+    """
+    # Primary path: raw Accept header, no size limit (up to repo blob size).
     try:
         proc = subprocess.run(
-            ["gh", "api", f"repos/{repo}/contents/{path}?ref={ref}",
-             "--jq", ".content"],
+            ["gh", "api",
+             "-H", "Accept: application/vnd.github.raw",
+             f"repos/{repo}/contents/{path}?ref={ref}"],
+            capture_output=True, text=True, check=False,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            return proc.stdout
+    except (FileNotFoundError, subprocess.SubprocessError) as exc:
+        _log.debug("gh raw fetch failed for %s@%s: %s", path, ref, exc)
+
+    # Fallback: legacy Contents API (subject to ~1 MB cap; encoding=none for big files).
+    try:
+        proc = subprocess.run(
+            ["gh", "api", f"repos/{repo}/contents/{path}?ref={ref}"],
             capture_output=True, text=True, check=False,
         )
         if proc.returncode != 0:
+            _log.debug("gh contents API rc=%s for %s@%s: %s",
+                       proc.returncode, path, ref, proc.stderr.strip())
             return ""
-        raw_b64 = proc.stdout.strip().replace("\n", "")
-        return base64.b64decode(raw_b64).decode("utf-8", errors="replace")
-    except (FileNotFoundError, subprocess.SubprocessError, Exception):
+        import json as _json
+        try:
+            body = _json.loads(proc.stdout)
+        except _json.JSONDecodeError:
+            return ""
+        encoding = body.get("encoding")
+        raw_content = (body.get("content") or "").replace("\n", "")
+        if encoding != "base64" or not raw_content:
+            # encoding == "none" means file too large for inline content.
+            _log.warning(
+                "gh contents API returned no inline content for %s@%s "
+                "(encoding=%r, size=%s) — symbol enrichment skipped",
+                path, ref, encoding, body.get("size"),
+            )
+            return ""
+        return base64.b64decode(raw_content).decode("utf-8", errors="replace")
+    except (FileNotFoundError, subprocess.SubprocessError, ValueError) as exc:
+        _log.debug("gh contents API failed for %s@%s: %s", path, ref, exc)
         return ""
+
+
+def _detect_repo_from_git_remote(cwd: Optional[Path] = None) -> Optional[str]:
+    """Best-effort: parse ``owner/repo`` from ``git remote get-url origin``.
+
+    Handles both ``git@github.com:owner/repo(.git)`` and
+    ``https://github.com/owner/repo(.git)`` forms. Returns None on failure.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True, text=True, check=False,
+            cwd=str(cwd) if cwd else None,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    url = proc.stdout.strip()
+    if not url:
+        return None
+    m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?$", url)
+    return m.group(1) if m else None
 
 
 def symbols_from_pr_diff(
@@ -198,8 +260,10 @@ def symbols_from_pr_diff(
         try:
             syms = touched_symbols(new_source=content, diff_text=file_diff)
             result[path] = syms
-        except Exception:
-            pass
+        except SyntaxError as exc:
+            _log.debug("ast parse failed for %s in PR#%s: %s", path, pr_number, exc)
+        except Exception as exc:
+            _log.debug("touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc)
     return result
 
 
@@ -236,6 +300,8 @@ def symbols_from_files_in_pr(
             syms = touched_symbols(new_source=content, diff_text=file_diff)
             if syms:
                 result[path] = syms
-        except Exception:
-            pass
+        except SyntaxError as exc:
+            _log.debug("ast parse failed for %s in PR#%s: %s", path, pr_number, exc)
+        except Exception as exc:
+            _log.debug("touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc)
     return result

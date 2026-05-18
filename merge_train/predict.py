@@ -204,6 +204,12 @@ def _pair_domain_conflicts(
     Registry flags applied when *registry* is provided:
     - ``per_pr_unique``: domain files are per-PR unique; skip the pair.
     - ``advisory``: conflict is informational only (doesn't block spawning).
+
+    .. note::
+       Callers that want v0.2 registry-flag semantics MUST pass ``registry``.
+       Public entry point :func:`predict_conflicts` always does. The
+       registry-less path is preserved only for legacy unit tests that
+       deliberately exercise v0.1 file/symbol conflict semantics.
     """
     by_domain_a = {e.domain: e for e in a_entries}
     out: list[DomainConflict] = []
@@ -652,6 +658,16 @@ def cli_predict_conflicts(
             return 2
 
     if enrich_symbols:
+        if not repo:
+            from merge_train.symbol_discovery import _detect_repo_from_git_remote
+            repo = _detect_repo_from_git_remote(git_cwd)
+        if not repo:
+            print(
+                "error: --enrich-symbols requires --repo OWNER/REPO "
+                "(no GitHub remote auto-detected from git)",
+                file=_sys.stderr,
+            )
+            return 2
         specs = _enrich_specs_with_symbols(specs, repo)
 
     plan = predict_conflicts(
