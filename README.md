@@ -28,10 +28,23 @@ AI-agent PR pipelines (Aider, OpenHands, Devin, custom AO setups) spawn many age
 
 ## Install
 
+**Into another repo (recommended):**
+
+```bash
+git clone https://github.com/jleechanorg/merge_train.git ~/merge_train
+cd /path/to/your/repo
+~/merge_train/install.sh
+```
+
+`install.sh` is idempotent: it `pip install -e`s the package, drops a `file_domains.yaml` skeleton, symlinks the pre-commit hook into `.git/hooks/pre-commit`, and smoke-tests the CLI. Flags: `--no-hook`, `--no-yaml`, `--force-hook`, `--python <bin>`.
+
+**Dev install (working on `merge_train` itself):**
+
 ```bash
 git clone https://github.com/jleechanorg/merge_train.git
 cd merge_train
-pip install -e .
+pip install -e '.[dev]'
+python -m pytest tests/ -q   # 180 passed
 ```
 
 Requires Python ≥ 3.10, `PyYAML`, and `git` on `PATH`.

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Spawn-time file-domain lock registry for AI-agent PR pipelines"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "PyYAML>=6.0",
 ]

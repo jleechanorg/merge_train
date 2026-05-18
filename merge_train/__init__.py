@@ -2,7 +2,8 @@
 
 __version__ = "0.1.0"
 
-__all__ = [
+# Names re-exported from merge_train.domain_lock
+_DOMAIN_LOCK_EXPORTS = (
     "Registry",
     "LockLog",
     "LockEntry",
@@ -16,11 +17,28 @@ __all__ = [
     "check",
     "list_locks",
     "audit",
-]
+)
+
+# Names re-exported from merge_train.predict (dry-run / replay mode)
+_PREDICT_EXPORTS = (
+    "PRSpec",
+    "Plan",
+    "DomainConflict",
+    "TextualConflict",
+    "PairConflict",
+    "predict_conflicts",
+    "load_plan",
+    "DISCLAIMER",
+)
+
+__all__ = list(_DOMAIN_LOCK_EXPORTS) + list(_PREDICT_EXPORTS)
 
 
 def __getattr__(name):
-    if name in __all__:
+    if name in _DOMAIN_LOCK_EXPORTS:
         from merge_train import domain_lock
         return getattr(domain_lock, name)
+    if name in _PREDICT_EXPORTS:
+        from merge_train import predict
+        return getattr(predict, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
