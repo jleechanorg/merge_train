@@ -47,7 +47,10 @@ jobs:
           python -m pip install -e '.[dev]'
 
       - name: Show versions
+        # `head` closes the pipe early; under bash's default pipefail this
+        # can surface as SIGPIPE (exit 141) on slow runners. Tolerate it.
         run: |
+          set +o pipefail
           python --version
           git --version
           pip show merge_train | head -5
@@ -86,6 +89,7 @@ jobs:
 
       - name: Verify install artifacts
         run: |
+          set +o pipefail
           test -f target_repo/file_domains.yaml || { echo "skeleton not created"; exit 1; }
           test -L target_repo/.git/hooks/pre-commit || { echo "hook not symlinked"; exit 1; }
           domain_lock --help | head -5
