@@ -123,14 +123,39 @@ After release, 0 active test PR locks remain.
 
 ## What This Proof Does NOT Cover
 
-- **Production AO worker orchestration** — hooks tested via direct invocation, not
-  through `ao spawn`. Tracked as bead `orch-66my`.
+- **20-slot AO orchestration** — `evidence/v0.5-ao/` now proves 15 slots through
+  `ao spawn --agent claude-code`; the 20-slot proof remains direct `openw run`.
+- **Production CI orchestration** — AO proof was run locally against
+  `jleechanorg/mctrl_test`, not as a scheduled production merge queue.
+
+## AO Orchestration Follow-up
+
+`evidence/v0.5-ao/` upgrades the AO claim:
+
+| Field | Value |
+|-------|-------|
+| merge_train SHA | `119154d61d6b422fa7c289ff4cc6d22dd847987a` |
+| Run ID | `20260519T165459Z` |
+| Agent | `ao spawn --agent claude-code` |
+| Slots | 15 |
+| PRs | #392 through #406 |
+| Result | 2/2 scenarios PASS (`ao_spawn_pr_creation`, `ao_pr_isolation`) |
+| Session cleanup | `kill_session_after_pr=true`, all 15 session kills exit 0 |
+
+This proves AO can create and isolate 15 area-locked Markdown edits while the
+runner releases each AO session after PR capture to avoid exhausting the active
+session pool.
 
 ## Reproduce
 
 ```bash
 cd /Users/jleechan/projects/merge_train
 python3 scripts/e2e_md_area_lock_runner.py --slots 20
+python3 scripts/e2e_ao_orchestrated_runner.py \
+  --slots 15 \
+  --ao-agent claude-code \
+  --kill-session-after-pr \
+  --output-dir evidence/v0.5-ao
 ```
 
 Evidence written to `/tmp/merge_train_evidence/opencode_md_area_lock/<RUN_ID>/`.

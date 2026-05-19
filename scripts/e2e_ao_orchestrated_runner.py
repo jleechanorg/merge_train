@@ -63,9 +63,27 @@ def _domain_lock_cmd(extra: list[str], registry: str, log: str, git_cwd: str | N
     return cmd + extra
 
 
+def _session_from_ls_output(output: str, *, session_name: str = "", pr_url: str = "") -> str:
+    """Return the AO session name matching either a known session or PR URL."""
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = stripped.split()
+        candidate = parts[0] if parts else ""
+        if not candidate.startswith("mt-"):
+            continue
+        if session_name and session_name in line:
+            return candidate
+        if pr_url and pr_url in line:
+            return candidate
+    return ""
+
+
 def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_log: str,
                    merge_train_repo: str, ao_project: str = "mctrl-test",
-                   ao_agent: str = "claude-code") -> dict:
+                   ao_agent: str = "claude-code",
+                   kill_session_after_pr: bool = False) -> dict:
     """Spawn one AO session for a slot, wait for idle, collect evidence."""
     n = f"{slot:02d}"
     branch = f"merge-train-e2e-ao/{run_id}/slot-{n}"
@@ -89,7 +107,7 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
 
     # Task string: include slot-{n} so AO names the branch with it (enables PR matching)
     task = (
-        f"area-lock-slot-{n}: edit merge_train_e2e/shared_plan.md "
+        f"ao-proof-{run_id}-slot-{n}: edit merge_train_e2e/shared_plan.md "
         f"under heading '## slot-{n}', change 'status: pending' to "
         f"'status: complete by ao-slot-{n}'. "
         f"Do NOT edit any other heading. Commit, push, create PR against main."
@@ -145,7 +163,7 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
         # Check recent PRs from this author on mctrl_test
         pr_check = _run(
             ["gh", "pr", "list", "--repo", "jleechanorg/mctrl_test",
-             "--state", "open", "--limit", "5",
+             "--state", "open", "--limit", "50",
              "--json", "number,url,headRefName,createdAt"],
             check=False,
         )
@@ -154,8 +172,13 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
                 prs = json.loads(pr_check.stdout)
                 for pr in prs:
                     head = pr.get("headRefName", "")
-                    # Created after run start — check by time or by slot keyword
-                    if f"slot-{n}" in head or f"slot_{n}" in head or ao_branch in head:
+                    normalized_head = head.lower()
+                    # Require this run_id to avoid matching stale PRs from older AO proofs.
+                    if run_id.lower() in normalized_head and (
+                        f"slot-{n}" in normalized_head
+                        or f"slot_{n}" in normalized_head
+                        or ao_branch.lower() in normalized_head
+                    ):
                         pr_number = pr.get("number", 0)
                         pr_url = pr.get("url", "")
                         break
@@ -165,6 +188,28 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
             break
 
     wait_elapsed = time.time() - wait_start
+    session_kill: dict = {}
+    if pr_url and kill_session_after_pr:
+        ls_result = _run(["ao", "session", "ls"], check=False, cwd=mctrl_repo)
+        session_to_kill = session_name or _session_from_ls_output(ls_result.stdout, pr_url=pr_url)
+        if session_to_kill:
+            kill_result = _run(
+                ["ao", "session", "kill", session_to_kill, "--keep-session"],
+                check=False, cwd=mctrl_repo,
+            )
+            session_kill = {
+                "session": session_to_kill,
+                "exit_code": kill_result.returncode,
+                "stdout_tail": kill_result.stdout[-500:],
+                "stderr_tail": kill_result.stderr[-500:],
+            }
+            session_name = session_name or session_to_kill
+        else:
+            session_kill = {
+                "session": "",
+                "exit_code": 1,
+                "stderr_tail": "No matching AO session found to kill after PR creation",
+            }
 
     return {
         "slot": slot,
@@ -174,11 +219,14 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
         "synthetic_pr": synthetic_pr,
         "session_name": session_name,
         "spawn_exit": spawn_result.returncode,
+        "spawn_stdout_tail": spawn_result.stdout[-1000:],
+        "spawn_stderr_tail": spawn_result.stderr[-1000:],
         "spawn_elapsed_s": round(spawn_elapsed, 1),
         "wait_elapsed_s": round(wait_elapsed, 1),
         "pr_url": pr_url,
         "pr_number": pr_number,
         "agent_mode": f"ao_spawn_{ao_agent.replace('-', '_')}",
+        "session_kill": session_kill,
     }
 
 
@@ -193,6 +241,8 @@ def main() -> int:
                         help="AO agent plugin (default: claude-code; opencode requires ao-plugin-agent-opencode npm pkg)")
     parser.add_argument("--output-dir", default=None,
                         help="evidence output path (default: /tmp/merge_train_evidence/ao/<run_id>)")
+    parser.add_argument("--kill-session-after-pr", action="store_true",
+                        help="kill each AO session after its PR is captured to free session capacity")
     args = parser.parse_args()
 
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -221,6 +271,7 @@ def main() -> int:
         "slots": args.slots,
         "orchestration_mode": "ao_spawn",
         "agent": args.ao_agent,
+        "kill_session_after_pr": args.kill_session_after_pr,
         "test_type": "e2e_area_lock_ao_orchestrated",
     }
 
@@ -231,7 +282,8 @@ def main() -> int:
     for slot in range(1, args.slots + 1):
         print(f"  Spawning slot-{slot:02d}...")
         result = _ao_spawn_slot(slot, run_id, mctrl_repo, registry_path, lock_log, merge_train_repo,
-                                ao_project=args.ao_project, ao_agent=args.ao_agent)
+                                ao_project=args.ao_project, ao_agent=args.ao_agent,
+                                kill_session_after_pr=args.kill_session_after_pr)
         slot_results.append(result)
         if result.get("pr_url"):
             print(f"  slot-{slot:02d}: PR #{result['pr_number']} ({result['pr_url']})")

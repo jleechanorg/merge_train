@@ -10,6 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_V03 = REPO_ROOT / "evidence" / "v0.3"
 EVIDENCE_V04 = REPO_ROOT / "evidence" / "v0.4"
 EVIDENCE_V04_AO = REPO_ROOT / "evidence" / "v0.4-ao"
+EVIDENCE_V05_AO = REPO_ROOT / "evidence" / "v0.5-ao"
 
 
 def test_v03_agent_transcripts_have_checksum_sidecars() -> None:
@@ -213,3 +214,40 @@ def test_v04_ao_checksums_valid() -> None:
     if not EVIDENCE_V04_AO.is_dir():
         return
     _bundle_sha256_checks(EVIDENCE_V04_AO)
+
+
+def test_v05_ao_bundle_proves_15_slots() -> None:
+    """v0.5 AO bundle must prove 15 slots created PRs through ao spawn."""
+    assert EVIDENCE_V05_AO.is_dir(), (
+        "evidence/v0.5-ao/ missing — run scripts/e2e_ao_orchestrated_runner.py "
+        "--slots 15 --kill-session-after-pr"
+    )
+    metadata = json.loads((EVIDENCE_V05_AO / "metadata.json").read_text())
+    assert metadata.get("orchestration_mode") == "ao_spawn"
+    assert metadata.get("slots") == 15
+    assert metadata.get("kill_session_after_pr") is True
+
+    run = json.loads((EVIDENCE_V05_AO / "run.json").read_text())
+    failed = [s["name"] for s in run.get("scenarios", []) if not s.get("passed")]
+    assert failed == []
+
+    slot_results = run.get("slot_results", [])
+    assert len(slot_results) == 15
+    assert [slot["slot"] for slot in slot_results] == list(range(1, 16))
+    missing_prs = [slot["slot"] for slot in slot_results if not slot.get("pr_url")]
+    assert missing_prs == []
+    bad_spawns = [slot["slot"] for slot in slot_results if slot.get("spawn_exit") != 0]
+    assert bad_spawns == []
+    bad_kills = [
+        slot["slot"]
+        for slot in slot_results
+        if slot.get("session_kill", {}).get("exit_code") != 0
+    ]
+    assert bad_kills == []
+
+
+def test_v05_ao_checksums_valid() -> None:
+    """All sha256 sidecars in 15-slot AO bundle must be valid."""
+    if not EVIDENCE_V05_AO.is_dir():
+        return
+    _bundle_sha256_checks(EVIDENCE_V05_AO)
