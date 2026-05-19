@@ -80,6 +80,17 @@ fi
 echo "  RESERVED: $LOCK_RESULT"
 echo "  Lock is active — starting agent."
 
+# Release lock on early exit (worktree failure, cd failure)
+cleanup_lock() {
+    echo "  Releasing lock for slot-${SLOT_N} due to early exit" >&2
+    python -m merge_train.domain_lock \
+        --registry "$REGISTRY" \
+        --log "$LOCK_LOG" \
+        --git-cwd "$MCTRL_REPO" \
+        release --pr "$SYNTHETIC_PR" 2>/dev/null || true
+}
+trap cleanup_lock EXIT
+
 # Create worktree for this slot
 WORKTREE="/tmp/merge_train_opencode_md_area_lock/${RUN_ID}/slot-${SLOT_N}"
 mkdir -p "$(dirname "$WORKTREE")"
@@ -102,7 +113,7 @@ if command -v openw >/dev/null 2>&1; then
 elif command -v opencode >/dev/null 2>&1; then
     OPENCODE_RESULT=$(opencode run --dangerously-skip-permissions "$AGENT_TASK" 2>&1) && OPENCODE_EXIT=0 || OPENCODE_EXIT=$?
 else
-    echo "  No opencode/openw found — doing manual edit (fallback proof)."
+    echo "  No opencode/openw found — doing manual edit (fallback proof; push failure is fatal)."
     # Manual edit as fallback
     python3 -c "
 p = open('merge_train_e2e/shared_plan.md').read()
@@ -124,10 +135,17 @@ for line in lines:
 open('merge_train_e2e/shared_plan.md','w').write('\n'.join(new_lines))
 "
     git add merge_train_e2e/shared_plan.md
-    git commit -m "feat(e2e): complete slot-${SLOT_N}" || true
-    git push origin "$BRANCH" 2>&1 || true
-    OPENCODE_EXIT=0
-    OPENCODE_RESULT="manual edit fallback (no opencode available)"
+    if ! git commit -m "feat(e2e): complete slot-${SLOT_N}"; then
+        echo "  WARN: nothing to commit for slot-${SLOT_N} — edit may have been no-op" >&2
+    fi
+    if git push origin "$BRANCH" 2>&1; then
+        OPENCODE_EXIT=0
+        OPENCODE_RESULT="manual edit fallback (no opencode available)"
+    else
+        echo "  FATAL: git push failed for slot-${SLOT_N} — branch not published" >&2
+        OPENCODE_EXIT=1
+        OPENCODE_RESULT="manual edit fallback FAILED: push error"
+    fi
 fi
 
 echo "  Agent exit: $OPENCODE_EXIT"
@@ -149,6 +167,9 @@ timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 
 echo "=== Worker slot-${SLOT_N} complete ==="
+
+# Normal exit — lock stays active until PR merge/close. Clear the cleanup trap.
+trap - EXIT
 
 # Note: lock is NOT released here. It stays active until PR merge/close.
 # The release step is separate.

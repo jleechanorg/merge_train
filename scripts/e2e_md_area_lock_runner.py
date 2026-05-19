@@ -173,7 +173,7 @@ def create_slot_pr(mctrl_repo: str, run_id: str, slot: int, setup_branch: str) -
     }
 
 
-def run_negative_controls(registry: str, log: str, git_cwd: str | None = None) -> list[dict]:
+def run_negative_controls(registry: str, log: str, git_cwd: str | None = None, total_slots: int = 20) -> list[dict]:
     controls: list[dict] = []
     print("\n=== Negative Control 1: Duplicate slot-01 ===")
     plan_path = "/tmp/e2e_neg_control_dup.yaml"
@@ -209,17 +209,18 @@ def run_negative_controls(registry: str, log: str, git_cwd: str | None = None) -
     })
     print(f"  Result: {'PASS' if denied else 'FAIL'} (exit={result.returncode})")
 
-    print("\n=== Negative Control 3: Different area (slot-20) should succeed ===")
-    plan_path_20 = "/tmp/e2e_neg_control_free.yaml"
-    Path(plan_path_20).write_text(_generate_plan_yaml(20))
+    free_slot = total_slots + 1
+    print(f"\n=== Negative Control 3: Different area (slot-{free_slot:02d}) should succeed ===")
+    plan_path_free = f"/tmp/e2e_neg_control_free.yaml"
+    Path(plan_path_free).write_text(_generate_plan_yaml(free_slot))
     result = _run(_domain_lock_cmd(
         ["reserve-plan", "--pr", "99997", "--agent", "neg-control-free",
-         "--branch", "neg-free-slot-20", "--plan", plan_path_20],
+         "--branch", f"neg-free-slot-{free_slot:02d}", "--plan", plan_path_free],
         registry=registry, log=log, git_cwd=git_cwd,
     ), check=False)
     allowed = result.returncode == 0
     controls.append({
-        "name": "different_area_slot_20",
+        "name": f"different_area_slot_{free_slot:02d}",
         "expected": "ALLOWED",
         "actual": "ALLOWED" if allowed else f"exit_{result.returncode}",
         "passed": allowed,
@@ -361,7 +362,7 @@ def main() -> int:
 
     # ── Phase 4: Negative controls ──────────────────────────────────────
     print("\n=== Phase 4: Negative controls ===")
-    controls = run_negative_controls(registry_path, lock_log, mctrl_repo)
+    controls = run_negative_controls(registry_path, lock_log, mctrl_repo, total_slots=args.slots)
     controls_ok = all(c["passed"] for c in controls)
     scenarios.append({
         "name": "negative_controls",
@@ -469,7 +470,7 @@ def main() -> int:
     scenarios.append({
         "name": "lock_release",
         "passed": release_ok,
-        "errors": release_errors + [f"{len(test_prs_active)} active test PRs remain"],
+        "errors": release_errors + ([f"{len(test_prs_active)} active test PRs remain"] if test_prs_active else []),
     })
 
     # ── Phase 9: Collect evidence ────────────────────────────────────────
