@@ -16,7 +16,9 @@ AI-agent PR pipelines (Aider, OpenHands, Devin, custom AO setups) spawn many age
 - Conflict surfaces after both agents have burned tokens.
 - Existing tools (Mergify, Graphite, jj, ghstack) all work at **merge time** or **commit time**, not **spawn time**.
 
-`merge_train` puts the gate at spawn time: declare which file → which domain, reserve the domain when an agent is spawned, refuse spawn if held.
+`merge_train` puts the gate at spawn time: resolve every file to a lock scope, reserve that scope when an agent is spawned, refuse spawn if held.
+
+Production use should cover **all files**. The registry is not meant to be a partial list of interesting YAML entries; it is the policy that decides which edits can safely run together. Use explicit domains for known hot spots and a final catch-all domain for everything else until automatic per-file fallback lands.
 
 ## Prior art
 
@@ -40,7 +42,7 @@ cd /path/to/your/repo
 ~/merge_train/install.sh
 ```
 
-`install.sh` is idempotent: it `pip install -e`s the package, drops a `file_domains.yaml` skeleton, symlinks the pre-commit hook into `.git/hooks/pre-commit`, and smoke-tests the CLI. Flags: `--no-hook`, `--no-yaml`, `--force-hook`, `--python <bin>`.
+`install.sh` is idempotent: it `pip install -e`s the package, drops a starter `file_domains.yaml` skeleton, symlinks the pre-commit hook into `.git/hooks/pre-commit`, and smoke-tests the CLI. The skeleton is not production-complete until you add your real domains plus a final catch-all domain. Flags: `--no-hook`, `--no-yaml`, `--force-hook`, `--python <bin>`.
 
 **Dev install (working on `merge_train` itself):**
 
@@ -48,7 +50,7 @@ cd /path/to/your/repo
 git clone https://github.com/jleechanorg/merge_train.git
 cd merge_train
 pip install -e '.[dev]'
-python -m pytest tests/ -q   # 180 passed
+python -m pytest tests/ -q   # 202 passed
 ```
 
 Requires Python ≥ 3.10, `PyYAML`, and `git` on `PATH`.
@@ -85,6 +87,12 @@ domains:
       - mvp_site/rewards_engine.py
       - mvp_site/world_logic.py
     owners: [jleechan2015]
+
+  # Required for production-style fail-closed coverage:
+  # keep this LAST so more specific domains win first.
+  all_other_files:
+    paths:
+      - "*"
 EOF
 
 # 2. Reserve before spawning an agent (whole-domain lock)
@@ -101,6 +109,44 @@ domain_lock list --status active
 # 5. Release after merge
 domain_lock release --pr 6926
 ```
+
+`all_other_files` is intentionally conservative: every otherwise-unmapped file shares one fallback domain. That avoids silent gaps, but it can over-block unrelated work. The planned `acquire --files` command should replace this with automatic per-file fallback locks such as `file:README.md`, while still honoring explicit grouped domains.
+
+## Agent lock contract
+
+Agents should not only run `check`. `check` is a read-only gate; it does not acquire anything. The orchestrator must reserve before the agent starts writing, and release when the PR merges, aborts, or is abandoned.
+
+Current supported flow:
+
+```bash
+# 1. Orchestrator predicts the files/domains for the task.
+# 2. Reserve one domain:
+domain_lock reserve --domain level_up_core \
+  --pr 7000 --agent codex-1 --branch feat/foo
+
+# Or reserve several domains atomically:
+cat > /tmp/merge_train_plan.yaml <<EOF
+plan:
+  - domain: level_up_core
+  - domain: all_other_files
+EOF
+
+domain_lock reserve-plan --pr 7000 --agent codex-1 \
+  --branch feat/foo --plan /tmp/merge_train_plan.yaml
+
+# 3. Spawn the agent only if reserve/reserve-plan exits 0.
+# 4. Release when done:
+domain_lock release --pr 7000
+```
+
+Target flow for the next integration release:
+
+```bash
+domain_lock acquire --files mvp_site/world_logic.py README.md \
+  --pr 7000 --agent codex-1 --branch feat/foo
+```
+
+`acquire` should resolve mapped files to registry domains, resolve unmapped files to deterministic per-file fallback locks, and reserve all required scopes atomically.
 
 ## Symbol-level locks (sub-file granularity)
 
@@ -204,11 +250,34 @@ domains:
     paths:
       - .github/workflows/**
     owners: [jleechan2015]
+  all_other_files:
+    paths:
+      - "*"
 ```
 
-- `paths` accepts globs (`**` recursive, `*.py` etc.)
-- Unmapped files surface as `WARN: unmapped files (no domain)` and do **not** block.
+- Domains are checked in declaration order; the first matching domain wins.
+- `paths` uses Python `fnmatch`-style globs.
+- Put a catch-all domain last for all-file coverage.
+- If a file is truly unmapped, current CLI behavior is only `WARN: unmapped files (no domain)` and it does **not** block. Treat that as a development-mode warning, not production-safe coverage.
 - See `examples/file_domains.yaml` for a working sample.
+
+## What is protected
+
+- Spawn-time collisions when two agents try to reserve the same domain.
+- Same-file Python edits when agents reserve disjoint symbols.
+- Multi-domain tasks when the orchestrator uses `reserve-plan`.
+- Local commits touching domains held by another PR, when the pre-commit hook is installed.
+- Concurrent lock-log writes, because writes are serialized with `flock(2)`.
+- Dry-run planning over declared PR file lists through `predict-conflicts`.
+
+## What is not protected
+
+- Agents that do not call `reserve` / `reserve-plan` before writing.
+- Files omitted from the registry when there is no catch-all domain.
+- Semantic conflicts across different files unless the registry groups those files into the same domain.
+- Runtime failures, test failures, CI failures, or reviewer objections.
+- Stale locks unless the orchestrator releases or cleans them up.
+- Non-Python symbol-level analysis; non-Python files fall back to whole-domain/file-level locking.
 
 ## Lock log (JSONL, append-only)
 
@@ -237,6 +306,27 @@ export MERGE_TRAIN_PR=7000
 ./hooks/ao-spawn-domain-check.sh
 # exit 0 = spawn allowed, 1 = held (refuse spawn), 2 = config error
 ```
+
+This hook is a pre-spawn **gate**, not the full acquisition protocol. A production orchestrator should use it as a fast refusal check, then call `reserve` or `reserve-plan` before actually launching the agent. Otherwise two orchestrators can both observe "free" and race each other.
+
+### Claude / OpenCode / Codex hook installers
+
+Current repo state:
+
+- Supported now: generic shell integration through `hooks/ao-spawn-domain-check.sh` plus the Git pre-commit hook.
+- Not supported yet: first-class installers that patch Claude Code, OpenCode, or Codex config files for you.
+- Not proven yet: an end-to-end fixture that installs each agent hook, attempts a conflicting spawn, observes refusal, releases the lock, and observes a clean spawn.
+
+The integration target is:
+
+```bash
+merge_train install-hooks --agent claude --repo /path/to/repo
+merge_train install-hooks --agent opencode --repo /path/to/repo
+merge_train install-hooks --agent codex --repo /path/to/repo
+merge_train test-hooks --agent all --repo /path/to/repo
+```
+
+Each installer should configure that agent's native pre-spawn/pre-write hook to call `domain_lock acquire --files ...` once `acquire` exists. Until then, wire the generic shell hook in the orchestrator and follow it with `reserve` / `reserve-plan`.
 
 ### Pre-commit hook (local guard)
 
@@ -272,7 +362,7 @@ If no git remote can be resolved, the log falls back to `~/.merge_train/locks/de
 
 ```bash
 pip install -e .
-python -m pytest tests/ -q     # 134 passed
+python -m pytest tests/ -q     # 202 passed
 ```
 
 ## Roadmap
@@ -283,8 +373,11 @@ python -m pytest tests/ -q     # 134 passed
 - [x] Atomic multi-domain `reserve-plan`
 - [x] Concurrency safety (flock)
 - [x] Dry-run / replay mode (`predict-conflicts` — greedy MIS + optional `git merge-tree`)
+- [x] `predict-conflicts --from-prs N,M,P` (gh-cli integration — fetch files from PRs)
+- [ ] `acquire --files` (atomic file-list acquisition with automatic per-file fallback)
+- [ ] Claude / OpenCode / Codex hook installers
+- [ ] End-to-end hook tests for Claude / OpenCode / Codex
 - [ ] `predict-conflicts --from-active` (derive plan from live `LockLog` instead of YAML)
-- [ ] `predict-conflicts --prs N,M,P` (gh-cli integration — fetch files/symbols from open PRs)
 - [ ] Refactoring-aware semantic edges (callers-of-deleted-symbol)
 - [ ] MCP server wrapper (agent-native schema'd tools — same lib)
 - [ ] Post-merge cascade rebase webhook
