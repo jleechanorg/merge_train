@@ -1,0 +1,874 @@
+{
+  "run_id": "20260519T073247Z",
+  "bundle_version": "1.1.0",
+  "scenarios": [
+    {
+      "name": "fixture_setup",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "name": "area_lock_reservation",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "name": "active_lock_verification",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "name": "negative_controls",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "name": "pr_creation",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "name": "pr_verification",
+      "passed": true,
+      "errors": [],
+      "note": "verified via gh pr view"
+    },
+    {
+      "name": "merge_simulation",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "name": "lock_release",
+      "passed": true,
+      "errors": []
+    }
+  ],
+  "reserve_results": [
+    {
+      "slot": 1,
+      "pr": 50001,
+      "symbol": "md:shared_plan.slot_01",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50001\te2e-slot-01\tmerge-train-e2e/20260519T073247Z/slot-01\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_01",
+      "stderr": ""
+    },
+    {
+      "slot": 2,
+      "pr": 50002,
+      "symbol": "md:shared_plan.slot_02",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50002\te2e-slot-02\tmerge-train-e2e/20260519T073247Z/slot-02\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_02",
+      "stderr": ""
+    },
+    {
+      "slot": 3,
+      "pr": 50003,
+      "symbol": "md:shared_plan.slot_03",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50003\te2e-slot-03\tmerge-train-e2e/20260519T073247Z/slot-03\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_03",
+      "stderr": ""
+    },
+    {
+      "slot": 4,
+      "pr": 50004,
+      "symbol": "md:shared_plan.slot_04",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50004\te2e-slot-04\tmerge-train-e2e/20260519T073247Z/slot-04\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_04",
+      "stderr": ""
+    },
+    {
+      "slot": 5,
+      "pr": 50005,
+      "symbol": "md:shared_plan.slot_05",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50005\te2e-slot-05\tmerge-train-e2e/20260519T073247Z/slot-05\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_05",
+      "stderr": ""
+    },
+    {
+      "slot": 6,
+      "pr": 50006,
+      "symbol": "md:shared_plan.slot_06",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50006\te2e-slot-06\tmerge-train-e2e/20260519T073247Z/slot-06\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_06",
+      "stderr": ""
+    },
+    {
+      "slot": 7,
+      "pr": 50007,
+      "symbol": "md:shared_plan.slot_07",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50007\te2e-slot-07\tmerge-train-e2e/20260519T073247Z/slot-07\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_07",
+      "stderr": ""
+    },
+    {
+      "slot": 8,
+      "pr": 50008,
+      "symbol": "md:shared_plan.slot_08",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50008\te2e-slot-08\tmerge-train-e2e/20260519T073247Z/slot-08\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_08",
+      "stderr": ""
+    },
+    {
+      "slot": 9,
+      "pr": 50009,
+      "symbol": "md:shared_plan.slot_09",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50009\te2e-slot-09\tmerge-train-e2e/20260519T073247Z/slot-09\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_09",
+      "stderr": ""
+    },
+    {
+      "slot": 10,
+      "pr": 50010,
+      "symbol": "md:shared_plan.slot_10",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50010\te2e-slot-10\tmerge-train-e2e/20260519T073247Z/slot-10\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_10",
+      "stderr": ""
+    },
+    {
+      "slot": 11,
+      "pr": 50011,
+      "symbol": "md:shared_plan.slot_11",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50011\te2e-slot-11\tmerge-train-e2e/20260519T073247Z/slot-11\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_11",
+      "stderr": ""
+    },
+    {
+      "slot": 12,
+      "pr": 50012,
+      "symbol": "md:shared_plan.slot_12",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50012\te2e-slot-12\tmerge-train-e2e/20260519T073247Z/slot-12\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_12",
+      "stderr": ""
+    },
+    {
+      "slot": 13,
+      "pr": 50013,
+      "symbol": "md:shared_plan.slot_13",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50013\te2e-slot-13\tmerge-train-e2e/20260519T073247Z/slot-13\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_13",
+      "stderr": ""
+    },
+    {
+      "slot": 14,
+      "pr": 50014,
+      "symbol": "md:shared_plan.slot_14",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50014\te2e-slot-14\tmerge-train-e2e/20260519T073247Z/slot-14\t2026-05-19T07:32:49Z\tactive\tsymbols=md:shared_plan.slot_14",
+      "stderr": ""
+    },
+    {
+      "slot": 15,
+      "pr": 50015,
+      "symbol": "md:shared_plan.slot_15",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50015\te2e-slot-15\tmerge-train-e2e/20260519T073247Z/slot-15\t2026-05-19T07:32:50Z\tactive\tsymbols=md:shared_plan.slot_15",
+      "stderr": ""
+    },
+    {
+      "slot": 16,
+      "pr": 50016,
+      "symbol": "md:shared_plan.slot_16",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50016\te2e-slot-16\tmerge-train-e2e/20260519T073247Z/slot-16\t2026-05-19T07:32:50Z\tactive\tsymbols=md:shared_plan.slot_16",
+      "stderr": ""
+    },
+    {
+      "slot": 17,
+      "pr": 50017,
+      "symbol": "md:shared_plan.slot_17",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50017\te2e-slot-17\tmerge-train-e2e/20260519T073247Z/slot-17\t2026-05-19T07:32:50Z\tactive\tsymbols=md:shared_plan.slot_17",
+      "stderr": ""
+    },
+    {
+      "slot": 18,
+      "pr": 50018,
+      "symbol": "md:shared_plan.slot_18",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50018\te2e-slot-18\tmerge-train-e2e/20260519T073247Z/slot-18\t2026-05-19T07:32:50Z\tactive\tsymbols=md:shared_plan.slot_18",
+      "stderr": ""
+    },
+    {
+      "slot": 19,
+      "pr": 50019,
+      "symbol": "md:shared_plan.slot_19",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50019\te2e-slot-19\tmerge-train-e2e/20260519T073247Z/slot-19\t2026-05-19T07:32:50Z\tactive\tsymbols=md:shared_plan.slot_19",
+      "stderr": ""
+    },
+    {
+      "slot": 20,
+      "pr": 50020,
+      "symbol": "md:shared_plan.slot_20",
+      "reserved": true,
+      "exit_code": 0,
+      "stdout": "RESERVED: e2e_shared_markdown\tPR#50020\te2e-slot-20\tmerge-train-e2e/20260519T073247Z/slot-20\t2026-05-19T07:32:50Z\tactive\tsymbols=md:shared_plan.slot_20",
+      "stderr": ""
+    }
+  ],
+  "negative_controls": [
+    {
+      "name": "duplicate_slot_01",
+      "expected": "DENIED",
+      "actual": "DENIED",
+      "passed": true,
+      "stderr": "DENIED: symbol(s) md:shared_plan.slot_01 in domain 'e2e_shared_markdown' held by PR #50001 (agent=e2e-slot-01, branch=merge-train-e2e/20260519T073247Z/slot-01) (plan rolled back)"
+    },
+    {
+      "name": "whole_domain_reservation",
+      "expected": "DENIED",
+      "actual": "DENIED",
+      "passed": true,
+      "stderr": "DENIED: domain 'e2e_shared_markdown' has symbol locks held by PR #50001 (symbols=md:shared_plan.slot_01) \u2014 whole-domain reservation refused"
+    },
+    {
+      "name": "different_area_slot_21",
+      "expected": "ALLOWED",
+      "actual": "ALLOWED",
+      "passed": true,
+      "stderr": ""
+    }
+  ],
+  "pr_results": [
+    {
+      "slot": 1,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-01",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/255",
+      "pr_number": 255,
+      "head_sha": "efe0247eeb902a0b4caef80d14c76b72a7c0f3c3",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-01",
+        "headRefOid": "efe0247eeb902a0b4caef80d14c76b72a7c0f3c3",
+        "number": 255,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/255"
+      }
+    },
+    {
+      "slot": 2,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-02",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/256",
+      "pr_number": 256,
+      "head_sha": "85ec28573298e764a8b2043460cbbe6652f92c1b",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-02",
+        "headRefOid": "85ec28573298e764a8b2043460cbbe6652f92c1b",
+        "number": 256,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/256"
+      }
+    },
+    {
+      "slot": 3,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-03",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/257",
+      "pr_number": 257,
+      "head_sha": "b2fb2a11e41f96c28e9d2ff337d7dc4c0c0745f3",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-03",
+        "headRefOid": "b2fb2a11e41f96c28e9d2ff337d7dc4c0c0745f3",
+        "number": 257,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/257"
+      }
+    },
+    {
+      "slot": 4,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-04",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/258",
+      "pr_number": 258,
+      "head_sha": "736bd58dabd162d6214d6fe47f429bfe012fa7f2",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-04",
+        "headRefOid": "736bd58dabd162d6214d6fe47f429bfe012fa7f2",
+        "number": 258,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/258"
+      }
+    },
+    {
+      "slot": 5,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-05",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/259",
+      "pr_number": 259,
+      "head_sha": "4cfd695eaad0bc9121de476afe19d4d573e9088b",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-05",
+        "headRefOid": "4cfd695eaad0bc9121de476afe19d4d573e9088b",
+        "number": 259,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/259"
+      }
+    },
+    {
+      "slot": 6,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-06",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/260",
+      "pr_number": 260,
+      "head_sha": "f2f3ea74dd943f1b1e26b6d00723fe7bbe8817f1",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-06",
+        "headRefOid": "f2f3ea74dd943f1b1e26b6d00723fe7bbe8817f1",
+        "number": 260,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/260"
+      }
+    },
+    {
+      "slot": 7,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-07",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/261",
+      "pr_number": 261,
+      "head_sha": "295cbc32f809b79b46694d2c6a31c3bb257d7f56",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-07",
+        "headRefOid": "295cbc32f809b79b46694d2c6a31c3bb257d7f56",
+        "number": 261,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/261"
+      }
+    },
+    {
+      "slot": 8,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-08",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/262",
+      "pr_number": 262,
+      "head_sha": "83e65772c3f24c6208f502072193229a41a43a5a",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-08",
+        "headRefOid": "83e65772c3f24c6208f502072193229a41a43a5a",
+        "number": 262,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/262"
+      }
+    },
+    {
+      "slot": 9,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-09",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/263",
+      "pr_number": 263,
+      "head_sha": "bcadde6c63199216f304a3d72595023cdd3dc7a8",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-09",
+        "headRefOid": "bcadde6c63199216f304a3d72595023cdd3dc7a8",
+        "number": 263,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/263"
+      }
+    },
+    {
+      "slot": 10,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-10",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/264",
+      "pr_number": 264,
+      "head_sha": "76870c72328868c30811c0260c5b150f08d3b364",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-10",
+        "headRefOid": "76870c72328868c30811c0260c5b150f08d3b364",
+        "number": 264,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/264"
+      }
+    },
+    {
+      "slot": 11,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-11",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/265",
+      "pr_number": 265,
+      "head_sha": "a446796156f825d8e82d04950a6d9e054554aab9",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-11",
+        "headRefOid": "a446796156f825d8e82d04950a6d9e054554aab9",
+        "number": 265,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/265"
+      }
+    },
+    {
+      "slot": 12,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-12",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/266",
+      "pr_number": 266,
+      "head_sha": "8c7a0364a9962d32001ae62176814f93132002b9",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-12",
+        "headRefOid": "8c7a0364a9962d32001ae62176814f93132002b9",
+        "number": 266,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/266"
+      }
+    },
+    {
+      "slot": 13,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-13",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/267",
+      "pr_number": 267,
+      "head_sha": "d01378dc940ca6cd46263d2451c4a106548da5d6",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-13",
+        "headRefOid": "d01378dc940ca6cd46263d2451c4a106548da5d6",
+        "number": 267,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/267"
+      }
+    },
+    {
+      "slot": 14,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-14",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/268",
+      "pr_number": 268,
+      "head_sha": "2726b683e8485e406cd79695b5a3924767ea71ef",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-14",
+        "headRefOid": "2726b683e8485e406cd79695b5a3924767ea71ef",
+        "number": 268,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/268"
+      }
+    },
+    {
+      "slot": 15,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-15",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/269",
+      "pr_number": 269,
+      "head_sha": "be77e1f17a9ce0bfd2598e28d15c11be00d2bd64",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-15",
+        "headRefOid": "be77e1f17a9ce0bfd2598e28d15c11be00d2bd64",
+        "number": 269,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/269"
+      }
+    },
+    {
+      "slot": 16,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-16",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/270",
+      "pr_number": 270,
+      "head_sha": "ec94841fc7d8478e5283e99bef26d22021bbaa41",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-16",
+        "headRefOid": "ec94841fc7d8478e5283e99bef26d22021bbaa41",
+        "number": 270,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/270"
+      }
+    },
+    {
+      "slot": 17,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-17",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/271",
+      "pr_number": 271,
+      "head_sha": "bd2f016a6aaaae05710d5a3f594ef30631031ed8",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-17",
+        "headRefOid": "bd2f016a6aaaae05710d5a3f594ef30631031ed8",
+        "number": 271,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/271"
+      }
+    },
+    {
+      "slot": 18,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-18",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/272",
+      "pr_number": 272,
+      "head_sha": "23422d48d2ad20851d57dd5b6e21973e7817c7b4",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-18",
+        "headRefOid": "23422d48d2ad20851d57dd5b6e21973e7817c7b4",
+        "number": 272,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/272"
+      }
+    },
+    {
+      "slot": 19,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-19",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/273",
+      "pr_number": 273,
+      "head_sha": "4165dc6bced98e30deb871e5189c34a0a8a6b81b",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-19",
+        "headRefOid": "4165dc6bced98e30deb871e5189c34a0a8a6b81b",
+        "number": 273,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/273"
+      }
+    },
+    {
+      "slot": 20,
+      "branch": "merge-train-e2e/20260519T073247Z/slot-20",
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/274",
+      "pr_number": 274,
+      "head_sha": "3860b33d3063d0d41b0034a0e68390516a471a95",
+      "gh_view": {
+        "baseRefName": "main",
+        "files": [
+          {
+            "path": "file_domains.yaml",
+            "additions": 0,
+            "deletions": 25
+          },
+          {
+            "path": "merge_train_e2e/shared_plan.md",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "path": "merge_train_e2e/tasks.md",
+            "additions": 219,
+            "deletions": 0
+          }
+        ],
+        "headRefName": "merge-train-e2e/20260519T073247Z/slot-20",
+        "headRefOid": "3860b33d3063d0d41b0034a0e68390516a471a95",
+        "number": 274,
+        "url": "https://github.com/jleechanorg/mctrl_test/pull/274"
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "run_id": "20260519T073247Z",
+  "bundle_version": "1.1.0",
+  "bundle_timestamp": "2026-05-19T07:32:47Z",
+  "merge_train_sha": "4758c66db662a880e2f6e8485331c4ccf7e219ec",
+  "merge_train_branch": "main",
+  "slots": 20,
+  "skip_pr_creation": false,
+  "mctrl_base_sha": "95fd6a763136297d35e8062b81a6429215e3163d",
+  "setup_branch": "merge-train-e2e/20260519T073247Z/setup",
+  "provenance": {
+    "merge_train_sha": "4758c66db662a880e2f6e8485331c4ccf7e219ec",
+    "merge_train_branch": "main",
+    "merge_base": "4758c66db662a880e2f6e8485331c4ccf7e219ec",
+    "commits_ahead_of_main": 0,
+    "diff_stat_vs_main": "",
+    "mctrl_base_sha": "95fd6a763136297d35e8062b81a6429215e3163d",
+    "python_version": "3.13.7",
+    "platform": "darwin",
+    "runner": "e2e_md_area_lock_runner.py"
+  },
+  "environment": {
+    "registry_path": "./file_domains.yaml",
+    "lock_log_path": "./lock_log.jsonl"
+  },
+  "test_type": "e2e_area_lock",
+  "evidence_mode": "local_cli_lock_proof"
+}

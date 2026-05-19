@@ -1,0 +1,142 @@
+[
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-01",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-02",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-03",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-04",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-05",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-06",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-07",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-08",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-09",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-10",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-11",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-12",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-13",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-14",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-15",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-16",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-17",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-18",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-19",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  },
+  {
+    "branch": "merge-train-e2e/20260519T073247Z/slot-20",
+    "base_at_merge": "origin/main",
+    "clean": true,
+    "conflict": false,
+    "exit_code": 0
+  }
+]
