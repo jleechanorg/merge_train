@@ -27,19 +27,13 @@ file, this E2E fails even if conflicts are avoided.
 
 ## Current Gap This Test Must Catch
 
-`merge_train` currently has Python symbol-level locks. Markdown area locks are
-not yet discovered automatically from diffs. For the first E2E, represent
-Markdown areas as explicit lock symbols in the plan:
+~~`merge_train` currently has Python symbol-level locks. Markdown area locks are
+not yet discovered automatically from diffs.~~ **CLOSED** — `extract_markdown_symbols()`
+now auto-discovers `## heading` symbols from Markdown files. The E2E runner uses
+auto-extraction and records `auto_extracted: true` per reservation.
 
-```yaml
-plan:
-  - domain: e2e_shared_markdown
-    symbols: [md:shared_plan.slot_01]
-```
-
-That proves the lock model and agent integration without pretending Markdown
-parsing exists. A later version can replace explicit task areas with automatic
-Markdown heading extraction.
+The current runner also launches real `openw run` agents (not inline Python fallbacks).
+Agent transcripts are captured in `agent_transcripts/`.
 
 ## Repos and Paths
 
@@ -362,3 +356,47 @@ If test PRs should not remain open, close them with an explicit comment:
 gh pr close "${PR}" --repo "${REMOTE_REPO}" \
   --comment "Closing merge_train OpenCode area-lock E2E test PR."
 ```
+
+## Proof Results — 2026-05-19
+
+Run ID: `20260519T082805Z`. Evidence bundle: `evidence/v0.3/`.
+
+### 9/9 Scenarios PASS
+
+| Scenario | Result |
+|----------|--------|
+| fixture_setup | PASS |
+| auto_extraction | PASS — 20 symbols auto-extracted from shared_plan.md |
+| area_lock_reservation | PASS — 20/20 reserved |
+| active_lock_verification | PASS — 20 distinct symbols, 0 whole-domain |
+| negative_controls | PASS — dup DENIED, whole-domain DENIED, different-area ALLOWED |
+| pr_creation | PASS — 20 PRs #340–#359 |
+| pr_verification | PASS — verified via gh pr view |
+| merge_simulation | PASS — pairwise + sequential clean |
+| lock_release | PASS — 0 active test PRs after release |
+
+### Proven Claims
+
+1. **Real OpenCode agents** — all 20 slots used `openw run` (`agent_mode=real_agent` in `prs.json`), not inline Python fallback.
+2. **Auto-extracted Markdown symbols** — `extract_markdown_symbols()` discovered all 20 `## slot-NN` headings (`auto_extracted=true` in `run.json`).
+3. **Lock-before-agent contract** — `e2e_slot_worker.sh` acquires lock before launching `openw run`; agent never starts if DENIED.
+4. **Area locks, not whole-file locks** — 20 concurrent locks on same file/domain with distinct symbols; 0 whole-domain locks.
+5. **Negative controls** — duplicate slot denied, whole-domain denied, free area allowed.
+
+### Evidence Artifacts
+
+| File | Proves |
+|------|--------|
+| `evidence/v0.3/run.json` | All scenario results, reserve_results with auto_extracted, negative_controls |
+| `evidence/v0.3/prs.json` | PR URLs, agent_mode=real_agent, head SHAs |
+| `evidence/v0.3/active_during_run.json` | 20 simultaneous active locks |
+| `evidence/v0.3/active_after_release.json` | 0 active after release |
+| `evidence/v0.3/agent_transcripts/*.log` | Real openw agent output per slot |
+| `evidence/v0.3/lock_log.jsonl` | Raw reservation + release log |
+| `evidence/v0.3/metadata.json` | Provenance: merge_train_sha=1ef058e |
+| `evidence/v0.3/checksums.txt` | All checksums verified |
+
+### Remaining Gap
+
+Production AO worker orchestration (`ao spawn` + `ao send`) is not yet tested.
+The hook is invoked directly by the runner. See bead `orch-66my`.
