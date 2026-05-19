@@ -13,11 +13,14 @@ from merge_train.symbols import (
     SymbolResolutionError,
     UnsupportedLanguageError,
     extract_symbols,
+    extract_markdown_symbols,
     is_python_path,
+    is_markdown_path,
     parse_hunks,
     resolve_touched_symbols,
     touched_symbols,
     touched_symbols_for_staged_file,
+    _touched_markdown_symbols,
 )
 
 
@@ -351,7 +354,71 @@ def test_resolve_touched_symbols_missing_file_falls_back(git_repo: Path):
 
 
 def test_resolve_touched_symbols_outside_git_repo(tmp_path: Path):
-    # Not a git repo => RuntimeError from git => fallback
     per_file, fallback = resolve_touched_symbols(["foo.py"], cwd=tmp_path)
     assert per_file == {}
     assert fallback == ["foo.py"]
+
+
+# --------------------------------------------------------------------------- #
+# Markdown symbol extraction
+# --------------------------------------------------------------------------- #
+
+
+def test_extract_markdown_symbols_basic():
+    src = "# Title\n\n## slot-01\ncontent\n\n## slot-02\nmore\n"
+    syms = extract_markdown_symbols(src)
+    assert len(syms) == 2
+    assert syms[0].name == "md:slot01"
+    assert syms[0].start == 3
+    assert syms[1].name == "md:slot02"
+    assert syms[1].start == 6
+
+
+def test_extract_markdown_symbols_with_file_stem():
+    src = "# Title\n\n## slot-01\ncontent\n\n## slot-02\nmore\n"
+    syms = extract_markdown_symbols(src, file_stem="shared_plan")
+    assert len(syms) == 2
+    assert syms[0].name == "md:shared_plan.slot01"
+    assert syms[1].name == "md:shared_plan.slot02"
+
+
+def test_extract_markdown_symbols_h2_only():
+    src = "# Title\n\n## alpha\na\n\n### sub\nb\n\n## beta\nc\n"
+    syms = extract_markdown_symbols(src)
+    names = [s.name for s in syms]
+    assert "md:alpha" in names
+    assert "md:beta" in names
+
+
+def test_extract_markdown_symbols_range_to_next_heading():
+    src = "## slot-01\na\nb\n## slot-02\nc\n"
+    syms = extract_markdown_symbols(src)
+    assert syms[0].end == 3
+    assert syms[1].start == 4
+
+
+def test_is_markdown_path():
+    assert is_markdown_path("foo.md")
+    assert not is_markdown_path("foo.py")
+    assert not is_markdown_path("foo.txt")
+
+
+def test_touched_markdown_symbols_single_hunk():
+    src = "# Plan\n\n## slot-01\nstatus: pending\n\n## slot-02\nstatus: pending\n"
+    diff = "@@ -4,1 +4,1 @@\n-status: pending\n+status: done"
+    syms = _touched_markdown_symbols(new_source=src, diff_text=diff)
+    assert syms == {"md:slot01"}
+
+
+def test_touched_markdown_symbols_different_slot():
+    src = "# Plan\n\n## slot-01\nstatus: done\n\n## slot-02\nstatus: pending\n"
+    diff = "@@ -7,1 +7,1 @@\n-status: pending\n+status: done"
+    syms = _touched_markdown_symbols(new_source=src, diff_text=diff)
+    assert syms == {"md:slot02"}
+
+
+def test_touched_markdown_symbols_no_overlap():
+    src = "# Plan\n\n## slot-01\ncontent\n\n## slot-02\nother\n"
+    diff = "@@ -1,1 +1,1 @@\n-# Plan\n+# Changed Plan"
+    syms = _touched_markdown_symbols(new_source=src, diff_text=diff)
+    assert len(syms) == 0

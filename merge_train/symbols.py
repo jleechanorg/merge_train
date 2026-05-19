@@ -21,7 +21,7 @@ from typing import Iterable, Optional
 
 
 class UnsupportedLanguageError(Exception):
-    """Raised when symbol extraction is requested for a non-Python file."""
+    """Raised when symbol extraction is requested for an unsupported file type."""
 
 
 class SymbolResolutionError(Exception):
@@ -195,6 +195,48 @@ def is_python_path(path: str) -> bool:
     return path.endswith(".py")
 
 
+def is_markdown_path(path: str) -> bool:
+    return path.endswith(".md")
+
+
+def extract_markdown_symbols(source: str, *, file_stem: str = "") -> list[Symbol]:
+    """Extract Markdown headings as symbols.
+
+    Each ``## Heading`` becomes a Symbol named ``md:<stem>.<heading_slug>``
+    where the slug is the heading text lowercased with spaces replaced by
+    underscores and non-alphanumeric chars stripped. The line range
+    covers from the heading line to the line before the next same-or-higher
+    level heading (or EOF).
+
+    If *file_stem* is provided (e.g. ``"shared_plan"``), symbols are named
+    ``md:shared_plan.slot_01``. Without it, ``md:slot_01``.
+
+    Only ``##`` (h2) and deeper are extracted; the document title (``#``)
+    is excluded since it's typically unique and not a useful lock unit.
+    """
+    lines = source.splitlines()
+    headings: list[tuple[int, int, str, str]] = []
+    for i, line in enumerate(lines, start=1):
+        m = re.match(r"^(#{2,6})\s+(.+)$", line)
+        if not m:
+            continue
+        level = len(m.group(1))
+        title = m.group(2).strip()
+        slug = re.sub(r"[^a-z0-9_]+", "", re.sub(r"\s+", "_", title.lower()))
+        prefix = f"md:{file_stem}." if file_stem else "md:"
+        headings.append((i, level, title, f"{prefix}{slug}"))
+
+    out: list[Symbol] = []
+    for idx, (start, level, _title, name) in enumerate(headings):
+        end = len(lines)
+        for j in range(idx + 1, len(headings)):
+            if headings[j][1] <= level:
+                end = headings[j][0] - 1
+                break
+        out.append(Symbol(name=name, start=start, end=end))
+    return out
+
+
 def _run_git(args: list[str], *, cwd: Optional[Path] = None) -> str:
     proc = subprocess.run(
         ["git", *args],
@@ -230,14 +272,24 @@ def touched_symbols_for_staged_file(
 ) -> set[str]:
     """Resolve touched symbols for a staged file via git plumbing.
 
-    Raises :class:`UnsupportedLanguageError` for non-Python files —
-    callers should treat that as a file-level collision.
-
-    Also raises :class:`UnsupportedLanguageError` when symbol resolution
-    fails (parse error, empty symbols) — same file-level fallback.
+    Supports Python (.py) and Markdown (.md). Raises
+    :class:`UnsupportedLanguageError` for other file types — callers
+    should treat that as a file-level collision.
     """
+    if is_markdown_path(path):
+        diff = staged_diff_for_file(path, cwd=cwd)
+        if not diff.strip():
+            return set()
+        new_source = staged_content_for_file(path, cwd=cwd)
+        file_stem = Path(path).stem
+        try:
+            return _touched_markdown_symbols(new_source=new_source, diff_text=diff, file_stem=file_stem)
+        except SymbolResolutionError as exc:
+            raise UnsupportedLanguageError(
+                f"markdown symbol resolution failed for {path}: {exc}"
+            ) from exc
     if not is_python_path(path):
-        raise UnsupportedLanguageError(f"symbol extraction supports .py only: {path}")
+        raise UnsupportedLanguageError(f"symbol extraction supports .py and .md only: {path}")
     diff = staged_diff_for_file(path, cwd=cwd)
     if not diff.strip():
         return set()
@@ -258,9 +310,9 @@ def resolve_touched_symbols(
     """Resolve every path to its set of touched symbols.
 
     Returns ``(per_file, file_level_fallback)`` where:
-      * ``per_file`` maps path -> set of touched symbol names (Python files)
+      * ``per_file`` maps path -> set of touched symbol names (Python/Markdown)
       * ``file_level_fallback`` lists paths that couldn't be symbol-resolved
-        (non-Python, missing, parse error) — callers fall back to
+        (unsupported type, missing, parse error) — callers fall back to
         whole-domain collision for these.
     """
     per_file: dict[str, set[str]] = {}
@@ -273,3 +325,27 @@ def resolve_touched_symbols(
         except (RuntimeError, FileNotFoundError):
             fallback.append(path)
     return per_file, fallback
+
+
+def _touched_markdown_symbols(
+    *,
+    new_source: str,
+    diff_text: str,
+    file_stem: str = "",
+) -> set[str]:
+    """Return the set of Markdown heading symbols whose range intersects any hunk."""
+    symbols = extract_markdown_symbols(new_source, file_stem=file_stem)
+    if new_source.strip() and not symbols:
+        raise SymbolResolutionError(
+            "non-empty markdown yielded no heading symbols — falling back to file-level"
+        )
+    hunks = parse_hunks(diff_text)
+    if not hunks:
+        return set()
+    out: set[str] = set()
+    for sym in symbols:
+        for hunk in hunks:
+            if sym.overlaps(hunk.start, hunk.end):
+                out.add(sym.name)
+                break
+    return out

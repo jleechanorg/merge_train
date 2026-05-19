@@ -25,14 +25,18 @@ from typing import Optional
 
 _log = logging.getLogger(__name__)
 
+from pathlib import Path as _Path
+
 from merge_train.symbols import (
     SymbolResolutionError,
     UnsupportedLanguageError,
     is_python_path,
+    is_markdown_path,
     parse_hunks,
     staged_content_for_file,
     staged_diff_for_file,
     touched_symbols,
+    touched_symbols_for_staged_file,
 )
 
 
@@ -96,15 +100,12 @@ def symbols_from_staged_diff(
     result: dict[str, set[str]] = {}
     for path in proc.stdout.splitlines():
         path = path.strip()
-        if not path or not is_python_path(path):
+        if not path or (not is_python_path(path) and not is_markdown_path(path)):
             continue
         try:
-            diff = staged_diff_for_file(path, cwd=cwd)
-            if not diff.strip():
-                continue
-            content = staged_content_for_file(path, cwd=cwd)
-            syms = touched_symbols(new_source=content, diff_text=diff)
-            result[path] = syms
+            syms = touched_symbols_for_staged_file(path, cwd=cwd)
+            if syms:
+                result[path] = syms
         except (SymbolResolutionError, UnsupportedLanguageError, RuntimeError, FileNotFoundError):
             pass
     return result
@@ -248,7 +249,24 @@ def symbols_from_pr_diff(
     result: dict[str, set[str]] = {}
 
     for path, file_diff in file_diffs.items():
-        if not is_python_path(path):
+        if not is_python_path(path) and not is_markdown_path(path):
+            continue
+        if is_markdown_path(path):
+            from merge_train.symbols import extract_markdown_symbols, _touched_markdown_symbols
+            hunks = parse_hunks(file_diff)
+            if not hunks:
+                continue
+            content = ""
+            if repo and head_ref:
+                content = _gh_file_content_at_ref(path, head_ref, repo)
+            if not content:
+                continue
+            try:
+                syms = _touched_markdown_symbols(new_source=content, diff_text=file_diff, file_stem=_Path(path).stem)
+                if syms:
+                    result[path] = syms
+            except (SymbolResolutionError, Exception):
+                pass
             continue
         hunks = parse_hunks(file_diff)
         if not hunks:
@@ -287,7 +305,26 @@ def symbols_from_files_in_pr(
     result: dict[str, set[str]] = {}
 
     for path, file_diff in file_diffs.items():
-        if path not in requested or not is_python_path(path):
+        if path not in requested:
+            continue
+        if not is_python_path(path) and not is_markdown_path(path):
+            continue
+        if is_markdown_path(path):
+            from merge_train.symbols import _touched_markdown_symbols
+            hunks = parse_hunks(file_diff)
+            if not hunks:
+                continue
+            content = ""
+            if repo and head_ref:
+                content = _gh_file_content_at_ref(path, head_ref, repo)
+            if not content:
+                continue
+            try:
+                syms = _touched_markdown_symbols(new_source=content, diff_text=file_diff, file_stem=_Path(path).stem)
+                if syms:
+                    result[path] = syms
+            except (SymbolResolutionError, Exception):
+                pass
             continue
         hunks = parse_hunks(file_diff)
         if not hunks:
