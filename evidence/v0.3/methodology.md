@@ -6,12 +6,38 @@
 and the same file (`merge_train_e2e/shared_plan.md`), each holding a
 distinct slot symbol like `md:shared_plan.slot_01`.
 
+## Full Git Provenance
+
+- merge_train SHA: 30446565a58ecc232e255ef5a3c4003069411ee0
+- merge_train branch: main (synced to origin/main)
+- mctrl_test base SHA: 6f89bef3b823bc74c89c260264396a7f16c62b55
+- commits_ahead_of_main: 0
+- Code changes proven: e2e_slot_worker.sh (push-failure fatal, worktree
+  lock trap), e2e_md_area_lock_runner.py (slot collision fix)
+
 ## Environment
 
-- Merge Train repo: `<merge_train_repo>`
-- Mctrl Test repo: `<mctrl_test_repo>`
-- Python: 3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.0.13.3)]
+- Merge Train repo: <merge_train_repo>
+- Mctrl Test repo: <mctrl_test_repo>
+- Python: 3.13.7
+- Platform: darwin
 - Runner: e2e_md_area_lock_runner.py
+
+## Negative Control Design
+
+- Control 1 (duplicate slot-01): PR 99999 tries md:shared_plan.slot_01,
+  already held by PR 50001. Must be DENIED.
+- Control 2 (whole-domain): PR 99998 tries domain-wide reservation on
+  e2e_shared_markdown while symbol locks are active. Must be DENIED.
+- Control 3 (different area): PR 99997 tries slot-21 (total_slots+1),
+  which is beyond the 20 reserved slots. Must be ALLOWED, then released.
+
+## Hook Contract
+
+The e2e_slot_worker.sh hook acquires an area lock BEFORE the agent starts
+editing. If lock acquisition fails (DENIED), the agent is NOT launched and
+the worker exits 1. A trap releases the lock on early exit (e.g., worktree
+failure). On normal completion, the lock remains active until PR merge/close.
 
 ## Steps
 
@@ -20,43 +46,7 @@ distinct slot symbol like `md:shared_plan.slot_01`.
 3. List active locks, verify 20 distinct symbols, 0 whole-domain
 4. Run 3 negative controls
 5. Create 20 PRs (one per slot)
-6. Verify PRs
-7. Run merge simulations
+6. Verify PRs via gh pr view
+7. Run pairwise + sequential merge simulations
 8. Release all locks
 9. Verify 0 active test PR locks remain
-
-## Full Git Provenance
-
-| Item | Value |
-|------|-------|
-| merge_train HEAD | `4758c66db662a880e2f6e8485331c4ccf7e219ec` |
-| merge_train branch | `main` (synced to origin/main) |
-| merge_base | `4758c66db662a880e2f6e8485331c4ccf7e219ec` (same as HEAD) |
-| commits ahead of main | 0 |
-| diff stat vs main | (empty — on main) |
-| mctrl_test HEAD | `95fd6a763136297d35e8062b81a6429215e3163d` |
-
-## Negative Control Design
-
-The "different area" control uses slot-21 (`md:shared_plan.slot_21`)
-because the first 20 slots (01–20) are reserved by the 20 area locks
-under test. Slot-21 is guaranteed to be unoccupied, so a reservation
-on it must succeed — proving that the lock system permits concurrent
-access to disjoint areas while blocking access to already-locked slots.
-If the system used whole-file locks, slot-21 would also be denied,
-contradicting the observed PASS result.
-
-## Hook Contract
-
-The `e2e_slot_worker.sh` hook enforces that the area lock is acquired
-**before** the agent process starts, not after. The sequence is:
-
-1. Hook receives slot assignment
-2. Hook calls `domain_lock reserve` to acquire the slot symbol
-3. Only after lock acquisition succeeds does the hook launch the agent
-4. On agent exit (success or failure), the hook calls `domain_lock release`
-
-This pre-start acquisition order is critical: if the lock were acquired
-after the agent started, two agents could read the same section
-simultaneously before either lock is held, violating the concurrency
-invariant. The hook contract ensures lock-then-edit, not edit-then-lock.

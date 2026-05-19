@@ -1,28 +1,27 @@
 # Evidence Summary — OpenCode Markdown Area-Lock E2E
 
-## Run ID: 20260519T073247Z
+## Run ID: 20260519T075806Z
 
 ## Results: 8 passed, 0 failed
 
 | Scenario | Passed | Errors |
 |----------|--------|--------|
-| fixture_setup | PASS | none  |
-| area_lock_reservation | PASS | none  |
-| active_lock_verification | PASS | none  |
-| negative_controls | PASS | none  |
-| pr_creation | PASS | none  |
+| fixture_setup | PASS | none |
+| area_lock_reservation | PASS | none |
+| active_lock_verification | PASS | none |
+| negative_controls | PASS | none |
+| pr_creation | PASS | none |
 | pr_verification | PASS | none verified via gh pr view |
-| merge_simulation | PASS | none  |
-| lock_release | PASS | 0 active test PRs remain  |
-
+| merge_simulation | PASS | none |
+| lock_release | PASS | none |
 
 ## Non-Negotiable Claim
 
-Multiple real agents can concurrently edit disjoint sections of the same
+Multiple agents can concurrently edit disjoint sections of the same
 Markdown file because merge_train acquires and releases area-level locks,
 not whole-file locks.
 
-## Evidence Map
+## Claim → Artifact Map
 
 | Claim | File | Key Field |
 |-------|------|-----------|
@@ -33,7 +32,7 @@ not whole-file locks.
 | Whole-domain denied | run.json | negative_controls[1].passed |
 | Different area allowed | run.json | negative_controls[2].passed |
 | All locks released | active_after_release.json | 0 test PR entries |
-| PR #255–#274 created | prs.json | pr_url per entry |
+| PR #275–#294 created | prs.json | pr_url per entry |
 | No merge conflicts | pairwise_merge_tree.json + sequential_merge_tree.json | conflict_count |
 | Fixture branch setup | run.json | scenarios[0] |
 
