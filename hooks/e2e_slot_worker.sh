@@ -56,7 +56,7 @@ plan:
     symbols: [${SYMBOL}]
 EOF
 
-# Acquire lock BEFORE starting agent
+# Acquire lock BEFORE starting agent (or verify existing lock)
 echo "  Acquiring lock..."
 set +e
 LOCK_RESULT=$(python -m merge_train.domain_lock \
@@ -72,9 +72,31 @@ LOCK_EXIT=$?
 set -e
 
 if [ $LOCK_EXIT -ne 0 ]; then
-    echo "  DENIED: $LOCK_RESULT" >&2
-    echo "  Agent NOT started — lock acquisition failed." >&2
-    exit 1
+    # Lock may already be held by us (e.g., runner pre-reserved it)
+    # Check if it's our lock
+    CHECK_RESULT=$(python -m merge_train.domain_lock \
+        --registry "$REGISTRY" \
+        --log "$LOCK_LOG" \
+        --git-cwd "$MCTRL_REPO" \
+        list --status active --json 2>&1)
+    OUR_LOCK=$(echo "$CHECK_RESULT" | python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+for e in data:
+    if e.get('pr') == $SYNTHETIC_PR and e.get('branch') == '$BRANCH':
+        print('HELD_BY_US')
+        break
+else:
+    print('HELD_BY_OTHER')
+" 2>/dev/null)
+    if [ "$OUR_LOCK" = "HELD_BY_US" ]; then
+        echo "  Lock already held by PR#${SYNTHETIC_PR} — proceeding."
+        LOCK_RESULT="ALREADY_RESERVED: slot-${SLOT_N} by PR#${SYNTHETIC_PR}"
+    else
+        echo "  DENIED: $LOCK_RESULT" >&2
+        echo "  Agent NOT started — lock acquisition failed." >&2
+        exit 1
+    fi
 fi
 
 echo "  RESERVED: $LOCK_RESULT"
@@ -94,12 +116,24 @@ trap cleanup_lock EXIT
 # Create worktree for this slot
 WORKTREE="/tmp/merge_train_opencode_md_area_lock/${RUN_ID}/slot-${SLOT_N}"
 mkdir -p "$(dirname "$WORKTREE")"
-git -C "$MCTRL_REPO" worktree add "$WORKTREE" "$BRANCH" 2>/dev/null || {
-    # If branch doesn't exist yet, create it from setup
-    git -C "$MCTRL_REPO" worktree add "$WORKTREE" "e2e-md-area-lock-setup" 2>/dev/null
-}
 
-cd "$WORKTREE"
+# Try to add worktree from existing branch, or create from setup branch
+if ! git -C "$MCTRL_REPO" worktree add "$WORKTREE" "$BRANCH" 2>/dev/null; then
+    # Branch doesn't exist yet — create worktree from setup, then create the branch
+    SETUP_BRANCH="e2e-md-area-lock-setup"
+    if ! git -C "$MCTRL_REPO" worktree add "$WORKTREE" "$SETUP_BRANCH" 2>/dev/null; then
+        # No setup branch either — create from origin/main
+        git -C "$MCTRL_REPO" worktree add "$WORKTREE" "origin/main" 2>/dev/null || {
+            echo "  FATAL: cannot create worktree for slot-${SLOT_N}" >&2
+            exit 1
+        }
+    fi
+    # Create the slot branch inside the worktree
+    cd "$WORKTREE"
+    git checkout -b "$BRANCH" 2>/dev/null || true
+else
+    cd "$WORKTREE"
+fi
 
 # Launch OpenCode agent
 # The agent edits only its assigned slot heading
