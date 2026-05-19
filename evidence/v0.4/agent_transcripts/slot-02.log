@@ -1,0 +1,13 @@
+slot: 02
+symbol: md:shared_plan.slot_02
+branch: merge-train-e2e/20260519T092144Z/slot-02
+pr: 50002
+lock_result: ALREADY_RESERVED: slot-02 by PR#50002
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: jleechanorg/mctrl_test/pull/362
+[0m
+OK
+OK
+Done. PR created: [#362](https://github.com/jleechanorg/mctrl_test/pull/362) — slot-02 status updated to `complete by slot-02`, only that heading was edited.
+timestamp: 2026-05-19T09:23:17Z

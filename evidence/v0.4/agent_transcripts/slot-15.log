@@ -1,0 +1,16 @@
+slot: 15
+symbol: md:shared_plan.slot_15
+branch: merge-train-e2e/20260519T092144Z/slot-15
+pr: 50015
+lock_result: ALREADY_RESERVED: slot-15 by PR#50015
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: [1;32mPR: #375 | ctx ---------- ---%[0m
+https://github.com/jleechanorg/mctrl_test/pull/375
+[0m
+OK
+OK
+Genesis Coder, Prime Mover,
+
+Done. PR created: https://github.com/jleechanorg/mctrl_test/pull/375
+timestamp: 2026-05-19T09:33:52Z

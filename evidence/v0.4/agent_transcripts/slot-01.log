@@ -1,0 +1,15 @@
+slot: 01
+symbol: md:shared_plan.slot_01
+branch: merge-train-e2e/20260519T092144Z/slot-01
+pr: 50001
+lock_result: ALREADY_RESERVED: slot-01 by PR#50001
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: t-01 (no remote)][0m
+[1;32mPR: #361 | ctx ---------- ---%[0m
+https://github.com/jleechanorg/mctrl_test/pull/361
+[0m
+OK
+OK
+[Dir: slot-01 | Branch: merge-train-e2e/20260519T092144Z/slot-01] PR: #361
+timestamp: 2026-05-19T09:22:34Z

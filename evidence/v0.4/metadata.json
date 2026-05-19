@@ -1,0 +1,25 @@
+{
+  "run_id": "20260519T092144Z",
+  "bundle_version": "1.2.0",
+  "bundle_timestamp": "2026-05-19T09:21:44Z",
+  "merge_train_sha": "debeaf9a7352f2dcf63629f48bb48743b2a387b3",
+  "merge_train_branch": "main",
+  "slots": 20,
+  "skip_pr_creation": false,
+  "mctrl_base_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+  "setup_branch": "merge-train-e2e/20260519T092144Z/setup",
+  "provenance": {
+    "merge_train_sha": "debeaf9a7352f2dcf63629f48bb48743b2a387b3",
+    "merge_train_branch": "main",
+    "merge_base": "debeaf9a7352f2dcf63629f48bb48743b2a387b3",
+    "commits_ahead_of_main": 0,
+    "diff_stat_vs_main": "",
+    "mctrl_base_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "python_version": "3.13.7",
+    "platform": "darwin",
+    "runner": "e2e_md_area_lock_runner.py",
+    "ci_run_url": ""
+  },
+  "test_type": "e2e_area_lock",
+  "evidence_mode": "real_opencode_agents"
+}

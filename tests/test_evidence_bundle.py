@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import subprocess
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_V03 = REPO_ROOT / "evidence" / "v0.3"
+EVIDENCE_V04 = REPO_ROOT / "evidence" / "v0.4"
 
 
 def test_v03_agent_transcripts_have_checksum_sidecars() -> None:
@@ -67,3 +70,111 @@ def test_v03_checksums_cover_all_required_artifact_files() -> None:
     assert missing_from_master == []
     assert missing_sidecars == []
     assert invalid_sidecars == []
+
+
+# ── v0.4 bundle tests ────────────────────────────────────────────────────────
+
+def _bundle_sha256_checks(evidence_dir: Path) -> None:
+    """Shared sha256 integrity check for any evidence bundle dir."""
+    required_artifacts = [
+        path for path in evidence_dir.rglob("*")
+        if path.is_file() and not path.name.endswith(".sha256")
+    ]
+    missing_sidecars = [
+        path.relative_to(evidence_dir).as_posix()
+        for path in required_artifacts
+        if not Path(str(path) + ".sha256").is_file()
+    ]
+    invalid_sidecars = []
+    for path in required_artifacts:
+        sidecar = Path(str(path) + ".sha256")
+        if not sidecar.is_file():
+            continue
+        expected = hashlib.sha256(path.read_bytes()).hexdigest()
+        actual = sidecar.read_text().split(maxsplit=1)[0]
+        if actual != expected:
+            invalid_sidecars.append(path.relative_to(evidence_dir).as_posix())
+    assert missing_sidecars == [], f"missing sha256 sidecars: {missing_sidecars}"
+    assert invalid_sidecars == [], f"invalid sha256 sidecars: {invalid_sidecars}"
+
+
+def test_v04_bundle_exists() -> None:
+    """v0.4 evidence bundle must exist (proves E2E rerun at HEAD debeaf9a)."""
+    assert EVIDENCE_V04.is_dir(), (
+        "evidence/v0.4/ missing — rerun scripts/e2e_md_area_lock_runner.py at current HEAD"
+    )
+    assert (EVIDENCE_V04 / "metadata.json").is_file(), "evidence/v0.4/metadata.json missing"
+
+
+def test_v04_metadata_sha_matches_head() -> None:
+    """Bundle SHA must be within 5 commits of HEAD."""
+    if not EVIDENCE_V04.is_dir():
+        return  # covered by test_v04_bundle_exists
+    meta = json.loads((EVIDENCE_V04 / "metadata.json").read_text())
+    bundle_sha = meta.get("merge_train_sha", "")
+    assert bundle_sha, "metadata.json missing merge_train_sha"
+    # Verify SHA exists
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{bundle_sha}^{{commit}}"],
+        cwd=REPO_ROOT, capture_output=True,
+    )
+    assert result.returncode == 0, f"bundle SHA {bundle_sha} not found in git history"
+    # Check staleness (≤5 commits)
+    ahead = subprocess.run(
+        ["git", "rev-list", "--count", f"{bundle_sha}..HEAD"],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    commits_ahead = int(ahead.stdout.strip() or "999")
+    assert commits_ahead <= 5, (
+        f"evidence/v0.4 is {commits_ahead} commits stale "
+        f"(bundle_sha={bundle_sha[:12]}); rerun runner to refresh"
+    )
+
+
+def test_v04_bundle_scenarios_all_passed() -> None:
+    """All run.json scenarios must have passed=True."""
+    if not EVIDENCE_V04.is_dir():
+        return
+    run_json = EVIDENCE_V04 / "run.json"
+    if not run_json.is_file():
+        return
+    data = json.loads(run_json.read_text())
+    failed = [s["name"] for s in data.get("scenarios", []) if not s.get("passed")]
+    assert failed == [], f"v0.4 scenarios failed: {failed}"
+
+
+def test_v04_hook_behavior_scenarios_present() -> None:
+    """Phase 2 scenarios must be present in run.json."""
+    if not EVIDENCE_V04.is_dir():
+        return
+    run_json = EVIDENCE_V04 / "run.json"
+    if not run_json.is_file():
+        return
+    data = json.loads(run_json.read_text())
+    names = {s["name"] for s in data.get("scenarios", [])}
+    assert "lock_pre_reservation_path" in names, "missing lock_pre_reservation_path scenario"
+    assert "worktree_fallback_chain" in names, "missing worktree_fallback_chain scenario"
+
+
+def test_v04_checksums_valid() -> None:
+    """All sha256 sidecars in v0.4 bundle must be valid."""
+    if not EVIDENCE_V04.is_dir():
+        return
+    _bundle_sha256_checks(EVIDENCE_V04)
+
+
+def test_v04_agent_transcripts_present() -> None:
+    """20 slot transcripts with sidecars must exist."""
+    if not EVIDENCE_V04.is_dir():
+        return
+    transcript_dir = EVIDENCE_V04 / "agent_transcripts"
+    if not transcript_dir.is_dir():
+        return
+    transcripts = sorted(transcript_dir.glob("slot-*.log"))
+    assert len(transcripts) == 20, f"expected 20 transcripts, got {len(transcripts)}"
+    missing_sidecars = [
+        t.relative_to(REPO_ROOT).as_posix()
+        for t in transcripts
+        if not t.with_suffix(t.suffix + ".sha256").is_file()
+    ]
+    assert missing_sidecars == []

@@ -1,0 +1,482 @@
+[
+  {
+    "slot": 1,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-01",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/361",
+    "pr_number": 361,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "#361 | ctx ---------- ---%\u001b[0m\nhttps://github.com/jleechanorg/mctrl_test/pull/361\n\u001b[0m\nOK\nOK\n[Dir: slot-01 | Branch: merge-train-e2e/20260519T092144Z/slot-01] PR: #361\n=== Worker slot-01 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-01",
+      "headRefOid": "903b622eef7d36749277812b0577f0cca1c01243",
+      "number": 361,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/361"
+    }
+  },
+  {
+    "slot": 2,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-02",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/362",
+    "pr_number": 362,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "[0m\nOK\nOK\nDone. PR created: [#362](https://github.com/jleechanorg/mctrl_test/pull/362) \u2014 slot-02 status updated to `complete by slot-02`, only that heading was edited.\n=== Worker slot-02 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-02",
+      "headRefOid": "59a8a6b9467e2494bb1b0bfc73fd48ca564f097c",
+      "number": 362,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/362"
+    }
+  },
+  {
+    "slot": 3,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-03",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/363",
+    "pr_number": 363,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "#363 | ctx ---------- ---%\u001b[0m\nhttps://github.com/jleechanorg/mctrl_test/pull/363\n\u001b[0m\nOK\nOK\n[Dir: slot-03 | Branch: merge-train-e2e/20260519T092144Z/slot-03] PR: #363\n=== Worker slot-03 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-03",
+      "headRefOid": "57efdc5c964a9736b1f7b71a29117e0f933fcdda",
+      "number": 363,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/363"
+    }
+  },
+  {
+    "slot": 4,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-04",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/364",
+    "pr_number": 364,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "#364 | ctx ---------- ---%\u001b[0m\nhttps://github.com/jleechanorg/mctrl_test/pull/364\n\u001b[0m\nOK\nOK\n[Dir: slot-04 | Branch: merge-train-e2e/20260519T092144Z/slot-04] PR: #364\n=== Worker slot-04 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-04",
+      "headRefOid": "671ee9c659ab0247cdce7f43b24ffd8da36108bf",
+      "number": 364,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/364"
+    }
+  },
+  {
+    "slot": 5,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-05",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/365",
+    "pr_number": 365,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "tatus pending \u2192 complete by slot-05\"\nhttps://github.com/jleechanorg/mctrl_test/pull/365\n\u001b[0m\nOK\nOK\nDone. PR created: https://github.com/jleechanorg/mctrl_test/pull/365\n=== Worker slot-05 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-05",
+      "headRefOid": "87c2c5a7fb7129228e74c4c99ccc90a9f52231ee",
+      "number": 365,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/365"
+    }
+  },
+  {
+    "slot": 6,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-06",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/366",
+    "pr_number": 366,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "echanorg/mctrl_test/pull/366\n\u001b[0m\nOK\nOK\n[Dir: slot-06 | Branch: merge-train-e2e/20260519T092144Z/slot-06] PR: #366 | https://github.com/jleechanorg/mctrl_test/pull/366\n=== Worker slot-06 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-06",
+      "headRefOid": "606ea65814bf0e1477db6cfc5c818eb723aa552b",
+      "number": 366,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/366"
+    }
+  },
+  {
+    "slot": 7,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-07",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/367",
+    "pr_number": 367,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "erge_train_e2e/shared_plan.md.\" 2>&1\nhttps://github.com/jleechanorg/mctrl_test/pull/367\n\u001b[0m\nOK\nOK\nDone. PR created: https://github.com/jleechanorg/mctrl_test/pull/367\n=== Worker slot-07 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-07",
+      "headRefOid": "7a2f06a769bd2a11174e3903d0102118927fecd2",
+      "number": 367,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/367"
+    }
+  },
+  {
+    "slot": 8,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-08",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/368",
+    "pr_number": 368,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "368](https://github.com/jleechanorg/mctrl_test/pull/368).\n\n[Dir: slot-08 | Branch: merge-train-e2e/20260519T092144Z/slot-08 (no remote)]\nPR: #368 | ctx ---------- ---%\n=== Worker slot-08 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-08",
+      "headRefOid": "7a59f2e1e689dfa6c06c435026343a152c213f4f",
+      "number": 368,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/368"
+    }
+  },
+  {
+    "slot": 9,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-09",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/369",
+    "pr_number": 369,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "| PR: #369 | ctx ---------- ---%\u001b[0m\nhttps://github.com/jleechanorg/mctrl_test/pull/369\n\u001b[0m\nOK\nOK\nDone. PR created: https://github.com/jleechanorg/mctrl_test/pull/369\n=== Worker slot-09 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-09",
+      "headRefOid": "7505a1936af913a9f5171f9d5f6631ce0729e819",
+      "number": 369,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/369"
+    }
+  },
+  {
+    "slot": 10,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-10",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/370",
+    "pr_number": 370,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "K\nDone. Edited `## slot-10` status to `complete by slot-10`, committed, pushed, and created PR [#370](https://github.com/jleechanorg/mctrl_test/pull/370) against main.\n=== Worker slot-10 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-10",
+      "headRefOid": "33a8c3ecb3d0dd0bdc0d9b2240341cf9babea50f",
+      "number": 370,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/370"
+    }
+  },
+  {
+    "slot": 11,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-11",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/371",
+    "pr_number": 371,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "eechanorg/mctrl_test/pull/371)\n\n[Dir: slot-11 | Branch: merge-train-e2e/20260519T092144Z/slot-11 (synced)]\n\u2192 origin/merge-train-e2e/20260519T092144Z/slot-11 | PR: #371\n=== Worker slot-11 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-11",
+      "headRefOid": "5533dcbd6c66a5419bd964d79d7524526bef1b6f",
+      "number": 371,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/371"
+    }
+  },
+  {
+    "slot": 12,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-12",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/372",
+    "pr_number": 372,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "/mctrl_test/pull/372\n\u001b[0m\nOK\nOK\n[Dir: slot-12 | Branch: merge-train-e2e/20260519T092144Z/slot-12 (synced)]\n\u2192 origin/merge-train-e2e/20260519T092144Z/slot-12 | PR: #372\n=== Worker slot-12 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-12",
+      "headRefOid": "c610b32fa23d272d1c6356bd12843b4c133c9177",
+      "number": 372,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/372"
+    }
+  },
+  {
+    "slot": 13,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-13",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/373",
+    "pr_number": 373,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "status: pending` \u2192 `status: complete by slot-13` under `## slot-13` only, committed, pushed, and created PR: [#373](https://github.com/jleechanorg/mctrl_test/pull/373)\n=== Worker slot-13 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-13",
+      "headRefOid": "2beb9fc692ae705c6617081763cafeb307ef4a27",
+      "number": 373,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/373"
+    }
+  },
+  {
+    "slot": 14,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-14",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/374",
+    "pr_number": 374,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "st/pull/374\n\u001b[0m\nOK\nOK\nDone. Edited `## slot-14` status to `complete by slot-14`, committed, pushed, and created PR: https://github.com/jleechanorg/mctrl_test/pull/374\n=== Worker slot-14 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-14",
+      "headRefOid": "56a9bdef4ad80f28875971d0d574490eac3e9935",
+      "number": 374,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/374"
+    }
+  },
+  {
+    "slot": 15,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-15",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/375",
+    "pr_number": 375,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "--%\u001b[0m\nhttps://github.com/jleechanorg/mctrl_test/pull/375\n\u001b[0m\nOK\nOK\nGenesis Coder, Prime Mover,\n\nDone. PR created: https://github.com/jleechanorg/mctrl_test/pull/375\n=== Worker slot-15 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-15",
+      "headRefOid": "619b9b8ff676271965ad5895b6b9f0acbb0eb3bc",
+      "number": 375,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/375"
+    }
+  },
+  {
+    "slot": 16,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-16",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/376",
+    "pr_number": 376,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "echanorg/mctrl_test/pull/376\n\u001b[0m\nOK\nOK\n[Dir: slot-16 | Branch: merge-train-e2e/20260519T092144Z/slot-16] PR: #376 | https://github.com/jleechanorg/mctrl_test/pull/376\n=== Worker slot-16 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-16",
+      "headRefOid": "fcfee859b80228eb9e2768d06e444fbd018593c3",
+      "number": 376,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/376"
+    }
+  },
+  {
+    "slot": 17,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-17",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/377",
+    "pr_number": 377,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "rom pending to complete by slot-17.\"\nhttps://github.com/jleechanorg/mctrl_test/pull/377\n\u001b[0m\nOK\nOK\nDone. PR created: https://github.com/jleechanorg/mctrl_test/pull/377\n=== Worker slot-17 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-17",
+      "headRefOid": "575a45dce000691d9934f2e0d53448b5d2639fd3",
+      "number": 377,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/377"
+    }
+  },
+  {
+    "slot": 18,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-18",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/378",
+    "pr_number": 378,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "echanorg/mctrl_test/pull/378\n\u001b[0m\nOK\nOK\n[Dir: slot-18 | Branch: merge-train-e2e/20260519T092144Z/slot-18] PR: #378 | https://github.com/jleechanorg/mctrl_test/pull/378\n=== Worker slot-18 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-18",
+      "headRefOid": "f5362bb76cc1b47f3b9ca363ad4a2338abacd6b1",
+      "number": 378,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/378"
+    }
+  },
+  {
+    "slot": 19,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-19",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/379",
+    "pr_number": 379,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "mplete by slot-19 in shared_plan.md\"\nhttps://github.com/jleechanorg/mctrl_test/pull/379\n\u001b[0m\nOK\nOK\nDone. PR created: https://github.com/jleechanorg/mctrl_test/pull/379\n=== Worker slot-19 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-19",
+      "headRefOid": "41f36cd89d134738e36cf64f2dce04915cc14bb6",
+      "number": 379,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/379"
+    }
+  },
+  {
+    "slot": 20,
+    "branch": "merge-train-e2e/20260519T092144Z/slot-20",
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/380",
+    "pr_number": 380,
+    "head_sha": "4a2ae1501d657ae47a06baf13afad2e814919df1",
+    "agent_mode": "real_agent",
+    "worker_exit": 0,
+    "worker_output_last_200": "plete by slot-20 in shared_plan.md.\"\nhttps://github.com/jleechanorg/mctrl_test/pull/380\n\u001b[0m\nOK\nOK\nDone. PR created: https://github.com/jleechanorg/mctrl_test/pull/380\n=== Worker slot-20 complete ===\n",
+    "gh_view": {
+      "baseRefName": "main",
+      "files": [
+        {
+          "path": "merge_train_e2e/shared_plan.md",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "headRefName": "merge-train-e2e/20260519T092144Z/slot-20",
+      "headRefOid": "2976a259e3fde933ff60c97b26b2cf1e19058839",
+      "number": 380,
+      "url": "https://github.com/jleechanorg/mctrl_test/pull/380"
+    }
+  }
+]

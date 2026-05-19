@@ -1,0 +1,89 @@
+name: evidence-guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-staleness-check:
+    name: Evidence bundle staleness check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find latest evidence bundle
+        id: find-bundle
+        run: |
+          # Find the most recently committed evidence/v*/metadata.json
+          LATEST=$(ls -d evidence/v*/ 2>/dev/null | sort -V | tail -1)
+          if [ -z "$LATEST" ]; then
+            echo "ERROR: no evidence/v*/ bundles found" >&2
+            exit 1
+          fi
+          META="${LATEST}metadata.json"
+          if [ ! -f "$META" ]; then
+            echo "ERROR: $META missing" >&2
+            exit 1
+          fi
+          BUNDLE_SHA=$(python3 -c "import json; d=json.load(open('$META')); print(d.get('merge_train_sha',''))")
+          echo "bundle_dir=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "bundle_sha=$BUNDLE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Bundle dir: $LATEST"
+          echo "Bundle SHA: $BUNDLE_SHA"
+
+      - name: Check staleness (≤5 commits behind HEAD)
+        env:
+          BUNDLE_SHA: ${{ steps.find-bundle.outputs.bundle_sha }}
+          MAX_STALE_COMMITS: 5
+        run: |
+          if [ -z "$BUNDLE_SHA" ]; then
+            echo "FAIL: metadata.json missing merge_train_sha field" >&2
+            exit 1
+          fi
+          # Verify the bundle SHA exists in this repo
+          if ! git cat-file -e "${BUNDLE_SHA}^{commit}" 2>/dev/null; then
+            echo "FAIL: bundle SHA $BUNDLE_SHA not found in git history" >&2
+            exit 1
+          fi
+          # Count commits HEAD is ahead of bundle SHA
+          COMMITS_AHEAD=$(git rev-list --count "${BUNDLE_SHA}..HEAD" 2>/dev/null || echo 999)
+          echo "HEAD is $COMMITS_AHEAD commits ahead of bundle SHA $BUNDLE_SHA"
+          if [ "$COMMITS_AHEAD" -gt "$MAX_STALE_COMMITS" ]; then
+            echo "FAIL: evidence bundle is $COMMITS_AHEAD commits stale (max allowed: $MAX_STALE_COMMITS)." >&2
+            echo "Rerun scripts/e2e_md_area_lock_runner.py at current HEAD to refresh evidence." >&2
+            exit 1
+          fi
+          echo "PASS: bundle is current ($COMMITS_AHEAD commits behind HEAD)"
+
+      - name: Verify sha256 sidecars
+        run: |
+          BUNDLE_DIR=${{ steps.find-bundle.outputs.bundle_dir }}
+          FAIL=0
+          while IFS= read -r -d '' f; do
+            sidecar="${f}.sha256"
+            if [ ! -f "$sidecar" ]; then
+              echo "MISSING sidecar: $sidecar"
+              FAIL=1
+              continue
+            fi
+            EXPECTED=$(sha256sum "$f" | awk '{print $1}')
+            ACTUAL=$(awk '{print $1}' "$sidecar")
+            if [ "$EXPECTED" != "$ACTUAL" ]; then
+              echo "MISMATCH: $f (expected $EXPECTED, sidecar says $ACTUAL)"
+              FAIL=1
+            fi
+          done < <(find "$BUNDLE_DIR" -type f ! -name "*.sha256" -print0)
+          if [ "$FAIL" -eq 1 ]; then
+            echo "FAIL: sha256 sidecar verification failed" >&2
+            exit 1
+          fi
+          echo "PASS: all sha256 sidecars valid"

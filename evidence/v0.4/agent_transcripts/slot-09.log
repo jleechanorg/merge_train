@@ -1,0 +1,14 @@
+slot: 09
+symbol: md:shared_plan.slot_09
+branch: merge-train-e2e/20260519T092144Z/slot-09
+pr: 50009
+lock_result: ALREADY_RESERVED: slot-09 by PR#50009
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: ain-e2e/20260519T092144Z/slot-09 | PR: #369 | ctx ---------- ---%[0m
+https://github.com/jleechanorg/mctrl_test/pull/369
+[0m
+OK
+OK
+Done. PR created: https://github.com/jleechanorg/mctrl_test/pull/369
+timestamp: 2026-05-19T09:29:06Z

@@ -1,0 +1,14 @@
+slot: 18
+symbol: md:shared_plan.slot_18
+branch: merge-train-e2e/20260519T092144Z/slot-18
+pr: 50018
+lock_result: ALREADY_RESERVED: slot-18 by PR#50018
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: - ---%[0m
+https://github.com/jleechanorg/mctrl_test/pull/378
+[0m
+OK
+OK
+[Dir: slot-18 | Branch: merge-train-e2e/20260519T092144Z/slot-18] PR: #378 | https://github.com/jleechanorg/mctrl_test/pull/378
+timestamp: 2026-05-19T09:35:07Z

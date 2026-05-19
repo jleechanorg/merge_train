@@ -1,0 +1,12 @@
+slot: 08
+symbol: md:shared_plan.slot_08
+branch: merge-train-e2e/20260519T092144Z/slot-08
+pr: 50008
+lock_result: ALREADY_RESERVED: slot-08 by PR#50008
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: mmit `7a59f2e`, and created PR [#368](https://github.com/jleechanorg/mctrl_test/pull/368).
+
+[Dir: slot-08 | Branch: merge-train-e2e/20260519T092144Z/slot-08 (no remote)]
+PR: #368 | ctx ---------- ---%
+timestamp: 2026-05-19T09:28:16Z

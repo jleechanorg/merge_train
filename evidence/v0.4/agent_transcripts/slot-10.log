@@ -1,0 +1,13 @@
+slot: 10
+symbol: md:shared_plan.slot_10
+branch: merge-train-e2e/20260519T092144Z/slot-10
+pr: 50010
+lock_result: ALREADY_RESERVED: slot-10 by PR#50010
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: org/mctrl_test/pull/370
+[0m
+OK
+OK
+Done. Edited `## slot-10` status to `complete by slot-10`, committed, pushed, and created PR [#370](https://github.com/jleechanorg/mctrl_test/pull/370) against main.
+timestamp: 2026-05-19T09:30:04Z
