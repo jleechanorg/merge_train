@@ -1,0 +1,14 @@
+slot: 10
+symbol: md:shared_plan.slot_10
+branch: merge-train-e2e/20260519T082805Z/slot-10
+pr: 50010
+lock_result: ALREADY_RESERVED: slot-10 by PR#50010
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: jleechanorg/mctrl_test/pull/349
+[0m
+OK
+OK
+[Dir: slot-10 | Branch: merge-train-e2e/20260519T082805Z/slot-10 (synced)]
+→ origin/merge-train-e2e/20260519T082805Z/slot-10 | PR: #349 | ctx ---------- ---%
+timestamp: 2026-05-19T08:32:19Z

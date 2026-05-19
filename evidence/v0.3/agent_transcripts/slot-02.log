@@ -1,0 +1,9 @@
+slot: 02
+symbol: md:shared_plan.slot_02
+branch: merge-train-e2e/20260519T082805Z/slot-02
+pr: 50002
+lock_result: ALREADY_RESERVED: slot-02 by PR#50002
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: reated: [#341](https://github.com/jleechanorg/mctrl_test/pull/341) — changed `status: pending` → `status: complete by slot-02` under `## slot-02` only, committed, pushed, and PR opened against `main`.
+timestamp: 2026-05-19T08:29:06Z

@@ -1,0 +1,14 @@
+slot: 12
+symbol: md:shared_plan.slot_12
+branch: merge-train-e2e/20260519T082805Z/slot-12
+pr: 50012
+lock_result: ALREADY_RESERVED: slot-12 by PR#50012
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: \` to \`complete by slot-12\` in \`merge_train_e2e/shared_plan.md\`."
+https://github.com/jleechanorg/mctrl_test/pull/351
+[0m
+OK
+OK
+Done. PR created: https://github.com/jleechanorg/mctrl_test/pull/351
+timestamp: 2026-05-19T08:33:06Z

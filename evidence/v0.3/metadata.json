@@ -1,20 +1,20 @@
 {
-  "run_id": "20260519T075806Z",
+  "run_id": "20260519T082805Z",
   "bundle_version": "1.1.0",
-  "bundle_timestamp": "2026-05-19T07:58:06Z",
-  "merge_train_sha": "30446565a58ecc232e255ef5a3c4003069411ee0",
+  "bundle_timestamp": "2026-05-19T08:28:05Z",
+  "merge_train_sha": "1ef058ef70f88f3250ed14572d7baf70c1e6c5ec",
   "merge_train_branch": "main",
   "slots": 20,
   "skip_pr_creation": false,
-  "mctrl_base_sha": "6f89bef3b823bc74c89c260264396a7f16c62b55",
-  "setup_branch": "merge-train-e2e/20260519T075806Z/setup",
+  "mctrl_base_sha": "7f391fbc6fb99a7bbaf57d867e6accb2d15daa9d",
+  "setup_branch": "merge-train-e2e/20260519T082805Z/setup",
   "provenance": {
-    "merge_train_sha": "30446565a58ecc232e255ef5a3c4003069411ee0",
+    "merge_train_sha": "1ef058ef70f88f3250ed14572d7baf70c1e6c5ec",
     "merge_train_branch": "main",
-    "merge_base": "30446565a58ecc232e255ef5a3c4003069411ee0",
+    "merge_base": "1ef058ef70f88f3250ed14572d7baf70c1e6c5ec",
     "commits_ahead_of_main": 0,
     "diff_stat_vs_main": "",
-    "mctrl_base_sha": "6f89bef3b823bc74c89c260264396a7f16c62b55",
+    "mctrl_base_sha": "7f391fbc6fb99a7bbaf57d867e6accb2d15daa9d",
     "python_version": "3.13.7",
     "platform": "darwin",
     "runner": "e2e_md_area_lock_runner.py"
@@ -24,5 +24,5 @@
     "lock_log_path": "./lock_log.jsonl"
   },
   "test_type": "e2e_area_lock",
-  "evidence_mode": "local_cli_lock_proof"
+  "evidence_mode": "real_opencode_agents"
 }

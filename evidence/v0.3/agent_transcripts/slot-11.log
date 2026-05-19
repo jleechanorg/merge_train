@@ -1,0 +1,15 @@
+slot: 11
+symbol: md:shared_plan.slot_11
+branch: merge-train-e2e/20260519T082805Z/slot-11
+pr: 50011
+lock_result: ALREADY_RESERVED: slot-11 by PR#50011
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: pull/350
+[0m
+OK
+OK
+PR created: https://github.com/jleechanorg/mctrl_test/pull/350
+
+Only `## slot-11` was changed from `status: pending` to `status: complete by slot-11`. All other headings untouched.
+timestamp: 2026-05-19T08:32:40Z

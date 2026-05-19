@@ -1,0 +1,12 @@
+slot: 07
+symbol: md:shared_plan.slot_07
+branch: merge-train-e2e/20260519T082805Z/slot-07
+pr: 50007
+lock_result: ALREADY_RESERVED: slot-07 by PR#50007
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: norg/mctrl_test/pull/346) against `main`.
+
+[Dir: slot-07 | Branch: merge-train-e2e/20260519T082805Z/slot-07 (synced)]
+→ origin/merge-train-e2e/20260519T082805Z/slot-07 | PR: #346 | ctx ---------- ---%
+timestamp: 2026-05-19T08:31:12Z

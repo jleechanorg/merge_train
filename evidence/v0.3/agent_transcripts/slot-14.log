@@ -1,0 +1,15 @@
+slot: 14
+symbol: md:shared_plan.slot_14
+branch: merge-train-e2e/20260519T082805Z/slot-14
+pr: 50014
+lock_result: ALREADY_RESERVED: slot-14 by PR#50014
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200: 0m
+https://github.com/jleechanorg/mctrl_test/pull/353
+[0m
+OK
+OK
+[Dir: slot-14 | Branch: merge-train-e2e/20260519T082805Z/slot-14 (synced)]
+→ origin/merge-train-e2e/20260519T082805Z/slot-14 | PR: #353
+timestamp: 2026-05-19T08:33:58Z

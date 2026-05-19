@@ -1,12 +1,13 @@
 # Evidence Summary — OpenCode Markdown Area-Lock E2E
 
-## Run ID: 20260519T075806Z
+## Run ID: 20260519T082805Z
 
-## Results: 8 passed, 0 failed
+## Results: 9 passed, 0 failed
 
 | Scenario | Passed | Errors |
 |----------|--------|--------|
 | fixture_setup | PASS | none |
+| auto_extraction | PASS | none |
 | area_lock_reservation | PASS | none |
 | active_lock_verification | PASS | none |
 | negative_controls | PASS | none |
@@ -17,7 +18,7 @@
 
 ## Non-Negotiable Claim
 
-Multiple agents can concurrently edit disjoint sections of the same
+Multiple real OpenCode agents can concurrently edit disjoint sections of the same
 Markdown file because merge_train acquires and releases area-level locks,
 not whole-file locks.
 
@@ -32,12 +33,11 @@ not whole-file locks.
 | Whole-domain denied | run.json | negative_controls[1].passed |
 | Different area allowed | run.json | negative_controls[2].passed |
 | All locks released | active_after_release.json | 0 test PR entries |
-| PR #275–#294 created | prs.json | pr_url per entry |
+| Symbols auto-extracted | run.json | reserve_results[].auto_extracted |
+| Real agents used | prs.json | agent_mode per entry |
+| PR #340–#359 created | prs.json | pr_url per entry |
 | No merge conflicts | pairwise_merge_tree.json + sequential_merge_tree.json | conflict_count |
-| Fixture branch setup | run.json | scenarios[0] |
 
 ## What This Evidence Does NOT Prove
 
-- Production OpenCode agent behavior (tested with CLI reservations)
-- Automatic Markdown heading extraction (explicit symbols used)
-- Real AO/OpenCode worker transcript (local lock model proof only)
+- Production AO worker orchestration (hooks tested via direct invocation)

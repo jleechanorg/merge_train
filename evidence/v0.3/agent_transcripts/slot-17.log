@@ -1,0 +1,14 @@
+slot: 17
+symbol: md:shared_plan.slot_17
+branch: merge-train-e2e/20260519T082805Z/slot-17
+pr: 50017
+lock_result: ALREADY_RESERVED: slot-17 by PR#50017
+lock_exit: 1
+agent_exit: 0
+agent_output_last_200:  \`pending\` to \`complete by slot-17\` in merge_train_e2e/shared_plan.md."
+https://github.com/jleechanorg/mctrl_test/pull/356
+[0m
+OK
+OK
+PR created: https://github.com/jleechanorg/mctrl_test/pull/356
+timestamp: 2026-05-19T08:35:11Z
