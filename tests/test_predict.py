@@ -927,6 +927,28 @@ def test_symbols_from_staged_diff_no_git(tmp_path, monkeypatch):
     assert result == {}
 
 
+def test_symbols_from_staged_diff_parse_failure_is_omitted(tmp_path):
+    """A staged syntax error must not crash symbol discovery.
+
+    The discovery API omits files it cannot resolve so callers can keep
+    fail-closed whole-file semantics outside this helper.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@e.com")
+    _git(repo, "config", "user.name", "T")
+    (repo / "bad.py").write_text("def ok():\n    return 1\n")
+    _git(repo, "add", "bad.py")
+    _git(repo, "commit", "-q", "-m", "base")
+
+    (repo / "bad.py").write_text("def broken(:\n    pass\n")
+    _git(repo, "add", "bad.py")
+
+    from merge_train.symbol_discovery import symbols_from_staged_diff
+    assert symbols_from_staged_diff(cwd=repo) == {}
+
+
 # --------------------------------------------------------------------------- #
 # v0.2.1: codex-review follow-ups
 # --------------------------------------------------------------------------- #
@@ -1022,6 +1044,46 @@ def test_enrich_symbols_errors_without_repo_or_remote(tmp_path, monkeypatch):
     ], capture_output=True, text=True)
     assert r.returncode == 2, r.stderr
     assert "--enrich-symbols requires --repo" in r.stderr
+
+
+def test_from_prs_fails_closed_when_any_requested_pr_cannot_load(tmp_path):
+    """`--from-prs` must not silently analyze a partial requested PR set."""
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    gh = fake_bin / "gh"
+    gh.write_text("""#!/bin/sh
+if [ "$1" = "pr" ] && [ "$2" = "diff" ]; then
+  if [ "$3" = "1" ]; then
+    echo mvp_site/world_logic.py
+    exit 0
+  fi
+  echo "not found" >&2
+  exit 1
+fi
+if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  echo branch-$3
+  exit 0
+fi
+exit 1
+""")
+    gh.chmod(0o755)
+
+    import os
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    r = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "predict-conflicts", "--from-prs", "1,2", "--repo", "owner/repo",
+        "--no-textual", "--json",
+    ], capture_output=True, text=True, env=env)
+    assert r.returncode == 2
+    assert "could not load requested PRs: 2" in r.stderr
 
 
 def test_gh_file_content_at_ref_uses_raw_accept_header(monkeypatch):

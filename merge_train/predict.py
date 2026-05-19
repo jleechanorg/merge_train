@@ -556,10 +556,11 @@ def predict_conflicts(
 def _load_specs_from_github(
     pr_numbers: list[int],
     repo: Optional[str],
-) -> list["PRSpec"]:
+) -> tuple[list["PRSpec"], list[int]]:
     """Fetch file lists for each PR from GitHub via ``gh pr diff --name-only``."""
     import subprocess as _sp
     specs: list[PRSpec] = []
+    failed: list[int] = []
     for pr in pr_numbers:
         cmd = ["gh", "pr", "diff", str(pr), "--name-only"]
         if repo:
@@ -568,10 +569,12 @@ def _load_specs_from_github(
             proc = _sp.run(cmd, capture_output=True, text=True, check=False)
         except FileNotFoundError:
             print(f"warning: gh CLI not found; skipping PR#{pr}", file=__import__("sys").stderr)
+            failed.append(pr)
             continue
         if proc.returncode != 0:
             print(f"warning: gh pr diff failed for PR#{pr}: {proc.stderr.strip()}",
                   file=__import__("sys").stderr)
+            failed.append(pr)
             continue
         files = tuple(f.strip() for f in proc.stdout.splitlines() if f.strip())
         branch_cmd = ["gh", "pr", "view", str(pr), "--json", "headRefName", "--jq", ".headRefName"]
@@ -584,7 +587,7 @@ def _load_specs_from_github(
         except FileNotFoundError:
             branch = f"pr-{pr}"
         specs.append(PRSpec(pr=pr, branch=branch, files=files))
-    return specs
+    return specs, failed
 
 
 def _enrich_specs_with_symbols(
@@ -640,7 +643,12 @@ def cli_predict_conflicts(
             print(f"error: --from-prs must be comma-separated integers: {exc}",
                   file=_sys.stderr)
             return 2
-        specs = _load_specs_from_github(pr_numbers, repo)
+        specs, failed_prs = _load_specs_from_github(pr_numbers, repo)
+        if failed_prs:
+            failed_s = ",".join(str(pr) for pr in failed_prs)
+            print(f"error: could not load requested PRs: {failed_s}",
+                  file=_sys.stderr)
+            return 2
         if not specs:
             print("error: no PRs could be loaded from GitHub", file=_sys.stderr)
             return 2

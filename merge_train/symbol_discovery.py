@@ -26,6 +26,7 @@ from typing import Optional
 _log = logging.getLogger(__name__)
 
 from merge_train.symbols import (
+    SymbolResolutionError,
     UnsupportedLanguageError,
     is_python_path,
     parse_hunks,
@@ -104,7 +105,7 @@ def symbols_from_staged_diff(
             content = staged_content_for_file(path, cwd=cwd)
             syms = touched_symbols(new_source=content, diff_text=diff)
             result[path] = syms
-        except (UnsupportedLanguageError, RuntimeError, FileNotFoundError):
+        except (SymbolResolutionError, UnsupportedLanguageError, RuntimeError, FileNotFoundError):
             pass
     return result
 
