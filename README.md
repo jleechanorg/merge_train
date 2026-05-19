@@ -388,6 +388,7 @@ python -m pytest tests/ -q     # 202 passed
 
 - [`docs/AGENTS.md`](docs/AGENTS.md) — recipes for AI agents using or modifying this repo (paste-in integration snippets)
 - [`docs/CLAUDE.md`](docs/CLAUDE.md) — repo-local Claude Code policy (test discipline, evidence, adversarial review)
+- [`docs/opencode_md_area_lock_e2e.md`](docs/opencode_md_area_lock_e2e.md) — real OpenCode/AO E2E runbook for 20 Markdown area-lock PRs against `mctrl_test`
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes
 - [`roadmap/README.md`](roadmap/README.md) — rolling activity log
 - [`examples/file_domains.yaml`](examples/file_domains.yaml) — sample registry
