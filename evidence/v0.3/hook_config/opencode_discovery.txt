@@ -1,0 +1,5 @@
+<openw_path>/Users/jleechan/.local/bin/openw</openw_path>
+<opencode_path>/Users/jleechan/.opencode/bin/opencode</opencode_path>
+
+openw run --dangerously-skip-permissions: available
+opencode run --dangerously-skip-permissions: available
