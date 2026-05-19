@@ -27,7 +27,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2  # let `git merge-tree` resolve recent history if a test needs it
+          fetch-depth: 8  # evidence freshness tests allow bundles up to 5 commits behind HEAD
 
       - name: Configure git identity (for tests that init tmp repos)
         run: |
