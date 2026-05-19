@@ -34,7 +34,7 @@ Markdown areas as explicit lock symbols in the plan:
 ```yaml
 plan:
   - domain: e2e_shared_markdown
-    symbols: [md:e2e_shared_plan.slot_01]
+    symbols: [md:shared_plan.slot_01]
 ```
 
 That proves the lock model and agent integration without pretending Markdown
@@ -94,7 +94,7 @@ block per PR:
 
 - branch: merge-train-e2e/${RUN_ID}/slot-01
 - lock-domain: e2e_shared_markdown
-- lock-symbol: md:e2e_shared_plan.slot_01
+- lock-symbol: md:shared_plan.slot_01
 - file: merge_train_e2e/shared_plan.md
 - heading: ## slot-01
 - required edit: replace `status: pending` with
@@ -203,26 +203,26 @@ PR is merged:
 
 | PR Lane | Branch Suffix | Required Lock Symbol |
 |---------|---------------|----------------------|
-| 01 | slot-01 | `md:e2e_shared_plan.slot_01` |
-| 02 | slot-02 | `md:e2e_shared_plan.slot_02` |
-| 03 | slot-03 | `md:e2e_shared_plan.slot_03` |
-| 04 | slot-04 | `md:e2e_shared_plan.slot_04` |
-| 05 | slot-05 | `md:e2e_shared_plan.slot_05` |
-| 06 | slot-06 | `md:e2e_shared_plan.slot_06` |
-| 07 | slot-07 | `md:e2e_shared_plan.slot_07` |
-| 08 | slot-08 | `md:e2e_shared_plan.slot_08` |
-| 09 | slot-09 | `md:e2e_shared_plan.slot_09` |
-| 10 | slot-10 | `md:e2e_shared_plan.slot_10` |
-| 11 | slot-11 | `md:e2e_shared_plan.slot_11` |
-| 12 | slot-12 | `md:e2e_shared_plan.slot_12` |
-| 13 | slot-13 | `md:e2e_shared_plan.slot_13` |
-| 14 | slot-14 | `md:e2e_shared_plan.slot_14` |
-| 15 | slot-15 | `md:e2e_shared_plan.slot_15` |
-| 16 | slot-16 | `md:e2e_shared_plan.slot_16` |
-| 17 | slot-17 | `md:e2e_shared_plan.slot_17` |
-| 18 | slot-18 | `md:e2e_shared_plan.slot_18` |
-| 19 | slot-19 | `md:e2e_shared_plan.slot_19` |
-| 20 | slot-20 | `md:e2e_shared_plan.slot_20` |
+| 01 | slot-01 | `md:shared_plan.slot_01` |
+| 02 | slot-02 | `md:shared_plan.slot_02` |
+| 03 | slot-03 | `md:shared_plan.slot_03` |
+| 04 | slot-04 | `md:shared_plan.slot_04` |
+| 05 | slot-05 | `md:shared_plan.slot_05` |
+| 06 | slot-06 | `md:shared_plan.slot_06` |
+| 07 | slot-07 | `md:shared_plan.slot_07` |
+| 08 | slot-08 | `md:shared_plan.slot_08` |
+| 09 | slot-09 | `md:shared_plan.slot_09` |
+| 10 | slot-10 | `md:shared_plan.slot_10` |
+| 11 | slot-11 | `md:shared_plan.slot_11` |
+| 12 | slot-12 | `md:shared_plan.slot_12` |
+| 13 | slot-13 | `md:shared_plan.slot_13` |
+| 14 | slot-14 | `md:shared_plan.slot_14` |
+| 15 | slot-15 | `md:shared_plan.slot_15` |
+| 16 | slot-16 | `md:shared_plan.slot_16` |
+| 17 | slot-17 | `md:shared_plan.slot_17` |
+| 18 | slot-18 | `md:shared_plan.slot_18` |
+| 19 | slot-19 | `md:shared_plan.slot_19` |
+| 20 | slot-20 | `md:shared_plan.slot_20` |
 
 Success condition: while the 20 workers are active, this command shows 20 active
 entries on the same domain with 20 distinct symbols:
@@ -236,11 +236,11 @@ domain_lock --registry file_domains.yaml --log "${LOCK_LOG}" \
 
 Run these after at least one slot lock is active:
 
-1. Try to acquire `md:e2e_shared_plan.slot_01` for a second worker. It must be
+1. Try to acquire `md:shared_plan.slot_01` for a second worker. It must be
    denied before OpenCode starts.
 2. Try a whole-domain reservation for `e2e_shared_markdown`. It must be denied
    while any area lock is active.
-3. Try a different area, for example `md:e2e_shared_plan.slot_20`. It must be
+3. Try a different area, for example `md:shared_plan.slot_20`. It must be
    allowed while slot-01 is active.
 
 These controls prove the system is neither fail-open nor whole-file locked.

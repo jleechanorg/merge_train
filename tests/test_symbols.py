@@ -368,9 +368,9 @@ def test_extract_markdown_symbols_basic():
     src = "# Title\n\n## slot-01\ncontent\n\n## slot-02\nmore\n"
     syms = extract_markdown_symbols(src)
     assert len(syms) == 2
-    assert syms[0].name == "md:slot01"
+    assert syms[0].name == "md:slot_01"
     assert syms[0].start == 3
-    assert syms[1].name == "md:slot02"
+    assert syms[1].name == "md:slot_02"
     assert syms[1].start == 6
 
 
@@ -378,8 +378,8 @@ def test_extract_markdown_symbols_with_file_stem():
     src = "# Title\n\n## slot-01\ncontent\n\n## slot-02\nmore\n"
     syms = extract_markdown_symbols(src, file_stem="shared_plan")
     assert len(syms) == 2
-    assert syms[0].name == "md:shared_plan.slot01"
-    assert syms[1].name == "md:shared_plan.slot02"
+    assert syms[0].name == "md:shared_plan.slot_01"
+    assert syms[1].name == "md:shared_plan.slot_02"
 
 
 def test_extract_markdown_symbols_h2_only():
@@ -407,14 +407,14 @@ def test_touched_markdown_symbols_single_hunk():
     src = "# Plan\n\n## slot-01\nstatus: pending\n\n## slot-02\nstatus: pending\n"
     diff = "@@ -4,1 +4,1 @@\n-status: pending\n+status: done"
     syms = _touched_markdown_symbols(new_source=src, diff_text=diff)
-    assert syms == {"md:slot01"}
+    assert syms == {"md:slot_01"}
 
 
 def test_touched_markdown_symbols_different_slot():
     src = "# Plan\n\n## slot-01\nstatus: done\n\n## slot-02\nstatus: pending\n"
     diff = "@@ -7,1 +7,1 @@\n-status: pending\n+status: done"
     syms = _touched_markdown_symbols(new_source=src, diff_text=diff)
-    assert syms == {"md:slot02"}
+    assert syms == {"md:slot_02"}
 
 
 def test_touched_markdown_symbols_no_overlap():

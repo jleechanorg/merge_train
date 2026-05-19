@@ -222,7 +222,7 @@ def extract_markdown_symbols(source: str, *, file_stem: str = "") -> list[Symbol
             continue
         level = len(m.group(1))
         title = m.group(2).strip()
-        slug = re.sub(r"[^a-z0-9_]+", "", re.sub(r"\s+", "_", title.lower()))
+        slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
         prefix = f"md:{file_stem}." if file_stem else "md:"
         headings.append((i, level, title, f"{prefix}{slug}"))
 

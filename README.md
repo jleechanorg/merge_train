@@ -50,7 +50,7 @@ cd /path/to/your/repo
 git clone https://github.com/jleechanorg/merge_train.git
 cd merge_train
 pip install -e '.[dev]'
-python -m pytest tests/ -q   # 202 passed
+python -m pytest tests/ -q   # 213 passed
 ```
 
 Requires Python ≥ 3.10, `PyYAML`, and `git` on `PATH`.
@@ -362,7 +362,7 @@ If no git remote can be resolved, the log falls back to `~/.merge_train/locks/de
 
 ```bash
 pip install -e .
-python -m pytest tests/ -q     # 202 passed
+python -m pytest tests/ -q     # 213 passed
 ```
 
 ## Roadmap

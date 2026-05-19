@@ -37,6 +37,12 @@ def _run(cmd: list[str], *, check: bool = True, capture: bool = True, cwd: str |
         print(f"FAIL: {' '.join(cmd)}", file=sys.stderr)
         print(f"  stdout: {result.stdout[:500]}", file=sys.stderr)
         print(f"  stderr: {result.stderr[:500]}", file=sys.stderr)
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            cmd,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
     return result
 
 
@@ -46,8 +52,9 @@ def _utcnow() -> str:
 
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
-    for chunk in iter(lambda: path.open("rb").read(8192), b""):
-        h.update(chunk)
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
     return h.hexdigest()
 
 
@@ -79,7 +86,7 @@ def _generate_tasks_md(run_id: str, slots: int) -> str:
         lines.append(f"## slot-{n} task\n")
         lines.append(f"- branch: merge-train-e2e/{run_id}/slot-{n}")
         lines.append(f"- lock-domain: e2e_shared_markdown")
-        lines.append(f"- lock-symbol: md:e2e_shared_plan.slot_{n}")
+        lines.append(f"- lock-symbol: md:shared_plan.slot_{n}")
         lines.append(f"- file: merge_train_e2e/shared_plan.md")
         lines.append(f"- heading: ## slot-{n}")
         lines.append(f"- required edit: replace `status: pending` with")
@@ -105,7 +112,7 @@ def _generate_plan_yaml(slot_num: int) -> str:
     return f"""\
 plan:
   - domain: e2e_shared_markdown
-    symbols: [md:e2e_shared_plan.slot_{n}]
+    symbols: [md:shared_plan.slot_{n}]
 """
 
 
@@ -141,7 +148,7 @@ def create_slot_pr(mctrl_repo: str, run_id: str, slot: int, setup_branch: str) -
     _run(["git", "push", "origin", branch], cwd=mctrl_repo)
     pr_result = _run(
         ["gh", "pr", "create", "--title", f"E2E area-lock: slot-{n}",
-         "--body", f"Completes slot-{n} of the shared plan. Area lock: md:e2e_shared_plan.slot_{n}",
+         "--body", f"Completes slot-{n} of the shared plan. Area lock: md:shared_plan.slot_{n}",
          "--base", "main", "--head", branch, "--repo", "jleechanorg/mctrl_test"],
         cwd=mctrl_repo,
     )
@@ -294,7 +301,7 @@ def main() -> int:
         reserve_results.append({
             "slot": slot,
             "pr": synthetic_pr,
-            "symbol": f"md:e2e_shared_plan.slot_{n}",
+            "symbol": f"md:shared_plan.slot_{n}",
             "reserved": ok,
             "exit_code": result.returncode,
             "stdout": result.stdout.strip(),
@@ -556,7 +563,7 @@ not whole-file locks.
 
 20 symbol-level area locks on the same domain (`e2e_shared_markdown`)
 and the same file (`merge_train_e2e/shared_plan.md`), each holding a
-distinct slot symbol like `md:e2e_shared_plan.slot_01`.
+distinct slot symbol like `md:shared_plan.slot_01`.
 
 ## Environment
 

@@ -34,7 +34,7 @@ from merge_train.symbols import extract_markdown_symbols
 src = open('${MCTRL_REPO}/merge_train_e2e/shared_plan.md').read()
 syms = extract_markdown_symbols(src, file_stem='shared_plan')
 for s in syms:
-    if 'slot${SLOT_N}' in s.name:
+    if 'slot_${SLOT_N}' in s.name:
         print(s.name)
         break
 ")
@@ -58,6 +58,7 @@ EOF
 
 # Acquire lock BEFORE starting agent
 echo "  Acquiring lock..."
+set +e
 LOCK_RESULT=$(python -m merge_train.domain_lock \
     --registry "$REGISTRY" \
     --log "$LOCK_LOG" \
@@ -68,6 +69,7 @@ LOCK_RESULT=$(python -m merge_train.domain_lock \
     --branch "$BRANCH" \
     --plan "$PLAN_FILE" 2>&1)
 LOCK_EXIT=$?
+set -e
 
 if [ $LOCK_EXIT -ne 0 ]; then
     echo "  DENIED: $LOCK_RESULT" >&2
@@ -95,10 +97,10 @@ AGENT_TASK="Edit merge_train_e2e/shared_plan.md: under heading ## slot-${SLOT_N}
 echo "  Launching opencode agent..."
 OPENCODE_RESULT=""
 OPENCODE_EXIT=99
-if command -v opencode >/dev/null 2>&1; then
-    OPENCODE_RESULT=$(opencode run "$AGENT_TASK" 2>&1) && OPENCODE_EXIT=0 || OPENCODE_EXIT=$?
-elif command -v openw >/dev/null 2>&1; then
-    OPENCODE_RESULT=$(openw run "$AGENT_TASK" 2>&1) && OPENCODE_EXIT=0 || OPENCODE_EXIT=$?
+if command -v openw >/dev/null 2>&1; then
+    OPENCODE_RESULT=$(openw run --dangerously-skip-permissions "$AGENT_TASK" 2>&1) && OPENCODE_EXIT=0 || OPENCODE_EXIT=$?
+elif command -v opencode >/dev/null 2>&1; then
+    OPENCODE_RESULT=$(opencode run --dangerously-skip-permissions "$AGENT_TASK" 2>&1) && OPENCODE_EXIT=0 || OPENCODE_EXIT=$?
 else
     echo "  No opencode/openw found — doing manual edit (fallback proof)."
     # Manual edit as fallback
