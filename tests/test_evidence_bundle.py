@@ -9,6 +9,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_V03 = REPO_ROOT / "evidence" / "v0.3"
 EVIDENCE_V04 = REPO_ROOT / "evidence" / "v0.4"
+EVIDENCE_V04_AO = REPO_ROOT / "evidence" / "v0.4-ao"
 
 
 def test_v03_agent_transcripts_have_checksum_sidecars() -> None:
@@ -178,3 +179,37 @@ def test_v04_agent_transcripts_present() -> None:
         if not t.with_suffix(t.suffix + ".sha256").is_file()
     ]
     assert missing_sidecars == []
+
+
+def test_v04_ao_bundle_exists() -> None:
+    """AO orchestration evidence bundle must exist (proves ao spawn drives area-lock)."""
+    assert EVIDENCE_V04_AO.is_dir(), (
+        "evidence/v0.4-ao/ missing — run scripts/e2e_ao_orchestrated_runner.py"
+    )
+    assert (EVIDENCE_V04_AO / "run.json").is_file(), "evidence/v0.4-ao/run.json missing"
+
+
+def test_v04_ao_scenarios_all_passed() -> None:
+    """AO bundle run.json: all scenarios must have passed=True."""
+    if not (EVIDENCE_V04_AO / "run.json").is_file():
+        return
+    data = json.loads((EVIDENCE_V04_AO / "run.json").read_text())
+    assert data.get("orchestration_mode") == "ao_spawn", "unexpected orchestration_mode"
+    failed = [s["name"] for s in data.get("scenarios", []) if not s.get("passed")]
+    assert failed == [], f"AO scenarios failed: {failed}"
+
+
+def test_v04_ao_prs_created() -> None:
+    """AO bundle prs.json: all slots must have real PR URLs."""
+    if not (EVIDENCE_V04_AO / "prs.json").is_file():
+        return
+    slots = json.loads((EVIDENCE_V04_AO / "prs.json").read_text())
+    no_pr = [s["slot"] for s in slots if not s.get("pr_url")]
+    assert no_pr == [], f"AO slots missing PRs: {no_pr}"
+
+
+def test_v04_ao_checksums_valid() -> None:
+    """All sha256 sidecars in AO bundle must be valid."""
+    if not EVIDENCE_V04_AO.is_dir():
+        return
+    _bundle_sha256_checks(EVIDENCE_V04_AO)

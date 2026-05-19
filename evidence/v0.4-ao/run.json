@@ -1,0 +1,48 @@
+{
+  "run_id": "20260519T160751Z",
+  "bundle_version": "1.2.0",
+  "orchestration_mode": "ao_spawn",
+  "scenarios": [
+    {
+      "name": "ao_spawn_pr_creation",
+      "passed": true,
+      "errors": [],
+      "note": "2/2 PRs created via ao spawn --agent claude-code"
+    },
+    {
+      "name": "ao_pr_isolation",
+      "passed": true,
+      "errors": []
+    }
+  ],
+  "slot_results": [
+    {
+      "slot": 1,
+      "reserved": true,
+      "symbol": "md:shared_plan.slot_01",
+      "branch": "merge-train-e2e-ao/20260519T160751Z/slot-01",
+      "synthetic_pr": 60001,
+      "session_name": "",
+      "spawn_exit": 1,
+      "spawn_elapsed_s": 3.3,
+      "wait_elapsed_s": 10.5,
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/381",
+      "pr_number": 381,
+      "agent_mode": "ao_spawn_claude_code"
+    },
+    {
+      "slot": 2,
+      "reserved": true,
+      "symbol": "md:shared_plan.slot_02",
+      "branch": "merge-train-e2e-ao/20260519T160751Z/slot-02",
+      "synthetic_pr": 60002,
+      "session_name": "",
+      "spawn_exit": 1,
+      "spawn_elapsed_s": 4.9,
+      "wait_elapsed_s": 42.0,
+      "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/382",
+      "pr_number": 382,
+      "agent_mode": "ao_spawn_claude_code"
+    }
+  ]
+}

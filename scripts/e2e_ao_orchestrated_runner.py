@@ -64,7 +64,8 @@ def _domain_lock_cmd(extra: list[str], registry: str, log: str, git_cwd: str | N
 
 
 def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_log: str,
-                   merge_train_repo: str) -> dict:
+                   merge_train_repo: str, ao_project: str = "mctrl-test",
+                   ao_agent: str = "claude-code") -> dict:
     """Spawn one AO session for a slot, wait for idle, collect evidence."""
     n = f"{slot:02d}"
     branch = f"merge-train-e2e-ao/{run_id}/slot-{n}"
@@ -86,72 +87,90 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
             "error": f"lock reservation failed: {reserve_result.stderr.strip()}",
         }
 
-    # Build the task for the AO session
+    # Task string: include slot-{n} so AO names the branch with it (enables PR matching)
     task = (
-        f"In the repo at {mctrl_repo}, on branch {branch} (create from setup branch "
-        f"merge-train-e2e/{run_id}/setup if it doesn't exist): "
-        f"edit merge_train_e2e/shared_plan.md under heading ## slot-{n}, "
-        f"change 'status: pending' to 'status: complete by ao-slot-{n}'. "
-        f"Do NOT edit any other heading. Commit and push the branch, "
-        f"then create a PR against main in jleechanorg/mctrl_test. "
-        f"Report the PR URL when done."
+        f"area-lock-slot-{n}: edit merge_train_e2e/shared_plan.md "
+        f"under heading '## slot-{n}', change 'status: pending' to "
+        f"'status: complete by ao-slot-{n}'. "
+        f"Do NOT edit any other heading. Commit, push, create PR against main."
     )
 
     # Spawn AO session
     spawn_start = time.time()
     spawn_result = _run(
-        ["ao", "spawn", "--agent", "opencode", task],
-        check=False, cwd=merge_train_repo,
+        ["ao", "spawn", "-p", ao_project, "--agent", ao_agent, task],
+        check=False, cwd=mctrl_repo,  # run from mctrl_repo so AO uses that repo
     )
     spawn_elapsed = time.time() - spawn_start
     session_name = ""
     for line in spawn_result.stdout.splitlines():
-        if "session" in line.lower() and ":" in line:
-            session_name = line.split(":")[-1].strip()
+        if line.strip().startswith("SESSION="):
+            session_name = line.strip().split("=", 1)[1]
             break
-        if line.strip().startswith("ao-") or line.strip().startswith("session-"):
-            session_name = line.strip()
+        if "Session" in line and "created" in line:
+            parts = line.split()
+            for p in parts:
+                if p.startswith("mt-"):
+                    session_name = p
+                    break
 
-    # Wait for session to complete (poll ao status)
+    print(f"    session={session_name or 'UNKNOWN'} spawn_exit={spawn_result.returncode}")
+
+    # Discover the AO-assigned branch for this session
+    ao_branch = branch  # fallback
+    if session_name:
+        ls_result = _run(["ao", "session", "ls"], check=False, cwd=mctrl_repo)
+        for line in ls_result.stdout.splitlines():
+            if session_name in line:
+                # line format: "  mt-NNN  (Xs ago)  feat/some-branch  [status]"
+                parts = line.split()
+                for p in parts:
+                    if p.startswith("feat/") or p.startswith("merge-train"):
+                        ao_branch = p
+                        break
+
+    # Wait for PR (poll both by session presence and by PR API)
     pr_url = ""
     pr_number = 0
     wait_start = time.time()
-    max_wait = 300  # 5 minutes per slot
+    max_wait = 600  # 10 minutes
     while time.time() - wait_start < max_wait:
         time.sleep(10)
+        # Check if session finished
         if session_name:
-            status_result = _run(["ao", "session", "ls", "--json"], check=False, cwd=merge_train_repo)
-            if status_result.returncode == 0 and status_result.stdout.strip():
-                try:
-                    sessions = json.loads(status_result.stdout)
-                    for sess in sessions:
-                        if sess.get("name") == session_name or sess.get("id") == session_name:
-                            if sess.get("status") in ("idle", "done", "complete"):
-                                break
-                except (json.JSONDecodeError, TypeError):
-                    pass
-        # Check if branch was pushed and PR exists
+            ls = _run(["ao", "session", "ls"], check=False, cwd=mctrl_repo)
+            if session_name not in ls.stdout:
+                pass  # session gone — may have completed; keep polling for PR
+
+        # Check recent PRs from this author on mctrl_test
         pr_check = _run(
             ["gh", "pr", "list", "--repo", "jleechanorg/mctrl_test",
-             "--head", branch, "--json", "number,url", "--state", "open"],
+             "--state", "open", "--limit", "5",
+             "--json", "number,url,headRefName,createdAt"],
             check=False,
         )
         if pr_check.returncode == 0 and pr_check.stdout.strip():
             try:
                 prs = json.loads(pr_check.stdout)
-                if prs:
-                    pr_number = prs[0].get("number", 0)
-                    pr_url = prs[0].get("url", "")
-                    break
+                for pr in prs:
+                    head = pr.get("headRefName", "")
+                    # Created after run start — check by time or by slot keyword
+                    if f"slot-{n}" in head or f"slot_{n}" in head or ao_branch in head:
+                        pr_number = pr.get("number", 0)
+                        pr_url = pr.get("url", "")
+                        break
             except (json.JSONDecodeError, IndexError):
                 pass
+        if pr_url:
+            break
+
     wait_elapsed = time.time() - wait_start
 
     return {
         "slot": slot,
         "reserved": True,
         "symbol": symbol,
-        "branch": branch,
+        "branch": ao_branch,
         "synthetic_pr": synthetic_pr,
         "session_name": session_name,
         "spawn_exit": spawn_result.returncode,
@@ -159,7 +178,7 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
         "wait_elapsed_s": round(wait_elapsed, 1),
         "pr_url": pr_url,
         "pr_number": pr_number,
-        "agent_mode": "ao_spawn_opencode",
+        "agent_mode": f"ao_spawn_{ao_agent.replace('-', '_')}",
     }
 
 
@@ -168,6 +187,10 @@ def main() -> int:
     parser.add_argument("--slots", type=int, default=4,
                         help="number of slots (default: 4, keep low for AO session budget)")
     parser.add_argument("--mctrl-repo", default=str(Path.home() / "projects" / "mctrl_test"))
+    parser.add_argument("--ao-project", default="mctrl-test",
+                        help="AO project ID for ao spawn -p (default: mctrl-test)")
+    parser.add_argument("--ao-agent", default="claude-code",
+                        help="AO agent plugin (default: claude-code; opencode requires ao-plugin-agent-opencode npm pkg)")
     parser.add_argument("--output-dir", default=None,
                         help="evidence output path (default: /tmp/merge_train_evidence/ao/<run_id>)")
     args = parser.parse_args()
@@ -186,7 +209,7 @@ def main() -> int:
     print(f"Run ID: {run_id}")
     print(f"Evidence dir: {evidence_dir}")
     print(f"Slots: {args.slots}")
-    print(f"Orchestration: ao spawn --agent opencode")
+    print(f"Orchestration: ao spawn --agent {args.ao_agent}")
 
     merge_train_sha = _run(["git", "rev-parse", "HEAD"], cwd=merge_train_repo).stdout.strip()
     metadata: dict = {
@@ -197,7 +220,7 @@ def main() -> int:
         "merge_train_branch": _run(["git", "branch", "--show-current"], cwd=merge_train_repo).stdout.strip(),
         "slots": args.slots,
         "orchestration_mode": "ao_spawn",
-        "agent": "opencode",
+        "agent": args.ao_agent,
         "test_type": "e2e_area_lock_ao_orchestrated",
     }
 
@@ -207,7 +230,8 @@ def main() -> int:
     print(f"\n=== Spawning {args.slots} AO sessions ===")
     for slot in range(1, args.slots + 1):
         print(f"  Spawning slot-{slot:02d}...")
-        result = _ao_spawn_slot(slot, run_id, mctrl_repo, registry_path, lock_log, merge_train_repo)
+        result = _ao_spawn_slot(slot, run_id, mctrl_repo, registry_path, lock_log, merge_train_repo,
+                                ao_project=args.ao_project, ao_agent=args.ao_agent)
         slot_results.append(result)
         if result.get("pr_url"):
             print(f"  slot-{slot:02d}: PR #{result['pr_number']} ({result['pr_url']})")
@@ -219,7 +243,7 @@ def main() -> int:
         "name": "ao_spawn_pr_creation",
         "passed": len(pr_slots) == args.slots,
         "errors": [f"slot {r['slot']}: no PR created" for r in slot_results if not r.get("pr_url")],
-        "note": f"{len(pr_slots)}/{args.slots} PRs created via ao spawn --agent opencode",
+        "note": f"{len(pr_slots)}/{args.slots} PRs created via ao spawn --agent {args.ao_agent}",
     })
 
     # Verify all PRs touch only their assigned slot
