@@ -45,6 +45,38 @@ The area-lock primitive can orchestrate 20 concurrent agent slots via AO (`ao sp
 | `lock_log.jsonl` | Lock acquire/release events |
 | `checksums.txt` | SHA-256 of all bundle files |
 | `*.sha256` | Per-file checksum sidecars |
+| `v0.6_verify.cast` | Asciinema terminal recording of bundle verification |
+| `v0.6_verify.gif` | GIF of terminal verification (inline-renderable) |
+| `v0.6_verify.mp4` | MP4 of terminal verification (downloadable) |
+
+## Video Evidence
+
+- **GIF**: https://github.com/jleechanorg/merge_train/releases/download/v0.6-ao-evidence/v0.6_verify.gif
+- **MP4**: https://github.com/jleechanorg/merge_train/releases/download/v0.6-ao-evidence/v0.6_verify.mp4
+- **Cast**: https://github.com/jleechanorg/merge_train/releases/download/v0.6-ao-evidence/v0.6_verify.cast
+
+Caption: Terminal recording verifying v0.6-ao evidence bundle — checksums (6/6 OK), scenario results (both passed), lock log coverage (20/20 slots), PR isolation via GitHub (10/10 clean), and pytest suite (2/2 passed).
+
+## Reproduction
+
+- **Gist**: https://gist.github.com/jleechan2015/a94f15a8df5fd284c3e4e31a6e91b18a
+- Clone, checkout, run, and verify commands with expected output
+| `v0.6_verify.cast` | Asciinema terminal recording of bundle verification |
+| `v0.6_verify.gif` | GIF of terminal verification (inline-renderable) |
+| `v0.6_verify.mp4` | MP4 of terminal verification (downloadable) |
+
+## Video Evidence
+
+- **GIF**: https://github.com/jleechanorg/merge_train/releases/download/v0.6-ao-evidence/v0.6_verify.gif
+- **MP4**: https://github.com/jleechanorg/merge_train/releases/download/v0.6-ao-evidence/v0.6_verify.mp4
+- **Cast**: https://github.com/jleechanorg/merge_train/releases/download/v0.6-ao-evidence/v0.6_verify.cast
+
+Caption: Terminal recording verifying v0.6-ao evidence bundle — checksums (6/6 OK), scenario results (both passed), lock log coverage (20/20 slots), PR isolation via GitHub (10/10 clean), and pytest suite (2/2 passed).
+
+## Reproduction
+
+- **Gist**: https://gist.github.com/jleechan2015/a94f15a8df5fd284c3e4e31a6e91b18a
+- Clone, checkout, run, and verify commands with expected output
 
 ## Acceptance Criteria
 
