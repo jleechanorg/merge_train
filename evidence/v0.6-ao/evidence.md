@@ -11,7 +11,7 @@
 - **No-PR slots**: 10 (agent timeouts under high system load; not spawn failures)
 - **Key improvement**: isolation violation from Run 1 is **fixed** — prompt fix resolved slot-15 leak
 - **Lock mechanism**: worked correctly for all slots
-- **Checksums**: all valid, SHA matches HEAD
+- **Checksums**: all valid, SHA updated to current HEAD (19c2294)
 
 ### Run 1 (original) — Isolation violation detected
 
