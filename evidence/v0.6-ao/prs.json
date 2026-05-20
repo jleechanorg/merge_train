@@ -1,0 +1,467 @@
+[
+  {
+    "slot": 1,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_01",
+    "branch": "feat/ao-proof-20260520t100838z-slot-01-edit-merge-train-e2e-share",
+    "synthetic_pr": 60001,
+    "session_name": "mt-223",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-223\n  Branch:   feat/ao-proof-20260520t100838z-slot-01-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-223\n\nSESSION=mt-223\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-223 created\n",
+    "spawn_elapsed_s": 14.3,
+    "wait_elapsed_s": 604.1,
+    "pr_url": "",
+    "pr_number": 0,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {},
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 2,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_02",
+    "branch": "feat/ao-proof-20260520t100838z-slot-02-edit-merge-train-e2e-share",
+    "synthetic_pr": 60002,
+    "session_name": "mt-224",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-224\n  Branch:   feat/ao-proof-20260520t100838z-slot-02-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-224\n\nSESSION=mt-224\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-224 created\n",
+    "spawn_elapsed_s": 16.5,
+    "wait_elapsed_s": 187.6,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/409",
+    "pr_number": 409,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-224",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-224: SessionNotFoundError: Session not found: mt-224\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 3,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_03",
+    "branch": "feat/ao-proof-20260520t100838z-slot-03-edit-merge-train-e2e-share",
+    "synthetic_pr": 60003,
+    "session_name": "mt-225",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-225\n  Branch:   feat/ao-proof-20260520t100838z-slot-03-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-225\n\nSESSION=mt-225\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-225 created\n",
+    "spawn_elapsed_s": 17.2,
+    "wait_elapsed_s": 244.1,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/410",
+    "pr_number": 410,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-225",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-225: SessionNotFoundError: Session not found: mt-225\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 4,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_04",
+    "branch": "feat/ao-proof-20260520t100838z-slot-04-edit-merge-train-e2e-share",
+    "synthetic_pr": 60004,
+    "session_name": "mt-226",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-226\n  Branch:   feat/ao-proof-20260520t100838z-slot-04-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-226\n\nSESSION=mt-226\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-226 created\n",
+    "spawn_elapsed_s": 14.5,
+    "wait_elapsed_s": 281.8,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/411",
+    "pr_number": 411,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-226",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-226: SessionNotFoundError: Session not found: mt-226\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 5,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_05",
+    "branch": "merge-train-e2e-ao/20260520T100838Z/slot-05",
+    "synthetic_pr": 60005,
+    "session_name": "",
+    "spawn_exit": 1,
+    "spawn_stdout_tail": "",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2716 Failed to create or initialize session\n\u2717 Spawn rejected: 20 active sessions >= cap (20). Set AO_MAX_CONCURRENT_SESSIONS env var to increase. Wait for sessions to complete.\n",
+    "spawn_elapsed_s": 7.2,
+    "wait_elapsed_s": 605.6,
+    "pr_url": "",
+    "pr_number": 0,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {},
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 6,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_06",
+    "branch": "feat/ao-proof-20260520t100838z-slot-06-edit-merge-train-e2e-share",
+    "synthetic_pr": 60006,
+    "session_name": "mt-227",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-227\n  Branch:   feat/ao-proof-20260520t100838z-slot-06-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-227\n\nSESSION=mt-227\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-227 created\n",
+    "spawn_elapsed_s": 24.5,
+    "wait_elapsed_s": 627.0,
+    "pr_url": "",
+    "pr_number": 0,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {},
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 7,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_07",
+    "branch": "feat/ao-proof-20260520t100838z-slot-07-edit-merge-train-e2e-share",
+    "synthetic_pr": 60007,
+    "session_name": "mt-228",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-228\n  Branch:   feat/ao-proof-20260520t100838z-slot-07-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-228\n\nSESSION=mt-228\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-228 created\n",
+    "spawn_elapsed_s": 14.5,
+    "wait_elapsed_s": 605.4,
+    "pr_url": "",
+    "pr_number": 0,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {},
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 8,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_08",
+    "branch": "feat/ao-proof-20260520t100838z-slot-08-edit-merge-train-e2e-share",
+    "synthetic_pr": 60008,
+    "session_name": "mt-229",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-229\n  Branch:   feat/ao-proof-20260520t100838z-slot-08-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-229\n\nSESSION=mt-229\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-229 created\n",
+    "spawn_elapsed_s": 14.9,
+    "wait_elapsed_s": 281.1,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/412",
+    "pr_number": 412,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-229",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-229: SessionNotFoundError: Session not found: mt-229\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 9,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_09",
+    "branch": "feat/ao-proof-20260520t100838z-slot-09-edit-merge-train-e2e-share",
+    "synthetic_pr": 60009,
+    "session_name": "mt-230",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-230\n  Branch:   feat/ao-proof-20260520t100838z-slot-09-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-230\n\nSESSION=mt-230\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-230 created\n",
+    "spawn_elapsed_s": 13.9,
+    "wait_elapsed_s": 159.5,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/413",
+    "pr_number": 413,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-230",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-230: SessionNotFoundError: Session not found: mt-230\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 10,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_10",
+    "branch": "feat/ao-proof-20260520t100838z-slot-10-edit-merge-train-e2e-share",
+    "synthetic_pr": 60010,
+    "session_name": "mt-231",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-231\n  Branch:   feat/ao-proof-20260520t100838z-slot-10-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-231\n\nSESSION=mt-231\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-231 created\n",
+    "spawn_elapsed_s": 12.2,
+    "wait_elapsed_s": 34.9,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/414",
+    "pr_number": 414,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-231",
+      "exit_code": 0,
+      "stdout_tail": "\nSession mt-231 killed.\n",
+      "stderr_tail": "rl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 11,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_11",
+    "branch": "feat/ao-proof-20260520t100838z-slot-11-edit-merge-train-e2e-share",
+    "synthetic_pr": 60011,
+    "session_name": "mt-232",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-232\n  Branch:   feat/ao-proof-20260520t100838z-slot-11-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-232\n\nSESSION=mt-232\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-232 created\n",
+    "spawn_elapsed_s": 14.5,
+    "wait_elapsed_s": 50.3,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/415",
+    "pr_number": 415,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-232",
+      "exit_code": 0,
+      "stdout_tail": "\nSession mt-232 killed.\n",
+      "stderr_tail": "rl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 12,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_12",
+    "branch": "feat/ao-proof-20260520t100838z-slot-12-edit-merge-train-e2e-share",
+    "synthetic_pr": 60012,
+    "session_name": "mt-233",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-233\n  Branch:   feat/ao-proof-20260520t100838z-slot-12-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-233\n\nSESSION=mt-233\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-233 created\n",
+    "spawn_elapsed_s": 16.5,
+    "wait_elapsed_s": 37.7,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/416",
+    "pr_number": 416,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-233",
+      "exit_code": 0,
+      "stdout_tail": "\nSession mt-233 killed.\n",
+      "stderr_tail": "rl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 13,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_13",
+    "branch": "feat/ao-proof-20260520t100838z-slot-13-edit-merge-train-e2e-share",
+    "synthetic_pr": 60013,
+    "session_name": "mt-234",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-234\n  Branch:   feat/ao-proof-20260520t100838z-slot-13-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-234\n\nSESSION=mt-234\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-234 created\n",
+    "spawn_elapsed_s": 14.5,
+    "wait_elapsed_s": 612.6,
+    "pr_url": "",
+    "pr_number": 0,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {},
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 14,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_14",
+    "branch": "feat/ao-proof-20260520t100838z-slot-14-edit-merge-train-e2e-share",
+    "synthetic_pr": 60014,
+    "session_name": "mt-235",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-235\n  Branch:   feat/ao-proof-20260520t100838z-slot-14-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-235\n\nSESSION=mt-235\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-235 created\n",
+    "spawn_elapsed_s": 14.7,
+    "wait_elapsed_s": 612.7,
+    "pr_url": "",
+    "pr_number": 0,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {},
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 15,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_15",
+    "branch": "feat/ao-proof-20260520t100838z-slot-15-edit-merge-train-e2e-share",
+    "synthetic_pr": 60015,
+    "session_name": "mt-236",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-236\n  Branch:   feat/ao-proof-20260520t100838z-slot-15-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-236\n\nSESSION=mt-236\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-236 created\n",
+    "spawn_elapsed_s": 15.8,
+    "wait_elapsed_s": 273.5,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/418",
+    "pr_number": 418,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-236",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-236: SessionNotFoundError: Session not found: mt-236\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 16,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_16",
+    "branch": "feat/ao-proof-20260520t100838z-slot-16-edit-merge-train-e2e-share",
+    "synthetic_pr": 60016,
+    "session_name": "mt-237",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-237\n  Branch:   feat/ao-proof-20260520t100838z-slot-16-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-237\n\nSESSION=mt-237\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-237 created\n",
+    "spawn_elapsed_s": 22.0,
+    "wait_elapsed_s": 206.2,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/419",
+    "pr_number": 419,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-237",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-237: SessionNotFoundError: Session not found: mt-237\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 17,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_17",
+    "branch": "merge-train-e2e-ao/20260520T100838Z/slot-17",
+    "synthetic_pr": 60017,
+    "session_name": "",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Reason:   20 active sessions >= cap 20\n  Request:  sq-mpdzzet1-pmja4i\n\nREQUEST=sq-mpdzzet1-pmja4i\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session request queued at position 2\n",
+    "spawn_elapsed_s": 8.1,
+    "wait_elapsed_s": 609.0,
+    "pr_url": "",
+    "pr_number": 0,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {},
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 18,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_18",
+    "branch": "feat/ao-proof-20260520t100838z-slot-18-edit-merge-train-e2e-share",
+    "synthetic_pr": 60018,
+    "session_name": "mt-238",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-238\n  Branch:   feat/ao-proof-20260520t100838z-slot-18-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-238\n\nSESSION=mt-238\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-238 created\n",
+    "spawn_elapsed_s": 37.6,
+    "wait_elapsed_s": 104.2,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/420",
+    "pr_number": 420,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-238",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-238: SessionNotFoundError: Session not found: mt-238\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 19,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_19",
+    "branch": "feat/ao-proof-20260520t100838z-slot-19-edit-merge-train-e2e-share",
+    "synthetic_pr": 60019,
+    "session_name": "mt-239",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-239\n  Branch:   feat/ao-proof-20260520t100838z-slot-19-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-239\n\nSESSION=mt-239\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-239 created\n",
+    "spawn_elapsed_s": 13.5,
+    "wait_elapsed_s": 106.4,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/421",
+    "pr_number": 421,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-239",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-239: SessionNotFoundError: Session not found: mt-239\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  },
+  {
+    "slot": 20,
+    "reserved": true,
+    "symbol": "md:shared_plan.slot_20",
+    "branch": "feat/ao-proof-20260520t100838z-slot-20-edit-merge-train-e2e-share",
+    "synthetic_pr": 60020,
+    "session_name": "mt-240",
+    "spawn_exit": 0,
+    "spawn_stdout_tail": "  Worktree: /Users/jleechan/.worktrees/mctrl-test/mt-240\n  Branch:   feat/ao-proof-20260520t100838z-slot-20-edit-merge-train-e2e-share\n  Attach:   tmux attach -t 953501c04ccc-mt-240\n\nSESSION=mt-240\n",
+    "spawn_stderr_tail": "- Creating session\n[notifier-discord] No webhookUrl configured.\n  Set it in agent-orchestrator.yaml under notifiers.discord.webhookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\n\u2714 Session mt-240 created\n",
+    "spawn_elapsed_s": 13.7,
+    "wait_elapsed_s": 211.2,
+    "pr_url": "https://github.com/jleechanorg/mctrl_test/pull/422",
+    "pr_number": 422,
+    "agent_mode": "ao_spawn_claude_code",
+    "session_kill": {
+      "session": "mt-240",
+      "exit_code": 1,
+      "stdout_tail": "",
+      "stderr_tail": "ookUrl\n  Create a webhook: Discord Server Settings > Integrations > Webhooks > New Webhook\n[notifier-mcp-mail] No endpoint configured \u2014 notifications will be no-ops\n[notifier-openclaw] No token configured (token or OPENCLAW_HOOKS_TOKEN). Sending without Authorization header.\n[notifier-slack] Ignoring unresolved webhookUrl placeholder \u2014 webhookUrl contains unresolved template/placeholder \u2014 notifications will be no-ops\nFailed to kill session mt-240: SessionNotFoundError: Session not found: mt-240\n"
+    },
+    "session_survival": {
+      "mode": "kill_or_default"
+    }
+  }
+]
