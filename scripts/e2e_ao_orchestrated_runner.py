@@ -7,9 +7,15 @@ This runner proves the full orchestration path:
 
 Evidence saved to evidence/v0.4-ao/ (or /tmp/merge_train_evidence/ao/<run_id>).
 
+NP6: --keep-sessions — sessions are NOT killed after PR capture; runner verifies
+     session survival via `ao session ls` and waits for natural completion.
+NP7: --parallel N — spawns N slots concurrently via ThreadPoolExecutor; batches
+     respect the AO kanban max_spawn cap (default 8 active sessions).
+
 Usage:
-    python scripts/e2e_ao_orchestrated_runner.py [--slots 4] [--mctrl-repo PATH]
-    (default: 4 slots to keep AO session count low and test time short)
+    python scripts/e2e_ao_orchestrated_runner.py [--slots 20] [--mctrl-repo PATH]
+    python scripts/e2e_ao_orchestrated_runner.py --keep-sessions --session-wait-timeout 300
+    python scripts/e2e_ao_orchestrated_runner.py --parallel 3 --parallel-batch-size 3
 """
 
 from __future__ import annotations
@@ -21,11 +27,14 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+
+_AO_KANBAN_MAX_SPAWN = 8
 
 
 def _run(cmd: list[str], *, check: bool = True, capture: bool = True, cwd: str | None = None) -> subprocess.CompletedProcess:
@@ -80,10 +89,39 @@ def _session_from_ls_output(output: str, *, session_name: str = "", pr_url: str 
     return ""
 
 
+def _count_active_sessions(mctrl_repo: str) -> int:
+    """Count active AO sessions via `ao session ls`."""
+    ls = _run(["ao", "session", "ls"], check=False, cwd=mctrl_repo)
+    count = 0
+    for line in ls.stdout.splitlines():
+        stripped = line.strip()
+        if stripped and stripped.split()[0].startswith("mt-"):
+            count += 1
+    return count
+
+
+def _wait_for_session_capacity(mctrl_repo: str, needed: int, max_sessions: int = _AO_KANBAN_MAX_SPAWN,
+                               poll_interval: float = 15.0, timeout: float = 600.0) -> bool:
+    """Wait until active session count < max_sessions - needed.
+
+    Returns True if capacity became available, False if timed out.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        active = _count_active_sessions(mctrl_repo)
+        if active + needed <= max_sessions:
+            return True
+        print(f"    session capacity: {active}/{max_sessions} active, need {needed} slots — waiting {poll_interval:.0f}s")
+        time.sleep(poll_interval)
+    return False
+
+
 def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_log: str,
                    merge_train_repo: str, ao_project: str = "mctrl-test",
                    ao_agent: str = "claude-code",
-                   kill_session_after_pr: bool = False) -> dict:
+                   kill_session_after_pr: bool = False,
+                   keep_sessions: bool = False,
+                   session_wait_timeout: float = 300.0) -> dict:
     """Spawn one AO session for a slot, wait for idle, collect evidence."""
     n = f"{slot:02d}"
     branch = f"merge-train-e2e-ao/{run_id}/slot-{n}"
@@ -107,17 +145,19 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
 
     # Task string: include slot-{n} so AO names the branch with it (enables PR matching)
     task = (
-        f"ao-proof-{run_id}-slot-{n}: edit merge_train_e2e/shared_plan.md "
-        f"under heading '## slot-{n}', change 'status: pending' to "
-        f"'status: complete by ao-slot-{n}'. "
-        f"Do NOT edit any other heading. Commit, push, create PR against main."
+        f"ao-proof-{run_id}-slot-{n}: Your ONLY allowed edit is to "
+        f"merge_train_e2e/shared_plan.md — change 'status: pending' to "
+        f"'status: complete by ao-slot-{n}' under the heading '## slot-{n}'. "
+        f"DO NOT create, modify, or delete ANY other file (no file_domains.yaml, "
+        f"no tasks.md, no new files). DO NOT edit any other heading. "
+        f"Commit that single change, push, create PR against main."
     )
 
     # Spawn AO session
     spawn_start = time.time()
     spawn_result = _run(
         ["ao", "spawn", "-p", ao_project, "--agent", ao_agent, task],
-        check=False, cwd=mctrl_repo,  # run from mctrl_repo so AO uses that repo
+        check=False, cwd=mctrl_repo,
     )
     spawn_elapsed = time.time() - spawn_start
     session_name = ""
@@ -188,8 +228,35 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
             break
 
     wait_elapsed = time.time() - wait_start
+
+    # NP6: --keep-sessions mode — verify session survival, wait for natural completion
+    session_survival: dict = {}
+    if keep_sessions and pr_url and session_name:
+        # Verify session still exists after PR capture
+        ls_result = _run(["ao", "session", "ls"], check=False, cwd=mctrl_repo)
+        session_alive_after_pr = session_name in ls_result.stdout
+        session_survival["alive_after_pr_capture"] = session_alive_after_pr
+
+        # Wait for session to complete naturally
+        session_wait_start = time.time()
+        session_completed_naturally = False
+        while time.time() - session_wait_start < session_wait_timeout:
+            time.sleep(10)
+            ls = _run(["ao", "session", "ls"], check=False, cwd=mctrl_repo)
+            if session_name not in ls.stdout:
+                session_completed_naturally = True
+                break
+
+        session_wait_elapsed = time.time() - session_wait_start
+        session_survival["completed_naturally"] = session_completed_naturally
+        session_survival["session_wait_elapsed_s"] = round(session_wait_elapsed, 1)
+        session_survival["timed_out"] = not session_completed_naturally
+    elif not keep_sessions:
+        session_survival["mode"] = "kill_or_default"
+
+    # Existing kill-session behavior (only when --keep-sessions is NOT set AND --kill-session-after-pr IS set)
     session_kill: dict = {}
-    if pr_url and kill_session_after_pr:
+    if pr_url and kill_session_after_pr and not keep_sessions:
         ls_result = _run(["ao", "session", "ls"], check=False, cwd=mctrl_repo)
         session_to_kill = session_name or _session_from_ls_output(ls_result.stdout, pr_url=pr_url)
         if session_to_kill:
@@ -227,13 +294,46 @@ def _ao_spawn_slot(slot: int, run_id: str, mctrl_repo: str, registry: str, lock_
         "pr_number": pr_number,
         "agent_mode": f"ao_spawn_{ao_agent.replace('-', '_')}",
         "session_kill": session_kill,
+        "session_survival": session_survival,
     }
+
+
+def _spawn_batch_parallel(slots: list[int], run_id: str, mctrl_repo: str, registry: str, lock_log: str,
+                          merge_train_repo: str, ao_project: str, ao_agent: str,
+                          kill_session_after_pr: bool, keep_sessions: bool,
+                          session_wait_timeout: float) -> list[dict]:
+    """Spawn a batch of slots concurrently and return their results."""
+    results: list[dict] = []
+    with ThreadPoolExecutor(max_workers=len(slots)) as executor:
+        futures = {}
+        for slot in slots:
+            future = executor.submit(
+                _ao_spawn_slot, slot, run_id, mctrl_repo, registry, lock_log,
+                merge_train_repo, ao_project=ao_project, ao_agent=ao_agent,
+                kill_session_after_pr=kill_session_after_pr,
+                keep_sessions=keep_sessions,
+                session_wait_timeout=session_wait_timeout,
+            )
+            futures[future] = slot
+        for future in as_completed(futures):
+            slot = futures[future]
+            try:
+                result = future.result()
+            except Exception as exc:
+                result = {"slot": slot, "reserved": False, "error": str(exc)}
+            results.append(result)
+            if result.get("pr_url"):
+                print(f"    slot-{slot:02d}: PR #{result['pr_number']} ({result['pr_url']})")
+            else:
+                print(f"    slot-{slot:02d}: {'reserved, no PR yet' if result.get('reserved') else result.get('error', 'failed')}")
+    results.sort(key=lambda r: r.get("slot", 0))
+    return results
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="E2E AO orchestration proof for Markdown area-lock")
-    parser.add_argument("--slots", type=int, default=4,
-                        help="number of slots (default: 4, keep low for AO session budget)")
+    parser.add_argument("--slots", type=int, default=20,
+                        help="number of slots (default: 20)")
     parser.add_argument("--mctrl-repo", default=str(Path.home() / "projects" / "mctrl_test"))
     parser.add_argument("--ao-project", default="mctrl-test",
                         help="AO project ID for ao spawn -p (default: mctrl-test)")
@@ -243,6 +343,14 @@ def main() -> int:
                         help="evidence output path (default: /tmp/merge_train_evidence/ao/<run_id>)")
     parser.add_argument("--kill-session-after-pr", action="store_true",
                         help="kill each AO session after its PR is captured to free session capacity")
+    parser.add_argument("--keep-sessions", action="store_true",
+                        help="NP6: do NOT kill sessions after PR capture; verify survival via ao session ls and wait for natural completion")
+    parser.add_argument("--session-wait-timeout", type=float, default=300.0,
+                        help="NP6: timeout in seconds to wait for sessions to complete naturally (default: 300)")
+    parser.add_argument("--parallel", type=int, default=1,
+                        help="NP7: number of slots to spawn concurrently (default: 1 = sequential)")
+    parser.add_argument("--parallel-batch-size", type=int, default=None,
+                        help="NP7: override concurrent spawn batch size (default: same as --parallel)")
     args = parser.parse_args()
 
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -256,10 +364,17 @@ def main() -> int:
     registry_path = str(Path(mctrl_repo) / "file_domains.yaml")
     lock_log = str(evidence_dir / "lock_log.jsonl")
 
+    parallelism = args.parallel
+    batch_size = args.parallel_batch_size if args.parallel_batch_size is not None else parallelism
+
     print(f"Run ID: {run_id}")
     print(f"Evidence dir: {evidence_dir}")
     print(f"Slots: {args.slots}")
     print(f"Orchestration: ao spawn --agent {args.ao_agent}")
+    print(f"Parallel: {parallelism} (batch_size={batch_size})")
+    print(f"Keep sessions: {args.keep_sessions}")
+    if args.keep_sessions:
+        print(f"Session wait timeout: {args.session_wait_timeout}s")
 
     merge_train_sha = _run(["git", "rev-parse", "HEAD"], cwd=merge_train_repo).stdout.strip()
     metadata: dict = {
@@ -272,23 +387,90 @@ def main() -> int:
         "orchestration_mode": "ao_spawn",
         "agent": args.ao_agent,
         "kill_session_after_pr": args.kill_session_after_pr,
+        "keep_sessions": args.keep_sessions,
+        "session_wait_timeout": args.session_wait_timeout,
+        "parallel": parallelism,
+        "parallel_batch_size": batch_size,
         "test_type": "e2e_area_lock_ao_orchestrated",
     }
 
     scenarios: list[dict] = []
     slot_results: list[dict] = []
+    parallel_timing: dict = {}
+    total_start = time.time()
 
-    print(f"\n=== Spawning {args.slots} AO sessions ===")
-    for slot in range(1, args.slots + 1):
-        print(f"  Spawning slot-{slot:02d}...")
-        result = _ao_spawn_slot(slot, run_id, mctrl_repo, registry_path, lock_log, merge_train_repo,
-                                ao_project=args.ao_project, ao_agent=args.ao_agent,
-                                kill_session_after_pr=args.kill_session_after_pr)
-        slot_results.append(result)
-        if result.get("pr_url"):
-            print(f"  slot-{slot:02d}: PR #{result['pr_number']} ({result['pr_url']})")
-        else:
-            print(f"  slot-{slot:02d}: {'reserved, no PR yet' if result.get('reserved') else result.get('error', 'failed')}")
+    print(f"\n=== Spawning {args.slots} AO sessions (parallel={parallelism}, batch={batch_size}) ===")
+
+    if parallelism <= 1:
+        # Sequential mode (original behavior)
+        for slot in range(1, args.slots + 1):
+            print(f"  Spawning slot-{slot:02d}...")
+            result = _ao_spawn_slot(slot, run_id, mctrl_repo, registry_path, lock_log, merge_train_repo,
+                                    ao_project=args.ao_project, ao_agent=args.ao_agent,
+                                    kill_session_after_pr=args.kill_session_after_pr,
+                                    keep_sessions=args.keep_sessions,
+                                    session_wait_timeout=args.session_wait_timeout)
+            slot_results.append(result)
+            if result.get("pr_url"):
+                print(f"  slot-{slot:02d}: PR #{result['pr_number']} ({result['pr_url']})")
+            else:
+                print(f"  slot-{slot:02d}: {'reserved, no PR yet' if result.get('reserved') else result.get('error', 'failed')}")
+    else:
+        # Parallel batch mode (NP7)
+        all_slots = list(range(1, args.slots + 1))
+        per_batch_elapsed: list[dict] = []
+        max_concurrent_observed = 0
+        batch_idx = 0
+
+        while all_slots:
+            batch_slots = all_slots[:batch_size]
+            all_slots = all_slots[batch_size:]
+            batch_idx += 1
+
+            # Resource safety: wait for session capacity
+            needed = len(batch_slots)
+            capacity_ok = _wait_for_session_capacity(mctrl_repo, needed, _AO_KANBAN_MAX_SPAWN)
+            if not capacity_ok:
+                print(f"  WARNING: session capacity timeout before batch {batch_idx}, spawning anyway")
+                scenarios.append({
+                    "name": f"session_capacity_batch_{batch_idx}",
+                    "passed": False,
+                    "errors": [f"timed out waiting for session capacity before batch {batch_idx}"],
+                })
+
+            # Observe current concurrency
+            active_before = _count_active_sessions(mctrl_repo)
+            concurrent_this_batch = active_before + needed
+            if concurrent_this_batch > max_concurrent_observed:
+                max_concurrent_observed = concurrent_this_batch
+
+            print(f"  Batch {batch_idx}: spawning {len(batch_slots)} slots concurrently (active_ao_sessions={active_before})")
+            batch_start = time.time()
+            batch_results = _spawn_batch_parallel(
+                batch_slots, run_id, mctrl_repo, registry_path, lock_log, merge_train_repo,
+                ao_project=args.ao_project, ao_agent=args.ao_agent,
+                kill_session_after_pr=args.kill_session_after_pr,
+                keep_sessions=args.keep_sessions,
+                session_wait_timeout=args.session_wait_timeout,
+            )
+            batch_elapsed = time.time() - batch_start
+            slot_results.extend(batch_results)
+            per_batch_elapsed.append({
+                "batch": batch_idx,
+                "slots": batch_slots,
+                "elapsed_s": round(batch_elapsed, 1),
+                "active_sessions_before": active_before,
+            })
+            print(f"  Batch {batch_idx}: completed in {batch_elapsed:.1f}s")
+
+        total_elapsed = time.time() - total_start
+        parallel_timing = {
+            "total_elapsed_s": round(total_elapsed, 1),
+            "per_batch_elapsed": per_batch_elapsed,
+            "max_concurrent_sessions": max_concurrent_observed,
+            "parallelism": parallelism,
+            "batch_size": batch_size,
+        }
 
     pr_slots = [r for r in slot_results if r.get("pr_url")]
     scenarios.append({
@@ -297,6 +479,35 @@ def main() -> int:
         "errors": [f"slot {r['slot']}: no PR created" for r in slot_results if not r.get("pr_url")],
         "note": f"{len(pr_slots)}/{args.slots} PRs created via ao spawn --agent {args.ao_agent}",
     })
+
+    # NP6 scenario: session survival
+    if args.keep_sessions:
+        survival_ok = True
+        survival_errors: list[str] = []
+        for r in slot_results:
+            surv = r.get("session_survival", {})
+            if not surv.get("alive_after_pr_capture", False):
+                survival_ok = False
+                survival_errors.append(f"slot {r['slot']}: session not alive after PR capture")
+            if surv.get("timed_out", False):
+                survival_ok = False
+                survival_errors.append(f"slot {r['slot']}: session wait timed out")
+        scenarios.append({
+            "name": "session_survival_keep_sessions",
+            "passed": survival_ok,
+            "errors": survival_errors,
+            "note": f"keep_sessions=True, session_wait_timeout={args.session_wait_timeout}s",
+        })
+
+    # NP7 scenario: parallel timing
+    if parallelism > 1:
+        scenarios.append({
+            "name": "parallel_spawn_timing",
+            "passed": True,
+            "errors": [],
+            "note": f"parallel={parallelism}, batch_size={batch_size}, max_concurrent={parallel_timing.get('max_concurrent_sessions', 0)}",
+            "parallel_timing": parallel_timing,
+        })
 
     # Verify all PRs touch only their assigned slot
     print("\n=== Verifying PR isolation ===")
@@ -345,13 +556,19 @@ def main() -> int:
     }
     (evidence_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
-    run_json = {
+    run_json: dict = {
         "run_id": run_id,
         "bundle_version": "1.2.0",
         "orchestration_mode": "ao_spawn",
         "scenarios": scenarios,
         "slot_results": slot_results,
     }
+    if parallelism > 1:
+        run_json["parallel_timing"] = parallel_timing
+    if args.keep_sessions:
+        run_json["keep_sessions"] = True
+        run_json["session_wait_timeout"] = args.session_wait_timeout
+
     (evidence_dir / "run.json").write_text(json.dumps(run_json, indent=2))
 
     # Checksums
