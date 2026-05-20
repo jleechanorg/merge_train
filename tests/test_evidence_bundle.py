@@ -277,31 +277,8 @@ def test_v06_ao_bundle_proves_20_slots() -> None:
     assert len(bad_spawns) <= 2, f"too many spawn failures: {bad_spawns}"
 
 
-def test_v06_ao_metadata_sha_matches_head() -> None:
-    """v0.6-ao bundle SHA must be within 10 commits of HEAD."""
-    if not EVIDENCE_V06_AO.is_dir():
-        return
-    meta = json.loads((EVIDENCE_V06_AO / "metadata.json").read_text())
-    bundle_sha = meta.get("merge_train_sha", "")
-    assert bundle_sha, "metadata.json missing merge_train_sha"
-    result = subprocess.run(
-        ["git", "cat-file", "-e", f"{bundle_sha}^{{commit}}"],
-        cwd=REPO_ROOT, capture_output=True,
-    )
-    assert result.returncode == 0, f"bundle SHA {bundle_sha} not found in git history"
-    ahead = subprocess.run(
-        ["git", "rev-list", "--count", f"{bundle_sha}..HEAD"],
-        cwd=REPO_ROOT, capture_output=True, text=True,
-    )
-    commits_ahead = int(ahead.stdout.strip() or "999")
-    assert commits_ahead <= 10, (
-        f"evidence/v0.6-ao is {commits_ahead} commits stale "
-        f"(bundle_sha={bundle_sha[:12]}); rerun runner to refresh"
-    )
-
-
-def test_v06_ao_metadata_sha_matches_head() -> None:
-    """v0.6-ao bundle SHA must be within 10 commits of HEAD."""
+def test_v06_ao_metadata_sha_is_recent_ancestor() -> None:
+    """v0.6-ao bundle SHA must be a recent ancestor of HEAD."""
     if not EVIDENCE_V06_AO.is_dir():
         return
     meta = json.loads((EVIDENCE_V06_AO / "metadata.json").read_text())
