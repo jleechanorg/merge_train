@@ -682,7 +682,14 @@ def _build_parser() -> argparse.ArgumentParser:
                        help="base ref for git merge-tree (default: origin/main)")
     pr_pc.add_argument("--json", action="store_true", help="JSON output")
 
-    for _sp in (pr_re, pr_rp, pr_rl, pr_ck, pr_ls, pr_au, pr_pc):
+
+    pr_rd = sub.add_parser("recommend-domains", help="analyze recent repo history and suggest file + symbol lock domains")
+    pr_rd.add_argument("--repo", default=".", help="path to git repo (default: cwd)")
+    pr_rd.add_argument("--since-days", type=int, default=30, help="lookback window in days")
+    pr_rd.add_argument("--top-n", type=int, default=8, help="number of hotspot seeds")
+    pr_rd.add_argument("--json", action="store_true", help="JSON output")
+
+    for _sp in (pr_re, pr_rp, pr_rl, pr_ck, pr_ls, pr_au, pr_pc, pr_rd):
         _add_global_opts_to_subparser(_sp)
     return p
 
@@ -828,6 +835,17 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.cmd == "audit":
         print(json.dumps(audit(log, registry), indent=2))
+        return 0
+
+    if args.cmd == "recommend-domains":
+        from merge_train.domain_recommender import recommend_domains, to_yaml_dict
+        repo = Path(args.repo)
+        suggestions = recommend_domains(repo=repo, since_days=args.since_days, top_n=args.top_n)
+        payload = to_yaml_dict(suggestions)
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(yaml.safe_dump(payload, sort_keys=False))
         return 0
 
     if args.cmd == "predict-conflicts":
