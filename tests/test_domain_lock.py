@@ -849,3 +849,231 @@ def test_cli_reserve_plan_accepts_global_opts_after_subcommand(tmp_path: Path):
     r = subprocess.run(cmd, capture_output=True, text=True)
     assert r.returncode == 0, f"stderr={r.stderr!r}"
     assert log.exists()
+
+
+# ── --dry-run tests ──────────────────────────────────────────────────────
+
+
+def test_cli_reserve_dry_run_free(tmp_path: Path):
+    """--dry-run on a free domain prints WOULD-RESERVE and exits 0."""
+    r = _run_cli(
+        tmp_path, "reserve",
+        "--domain", "d1", "--pr", "1", "--agent", "a", "--branch", "b",
+        "--dry-run",
+    )
+    assert r.returncode == 0
+    assert "WOULD-RESERVE" in r.stdout
+    assert "d1" in r.stdout
+    # No lock entry written
+    log = tmp_path / "log.jsonl"
+    assert not log.exists() or log.read_text().strip() == ""
+
+
+def test_cli_reserve_dry_run_held(tmp_path: Path):
+    """--dry-run on a held domain prints HELD and exits 1 without writing."""
+    _run_cli(
+        tmp_path, "reserve",
+        "--domain", "d1", "--pr", "1", "--agent", "a", "--branch", "b",
+    )
+    r = _run_cli(
+        tmp_path, "reserve",
+        "--domain", "d1", "--pr", "2", "--agent", "c", "--branch", "d",
+        "--dry-run",
+    )
+    assert r.returncode == 1
+    assert "HELD" in r.stderr
+
+
+def test_cli_reserve_dry_run_symbol_held(tmp_path: Path):
+    """--dry-run with overlapping symbols on held domain exits 1."""
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"d1": {"paths": ["a.py"]}}
+    }))
+    log = tmp_path / "log.jsonl"
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "reserve", "--domain", "d1", "--pr", "1",
+        "--agent", "a", "--branch", "b", "--symbols", "foo,bar",
+    ]
+    subprocess.run(cmd, capture_output=True, text=True)
+    cmd2 = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "reserve", "--domain", "d1", "--pr", "2",
+        "--agent", "c", "--branch", "d", "--symbols", "bar,baz",
+        "--dry-run",
+    ]
+    r2 = subprocess.run(cmd2, capture_output=True, text=True)
+    assert r2.returncode == 1
+    assert "HELD" in r2.stderr
+
+
+def test_cli_reserve_dry_run_unknown_domain(tmp_path: Path):
+    """--dry-run on unknown domain exits 2."""
+    r = _run_cli(
+        tmp_path, "reserve",
+        "--domain", "nope", "--pr", "1", "--agent", "a", "--branch", "b",
+        "--dry-run",
+    )
+    assert r.returncode == 2
+
+
+def test_cli_reserve_plan_dry_run_all_free(tmp_path: Path):
+    """--dry-run on reserve-plan with all free legs exits 0."""
+    plan = tmp_path / "plan.yaml"
+    plan.write_text(yaml.safe_dump({
+        "plan": [
+            {"domain": "d1", "symbols": []},
+            {"domain": "d2", "symbols": []},
+        ]
+    }))
+    r = _run_cli(
+        tmp_path, "reserve-plan",
+        "--pr", "1", "--agent", "a", "--branch", "b",
+        "--plan", str(plan),
+        "--dry-run",
+    )
+    assert r.returncode == 0
+    assert r.stdout.count("WOULD-RESERVE") == 2
+    log = tmp_path / "log.jsonl"
+    assert not log.exists() or log.read_text().strip() == ""
+
+
+def test_cli_reserve_plan_dry_run_one_held(tmp_path: Path):
+    """--dry-run on reserve-plan where one leg is held exits 1."""
+    _run_cli(
+        tmp_path, "reserve",
+        "--domain", "d1", "--pr", "99", "--agent", "x", "--branch", "y",
+    )
+    plan = tmp_path / "plan.yaml"
+    plan.write_text(yaml.safe_dump({
+        "plan": [
+            {"domain": "d1", "symbols": []},
+            {"domain": "d2", "symbols": []},
+        ]
+    }))
+    r = _run_cli(
+        tmp_path, "reserve-plan",
+        "--pr", "1", "--agent", "a", "--branch", "b",
+        "--plan", str(plan),
+        "--dry-run",
+    )
+    assert r.returncode == 1
+    assert "HELD" in r.stderr
+    assert "WOULD-RESERVE" in r.stdout
+
+
+# ── --dry-run tests ──────────────────────────────────────────────────────
+
+
+def test_cli_reserve_dry_run_free(tmp_path: Path):
+    """--dry-run on a free domain prints WOULD-RESERVE and exits 0."""
+    r = _run_cli(
+        tmp_path, "reserve",
+        "--domain", "d1", "--pr", "1", "--agent", "a", "--branch", "b",
+        "--dry-run",
+    )
+    assert r.returncode == 0
+    assert "WOULD-RESERVE" in r.stdout
+    assert "d1" in r.stdout
+    # No lock entry written
+    log = tmp_path / "log.jsonl"
+    assert not log.exists() or log.read_text().strip() == ""
+
+
+def test_cli_reserve_dry_run_held(tmp_path: Path):
+    """--dry-run on a held domain prints HELD and exits 1 without writing."""
+    _run_cli(
+        tmp_path, "reserve",
+        "--domain", "d1", "--pr", "1", "--agent", "a", "--branch", "b",
+    )
+    r = _run_cli(
+        tmp_path, "reserve",
+        "--domain", "d1", "--pr", "2", "--agent", "c", "--branch", "d",
+        "--dry-run",
+    )
+    assert r.returncode == 1
+    assert "HELD" in r.stderr
+
+
+def test_cli_reserve_dry_run_symbol_held(tmp_path: Path):
+    """--dry-run with overlapping symbols on held domain exits 1."""
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"d1": {"paths": ["a.py"]}}
+    }))
+    log = tmp_path / "log.jsonl"
+    cmd = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "reserve", "--domain", "d1", "--pr", "1",
+        "--agent", "a", "--branch", "b", "--symbols", "foo,bar",
+    ]
+    subprocess.run(cmd, capture_output=True, text=True)
+    cmd2 = [
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "reserve", "--domain", "d1", "--pr", "2",
+        "--agent", "c", "--branch", "d", "--symbols", "bar,baz",
+        "--dry-run",
+    ]
+    r2 = subprocess.run(cmd2, capture_output=True, text=True)
+    assert r2.returncode == 1
+    assert "HELD" in r2.stderr
+
+
+def test_cli_reserve_dry_run_unknown_domain(tmp_path: Path):
+    """--dry-run on unknown domain exits 2."""
+    r = _run_cli(
+        tmp_path, "reserve",
+        "--domain", "nope", "--pr", "1", "--agent", "a", "--branch", "b",
+        "--dry-run",
+    )
+    assert r.returncode == 2
+
+
+def test_cli_reserve_plan_dry_run_all_free(tmp_path: Path):
+    """--dry-run on reserve-plan with all free legs exits 0."""
+    plan = tmp_path / "plan.yaml"
+    plan.write_text(yaml.safe_dump({
+        "plan": [
+            {"domain": "d1", "symbols": []},
+            {"domain": "d2", "symbols": []},
+        ]
+    }))
+    r = _run_cli(
+        tmp_path, "reserve-plan",
+        "--pr", "1", "--agent", "a", "--branch", "b",
+        "--plan", str(plan),
+        "--dry-run",
+    )
+    assert r.returncode == 0
+    assert r.stdout.count("WOULD-RESERVE") == 2
+    log = tmp_path / "log.jsonl"
+    assert not log.exists() or log.read_text().strip() == ""
+
+
+def test_cli_reserve_plan_dry_run_one_held(tmp_path: Path):
+    """--dry-run on reserve-plan where one leg is held exits 1."""
+    _run_cli(
+        tmp_path, "reserve",
+        "--domain", "d1", "--pr", "99", "--agent", "x", "--branch", "y",
+    )
+    plan = tmp_path / "plan.yaml"
+    plan.write_text(yaml.safe_dump({
+        "plan": [
+            {"domain": "d1", "symbols": []},
+            {"domain": "d2", "symbols": []},
+        ]
+    }))
+    r = _run_cli(
+        tmp_path, "reserve-plan",
+        "--pr", "1", "--agent", "a", "--branch", "b",
+        "--plan", str(plan),
+        "--dry-run",
+    )
+    assert r.returncode == 1
+    assert "HELD" in r.stderr
+    assert "WOULD-RESERVE" in r.stdout

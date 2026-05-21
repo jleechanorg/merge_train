@@ -622,6 +622,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="comma-separated symbol names within the domain "
              "(empty = whole-domain lock)",
     )
+    pr_re.add_argument(
+        "--dry-run", action="store_true",
+        help="check for conflicts without acquiring the lock; exits 0 if "
+             "the domain is free, 1 if held, and prints WOULD-RESERVE",
+    )
 
     pr_rp = sub.add_parser(
         "reserve-plan",
@@ -634,6 +639,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--plan", required=True,
         help="path to YAML/JSON file with a 'plan' (or 'reservations') list "
              "of {domain, symbols} entries",
+    )
+    pr_rp.add_argument(
+        "--dry-run", action="store_true",
+        help="check for conflicts without acquiring locks; exits 0 if all "
+             "legs are free, 1 if any is held, and prints WOULD-RESERVE per leg",
     )
 
     pr_rl = sub.add_parser("release", help="release a PR's reservations")
@@ -717,6 +727,26 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 2
         log = LockLog(args.log)
         syms = [s.strip() for s in (args.symbols or "").split(",") if s.strip()]
+        if args.dry_run:
+            if args.domain not in registry.domains:
+                print(f"error: unknown domain: {args.domain}", file=sys.stderr)
+                return 2
+            active = log.active_all()
+            holders = [e for e in active if e.domain == args.domain]
+            for h in holders:
+                if h.is_whole_domain:
+                    print(f"HELD: {args.domain} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
+                    return 1
+                if syms and set(syms).intersection(h.symbols):
+                    overlap = sorted(set(syms).intersection(h.symbols))
+                    print(f"HELD: {args.domain} symbols {overlap} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
+                    return 1
+                if not syms:
+                    print(f"HELD: {args.domain} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
+                    return 1
+            sym_part = f" symbols={syms}" if syms else ""
+            print(f"WOULD-RESERVE: {args.domain}\tPR#{args.pr}\t{args.agent}\t{args.branch}{sym_part}")
+            return 0
         try:
             entry = reserve(
                 log, registry,
@@ -751,6 +781,34 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("error: plan file has no 'plan' or 'reservations' list",
                   file=sys.stderr)
             return 2
+        if args.dry_run:
+            active = log.active_all()
+            held = False
+            for raw_item in plan_items:
+                dom = raw_item["domain"] if isinstance(raw_item, dict) else raw_item.domain
+                syms = (raw_item.get("symbols") or ()) if isinstance(raw_item, dict) else raw_item.symbols
+                if dom not in registry.domains:
+                    print(f"error: unknown domain: {dom}", file=sys.stderr)
+                    return 2
+                holders = [e for e in active if e.domain == dom]
+                for h in holders:
+                    if h.is_whole_domain:
+                        print(f"HELD: {dom} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
+                        held = True
+                        break
+                    if syms and set(syms).intersection(h.symbols):
+                        overlap = sorted(set(syms).intersection(h.symbols))
+                        print(f"HELD: {dom} symbols {overlap} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
+                        held = True
+                        break
+                    if not syms:
+                        print(f"HELD: {dom} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
+                        held = True
+                        break
+                else:
+                    sym_part = f" symbols={list(syms)}" if syms else ""
+                    print(f"WOULD-RESERVE: {dom}\tPR#{args.pr}\t{args.agent}\t{args.branch}{sym_part}")
+            return 1 if held else 0
         try:
             entries = reserve_plan(
                 log, registry,
