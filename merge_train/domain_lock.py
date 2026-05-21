@@ -682,7 +682,14 @@ def _build_parser() -> argparse.ArgumentParser:
                        help="base ref for git merge-tree (default: origin/main)")
     pr_pc.add_argument("--json", action="store_true", help="JSON output")
 
-    for _sp in (pr_re, pr_rp, pr_rl, pr_ck, pr_ls, pr_au, pr_pc):
+
+    pr_rd = sub.add_parser("recommend-domains", help="analyze recent repo history and suggest file + symbol lock domains")
+    pr_rd.add_argument("--repo", default=".", help="path to git repo (default: cwd)")
+    pr_rd.add_argument("--since-days", type=int, default=30, help="lookback window in days")
+    pr_rd.add_argument("--top-n", type=int, default=8, help="number of hotspot seeds")
+    pr_rd.add_argument("--json", action="store_true", help="JSON output")
+
+    for _sp in (pr_re, pr_rp, pr_rl, pr_ck, pr_ls, pr_au, pr_pc, pr_rd):
         _add_global_opts_to_subparser(_sp)
     return p
 
@@ -701,14 +708,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.log == DEFAULT_LOG:
         cwd = Path(args.git_cwd) if args.git_cwd else None
         args.log = _resolve_default_log(cwd)
-    try:
-        registry = load_registry(args.registry)
-    except FileNotFoundError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    log = LockLog(args.log)
 
     if args.cmd == "reserve":
+        try:
+            registry = load_registry(args.registry)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        log = LockLog(args.log)
         syms = [s.strip() for s in (args.symbols or "").split(",") if s.strip()]
         try:
             entry = reserve(
@@ -727,6 +734,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.cmd == "reserve-plan":
+        try:
+            registry = load_registry(args.registry)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        log = LockLog(args.log)
         try:
             with open(args.plan, "r", encoding="utf-8") as fh:
                 raw = yaml.safe_load(fh) or {}
@@ -755,6 +768,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.cmd == "release":
+        log = LockLog(args.log)
         released = release(log, pr=args.pr, domain=args.domain, note=args.note)
         if not released:
             print(f"no active reservations for PR #{args.pr}", file=sys.stderr)
@@ -764,6 +778,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.cmd == "check":
+        try:
+            registry = load_registry(args.registry)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        log = LockLog(args.log)
         touched_map: Optional[dict[str, Optional[set[str]]]] = None
         diff_fallback: list[str] = []
         if args.diff_mode:
@@ -816,6 +836,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0 if result.ok else 1
 
     if args.cmd == "list":
+        log = LockLog(args.log)
         entries = list_locks(log, status=args.status)
         if args.json:
             print(json.dumps([dataclasses.asdict(e) for e in entries], indent=2))
@@ -827,10 +848,32 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.cmd == "audit":
+        try:
+            registry = load_registry(args.registry)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        log = LockLog(args.log)
         print(json.dumps(audit(log, registry), indent=2))
         return 0
 
+    if args.cmd == "recommend-domains":
+        from merge_train.domain_recommender import recommend_domains, to_yaml_dict
+        repo = Path(args.repo)
+        suggestions = recommend_domains(repo=repo, since_days=args.since_days, top_n=args.top_n)
+        payload = to_yaml_dict(suggestions)
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(yaml.safe_dump(payload, sort_keys=False))
+        return 0
+
     if args.cmd == "predict-conflicts":
+        try:
+            registry = load_registry(args.registry)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
         from merge_train.predict import cli_predict_conflicts
         cwd = Path(args.git_cwd) if args.git_cwd else None
         plan_path = getattr(args, "plan", None)

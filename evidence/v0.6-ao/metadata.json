@@ -2,7 +2,7 @@
   "run_id": "20260520T131616Z",
   "bundle_version": "1.2.0",
   "bundle_timestamp": "2026-05-20T13:16:16Z",
-  "merge_train_sha": "19c22940774b7a78b277ce4fc956a351b1d8b741",
+  "merge_train_sha": "e26d234dd146b28a91187ea4225a6308557adf1b",
   "merge_train_branch": "main",
   "slots": 20,
   "orchestration_mode": "ao_spawn",
@@ -14,7 +14,7 @@
   "parallel_batch_size": 1,
   "test_type": "e2e_area_lock_ao_orchestrated",
   "provenance": {
-    "merge_train_sha": "19c22940774b7a78b277ce4fc956a351b1d8b741",
+    "merge_train_sha": "e26d234dd146b28a91187ea4225a6308557adf1b",
     "ci_run_url": ""
   }
 }
