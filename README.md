@@ -4,7 +4,7 @@
 [![Python ≥ 3.10](https://img.shields.io/badge/python-%E2%89%A53.10-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Spawn-time file-domain lock registry for AI-agent PR pipelines.
+Spawn-time domain lock registry for AI-agent PR pipelines (not just file-based locking).
 
 Stops two agents from grabbing the same files when they're spawned in parallel — before either writes a line of code. Symbol-level locks let two agents edit disjoint functions inside the same file.
 
@@ -58,7 +58,7 @@ Requires Python ≥ 3.10, `PyYAML`, and `git` on `PATH`.
 ## CLI surface
 
 ```
-domain_lock reserve            reserve a domain for a PR/agent (--symbols for sub-file locks)
+domain_lock reserve            reserve a domain/symbol scope for a PR/agent (symbol-first locking)
 domain_lock reserve-plan       atomically reserve multiple (domain, symbols) legs for one PR
 domain_lock release            release a PR's reservations
 domain_lock check              check files against active reservations (--diff-mode for symbol res.)
@@ -76,7 +76,7 @@ Global flags work **both** before and after the subcommand:
 --git-cwd DIR     git working tree used to resolve the default log path
 ```
 
-## Quick start
+## Quick start (default: symbol-based locking)
 
 ```bash
 # 1. Declare domains
@@ -95,12 +95,12 @@ domains:
       - "*"
 EOF
 
-# 2. Reserve before spawning an agent (whole-domain lock)
-domain_lock reserve --domain level_up_core \
-  --pr 6926 --agent claude-1 --branch feat/level-up
+# 2. Reserve before spawning an agent (default behavior in this repo guidance)
+# Reserve only the symbols your task will modify.
+domain_lock reserve --domain level_up_core   --symbols level_up,_apply_xp_bonus   --pr 6926 --agent claude-1 --branch feat/level-up
 
 # 3. Another agent checks before being spawned
-domain_lock check --files mvp_site/world_logic.py --pr 7000
+domain_lock check --files mvp_site/world_logic.py --pr 7000 --diff-mode
 # exit 0 = free, 1 = held (prints holder PR + agent)
 
 # 4. List active reservations
@@ -109,6 +109,8 @@ domain_lock list --status active
 # 5. Release after merge
 domain_lock release --pr 6926
 ```
+
+Whole-domain locking still works when needed (omit `--symbols`), but it is more conservative and blocks more parallelism.
 
 `all_other_files` is intentionally conservative: every otherwise-unmapped file shares one fallback domain. That avoids silent gaps, but it can over-block unrelated work. The planned `acquire --files` command should replace this with automatic per-file fallback locks such as `file:README.md`, while still honoring explicit grouped domains.
 
@@ -213,6 +215,8 @@ Risk-reduction signal, not a merge guarantee. Run CI + human review before mergi
 
 Drop `--no-textual` to additionally run `git merge-tree` between each pair and catch textual conflicts (imports, configs) that symbol analysis misses. `--json` emits machine-readable output.
 
+Reconfirming dry-run mode: `predict-conflicts` never writes reservations and never appends lock-log entries; it only loads your registry + plan, computes conflicts, and reports batches/order. Use it as a planning pass before `reserve`/`reserve-plan`.
+
 The recommended-order algorithm is a greedy maximal-independent-set sweep on the symbol-domain conflict graph: pick the largest batch of disjoint PRs, peel them off, repeat. Deterministic, polynomial-time, and tie-broken by PR id for reproducibility.
 
 Exit codes: `0` (no conflicts), `1` (at least one pair conflicts), `2` (plan file missing/malformed).
@@ -254,6 +258,33 @@ domains:
     paths:
       - "*"
 ```
+
+## How domains work (resolution + locking semantics)
+
+Think of a **domain** as a lock scope label over one or more files/patterns.
+
+1. **Resolution (file → domain)**
+   - The registry is read in YAML declaration order.
+   - For each file, `merge_train` checks each domain's `paths` globs using `fnmatch`.
+   - The **first matching domain wins**.
+   - If no domain matches, the file is treated as unmapped (fail-closed in normal usage, which is why a final catch-all like `all_other_files: ["*"]` is recommended).
+
+2. **Reservation (domain[/symbols] → active lock entry)**
+   - `reserve --domain X` (no `--symbols`) acquires the **whole domain**.
+   - `reserve --domain X --symbols a,b` acquires only those symbols in that domain, allowing co-tenancy with disjoint symbol sets.
+   - `reserve-plan` does the same atomically across multiple domain legs.
+
+3. **Collision rules**
+   - Whole-domain vs anything in the same domain: conflict.
+   - Symbol vs symbol in the same domain: conflict **only if symbol sets overlap**.
+   - Different domains never conflict with each other.
+
+4. **Check behavior**
+   - `check --files ...` resolves each file to its domain and tests for active holders.
+   - `check --diff-mode` narrows Python-file checks to symbols touched in the staged diff; on non-Python/parse fallback, it conservatively checks whole-domain.
+
+5. **Release behavior**
+   - `release --pr N` writes release entries for that PR's active reservations (whole-domain and symbol-scoped), removing them from active state.
 
 - Domains are checked in declaration order; the first matching domain wins.
 - `paths` uses Python `fnmatch`-style globs.
