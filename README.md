@@ -286,11 +286,26 @@ Think of a **domain** as a lock scope label over one or more files/patterns.
 5. **Release behavior**
    - `release --pr N` writes release entries for that PR's active reservations (whole-domain and symbol-scoped), removing them from active state.
 
-- Domains are checked in declaration order; the first matching domain wins.
-- `paths` uses Python `fnmatch`-style globs.
-- Put a catch-all domain last for all-file coverage.
-- If a file is truly unmapped, current CLI behavior is only `WARN: unmapped files (no domain)` and it does **not** block. Treat that as a development-mode warning, not production-safe coverage.
-- See `examples/file_domains.yaml` for a working sample.
+### Worked example
+
+Given:
+
+```yaml
+domains:
+  python_core:
+    paths: ["src/**/*.py"]
+  docs:
+    paths: ["README.md", "docs/**"]
+  all_other_files:
+    paths: ["*"]
+```
+
+- `src/app/main.py` resolves to `python_core` (first matching domain).
+- `README.md` resolves to `docs`.
+- `package-lock.json` resolves to `all_other_files`.
+
+If PR#10 reserves `python_core` whole-domain, PR#11 cannot reserve any symbol or whole-domain lock in `python_core` until PR#10 releases.
+If PR#10 reserves `python_core --symbols parse_config`, PR#11 may still reserve `python_core --symbols run_server` because symbols are disjoint.
 
 ## What is protected
 
