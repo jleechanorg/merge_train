@@ -307,6 +307,21 @@ domains:
 If PR#10 reserves `python_core` whole-domain, PR#11 cannot reserve any symbol or whole-domain lock in `python_core` until PR#10 releases.
 If PR#10 reserves `python_core --symbols parse_config`, PR#11 may still reserve `python_core --symbols run_server` because symbols are disjoint.
 
+### Can a domain be "just symbols" (no file-level locking)?
+
+Short answer: **partly**.
+
+- A domain is still defined by file-path patterns in the registry.
+- Symbol granularity is chosen at reservation/check time (`reserve --symbols ...`, `check --diff-mode`), not as a static "symbol list domain" in YAML.
+- So today, domains are **file-mapped scopes with optional symbol-scoped reservations**, not symbol-only objects.
+
+If you want to minimize file-level blocking in practice:
+
+1. Reserve with `--symbols` by default (avoid whole-domain reservations).
+2. Use `check --diff-mode` in pre-commit/commit gates.
+3. Keep domains narrow (don't over-group unrelated files).
+4. Expect conservative fallback to broader locking for non-Python files or symbol-resolution failures.
+
 ## What is protected
 
 - Spawn-time collisions when two agents try to reserve the same domain.
