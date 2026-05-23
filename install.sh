@@ -6,8 +6,13 @@
 #   2. `pip install -e` the merge_train package (development install).
 #   3. In the target repo, create a `file_domains.yaml` skeleton if one
 #      doesn't already exist.
-#   4. Install the pre-commit hook (symlink into .git/hooks/pre-commit)
-#      unless one already exists.
+#   4. Wire per-CLI session-start / session-stop domain-lock hooks:
+#      a. .git/hooks/pre-commit  (last-resort fallback for raw git commits)
+#      b. .codex/hooks.json      (Codex SessionStart + Stop)
+#      c. .gemini/domain-lock-guard.sh + .gemini/settings.json (Antigravity)
+#      d. .opencode.json         (OpenCode custom /domain-check command stub)
+#      NOTE: Claude Code global ~/.claude/settings.json is wired separately
+#            (already done if this install.sh is run with merge_train >= 0.2).
 #   5. Smoke-test the install (domain_lock list --status active).
 #   6. Print next steps.
 #
@@ -172,9 +177,145 @@ if [[ "$INSTALL_HOOK" -eq 1 ]]; then
     fi
     echo
 else
-    echo "[3/5] pre-commit hook: skipped (--no-hook)."
+    echo "[3/5] pre-commit hook (fallback): skipped (--no-hook)."
     echo
 fi
+
+# ------------------------------------------------------------------------- #
+# 4a. Codex per-repo hooks.json
+# ------------------------------------------------------------------------- #
+
+CODEX_DIR="$TARGET/.codex"
+CODEX_HOOKS="$CODEX_DIR/hooks.json"
+DL_START="$MERGE_TRAIN_ROOT/hooks/domain-lock-session-start.sh"
+DL_STOP="$MERGE_TRAIN_ROOT/hooks/domain-lock-session-stop.sh"
+
+echo "[3a/5] Codex per-repo hooks.json..."
+mkdir -p "$CODEX_DIR"
+if [[ ! -f "$CODEX_HOOKS" ]]; then
+    cat > "$CODEX_HOOKS" <<CODEX_EOF
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $DL_START",
+            "timeoutSec": 15,
+            "statusMessage": "Checking domain locks..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $DL_STOP",
+            "timeoutSec": 10,
+            "statusMessage": "Releasing domain locks..."
+          }
+        ]
+      }
+    ]
+  }
+}
+CODEX_EOF
+    echo "  ok: created $CODEX_HOOKS"
+else
+    # Idempotent: only patch if our hooks aren't already present
+    if ! grep -q "domain-lock-session-start" "$CODEX_HOOKS" 2>/dev/null; then
+        echo "  WARN: $CODEX_HOOKS exists but has no domain-lock hooks."
+        echo "        Manually add domain-lock-session-start.sh to SessionStart."
+    else
+        echo "  ok: $CODEX_HOOKS already wired."
+    fi
+fi
+echo
+
+# ------------------------------------------------------------------------- #
+# 4b. Antigravity (.gemini) per-repo guard
+# ------------------------------------------------------------------------- #
+
+GEMINI_DIR="$TARGET/.gemini"
+GEMINI_GUARD="$GEMINI_DIR/domain-lock-guard.sh"
+GEMINI_SETTINGS="$GEMINI_DIR/settings.json"
+GEMINI_HOOK_TEMPLATE="$MERGE_TRAIN_ROOT/hooks/gemini-domain-lock-guard.sh"
+
+echo "[3b/5] Antigravity (.gemini) per-repo guard..."
+mkdir -p "$GEMINI_DIR"
+
+# Symlink the guard script (or copy if symlinks not desired)
+if [[ -L "$GEMINI_GUARD" ]] && [[ "$(readlink "$GEMINI_GUARD")" == "$GEMINI_HOOK_TEMPLATE" ]]; then
+    echo "  ok: $GEMINI_GUARD already symlinked."
+elif [[ -f "$GEMINI_GUARD" ]]; then
+    echo "  ok: $GEMINI_GUARD already exists (leaving untouched)."
+else
+    ln -s "$GEMINI_HOOK_TEMPLATE" "$GEMINI_GUARD"
+    chmod +x "$GEMINI_HOOK_TEMPLATE"
+    echo "  ok: $GEMINI_GUARD -> $GEMINI_HOOK_TEMPLATE"
+fi
+
+# Patch .gemini/settings.json to call the guard in BeforeTool
+if [[ ! -f "$GEMINI_SETTINGS" ]]; then
+    cat > "$GEMINI_SETTINGS" <<GEMINI_EOF
+{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $GEMINI_GUARD"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $DL_STOP"
+          }
+        ]
+      }
+    ]
+  }
+}
+GEMINI_EOF
+    echo "  ok: created $GEMINI_SETTINGS"
+elif ! grep -q "domain-lock-guard" "$GEMINI_SETTINGS" 2>/dev/null; then
+    echo "  WARN: $GEMINI_SETTINGS exists but has no domain-lock-guard hook."
+    echo "        Manually add domain-lock-guard.sh to the BeforeTool hook."
+else
+    echo "  ok: $GEMINI_SETTINGS already wired."
+fi
+echo
+
+# ------------------------------------------------------------------------- #
+# 4c. OpenCode .opencode.json
+# ------------------------------------------------------------------------- #
+
+OPENCODE_JSON="$TARGET/.opencode.json"
+echo "[3c/5] OpenCode .opencode.json..."
+if [[ ! -f "$OPENCODE_JSON" ]]; then
+    cat > "$OPENCODE_JSON" <<OC_EOF
+{
+  "\$schema": "https://opencode.ai/config.json",
+  "instructions": "IMPORTANT: Before starting any coding task, run: domain_lock check --files <files-you-plan-to-edit>. If exit code is 1 (HELD), do not proceed — pick a different task. If exit code is 0, run: domain_lock reserve --domain <domain> --pr <PR_NUMBER> --agent \$(whoami) --branch \$(git branch --show-current). When done, run: domain_lock release --pr <PR_NUMBER>"
+}
+OC_EOF
+    echo "  ok: created $OPENCODE_JSON (domain-lock instructions injected)"
+elif ! grep -q "domain_lock" "$OPENCODE_JSON" 2>/dev/null; then
+    echo "  WARN: $OPENCODE_JSON exists but has no domain_lock instructions."
+    echo "        Add domain_lock check/reserve/release to the instructions field."
+else
+    echo "  ok: $OPENCODE_JSON already has domain_lock instructions."
+fi
+echo
 
 # ------------------------------------------------------------------------- #
 # 5. Smoke test
