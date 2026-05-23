@@ -318,6 +318,108 @@ fi
 echo
 
 # ------------------------------------------------------------------------- #
+# 4d. Claude Code global ~/.claude/settings.json
+# ------------------------------------------------------------------------- #
+
+echo "[3d/5] Claude Code global ~/.claude/settings.json..."
+CLAUDE_PRE_TOOL="$MERGE_TRAIN_ROOT/hooks/domain-lock-pre-tool.sh"
+chmod +x "$DL_START" "$DL_STOP" "$CLAUDE_PRE_TOOL"
+
+DL_START="$DL_START" DL_STOP="$DL_STOP" CLAUDE_PRE_TOOL="$CLAUDE_PRE_TOOL" "$PYTHON_BIN" -c '
+import os, sys, json
+from pathlib import Path
+
+settings_path = Path.home() / ".claude" / "settings.json"
+if not settings_path.exists():
+    print("  ok: Claude settings.json not found, skipping global configuration.")
+    sys.exit(0)
+
+dl_start = os.environ["DL_START"]
+dl_stop = os.environ["DL_STOP"]
+claude_pre_tool = os.environ["CLAUDE_PRE_TOOL"]
+
+with open(settings_path, "r") as f:
+    try:
+        data = json.load(f)
+    except Exception as e:
+        print(f"  WARN: Error reading settings.json: {e}")
+        sys.exit(0)
+
+# Ensure hooks exists
+if "hooks" not in data:
+    data["hooks"] = {}
+hooks = data["hooks"]
+
+# 1. Patch SessionStart
+session_start_hooks = hooks.setdefault("SessionStart", [])
+session_start_entry = None
+for entry in session_start_hooks:
+    if entry.get("matcher") == "":
+        session_start_entry = entry
+        break
+if not session_start_entry:
+    session_start_entry = {"matcher": "", "hooks": []}
+    session_start_hooks.append(session_start_entry)
+
+start_hook_cmd = f"bash {dl_start}"
+start_hook_exists = any(h.get("command") == start_hook_cmd for h in session_start_entry["hooks"])
+if not start_hook_exists:
+    session_start_entry["hooks"].append({
+        "type": "command",
+        "command": start_hook_cmd,
+        "timeout": 15000
+    })
+
+# 2. Patch Stop
+stop_hooks = hooks.setdefault("Stop", [])
+stop_entry = None
+for entry in stop_hooks:
+    if entry.get("matcher") == "":
+        stop_entry = entry
+        break
+if not stop_entry:
+    stop_entry = {"matcher": "", "hooks": []}
+    stop_hooks.append(stop_entry)
+
+stop_hook_cmd = f"bash {dl_stop}"
+stop_hook_exists = any(h.get("command") == stop_hook_cmd for h in stop_entry["hooks"])
+if not stop_hook_exists:
+    stop_entry["hooks"].append({
+        "type": "command",
+        "command": stop_hook_cmd,
+        "timeout": 10000
+    })
+
+# 3. Patch PreToolUse (Edit and Write)
+pre_tool_hooks = hooks.setdefault("PreToolUse", [])
+pre_tool_cmd = f"bash {claude_pre_tool}"
+
+for matcher in ["Edit", "Write"]:
+    matcher_entry = None
+    for entry in pre_tool_hooks:
+        if entry.get("matcher") == matcher:
+            matcher_entry = entry
+            break
+    if not matcher_entry:
+        matcher_entry = {"matcher": matcher, "hooks": []}
+        pre_tool_hooks.append(matcher_entry)
+    
+    pre_hook_exists = any(h.get("command") == pre_tool_cmd for h in matcher_entry["hooks"])
+    if not pre_hook_exists:
+        matcher_entry["hooks"].append({
+            "type": "command",
+            "command": pre_tool_cmd,
+            "timeout": 15000
+        })
+
+with open(settings_path, "w") as f:
+    json.dump(data, f, indent=2)
+print("  ok: successfully patched global Claude settings.json with session and pre-tool hooks.")
+'
+echo
+
+
+# ------------------------------------------------------------------------- #
 # 5. Smoke test
 # ------------------------------------------------------------------------- #
 
