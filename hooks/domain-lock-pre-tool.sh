@@ -13,9 +13,15 @@ set -euo pipefail
 # Read stdin payload
 payload="$(cat)"
 
-# Extract tool name and target file path
-tool_name="$(echo "$payload" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null || true)"
-file_path="$(echo "$payload" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_input', {}).get('file_path',''))" 2>/dev/null || true)"
+# Extract tool name and target file path (fast regex parse)
+tool_name="$(echo "$payload" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4 2>/dev/null || true)"
+file_path="$(echo "$payload" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4 2>/dev/null || true)"
+
+# Fallback to python if fast-path parsing fails
+if [[ -z "$tool_name" || -z "$file_path" ]]; then
+  tool_name="$(echo "$payload" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null || true)"
+  file_path="$(echo "$payload" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_input', {}).get('file_path',''))" 2>/dev/null || true)"
+fi
 
 # Only check Edit and Write tools
 case "$tool_name" in
@@ -34,6 +40,16 @@ fi
 # Find repository root
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 if [[ -z "$REPO_ROOT" ]]; then
+  echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
+  exit 0
+fi
+
+# ── Caching Layer ────────────────────────────────────────────────────────────
+SESSION_KEY="${CLAUDE_SESSION_ID:-${AO_SESSION_ID:-$$}}"
+REPO_HASH="$(echo "$REPO_ROOT" | md5 -q 2>/dev/null || echo "$REPO_ROOT" | md5sum 2>/dev/null | cut -d' ' -f1 || echo "unknown")"
+CACHE_FILE="/tmp/mt_session_allowed_${REPO_HASH}_${SESSION_KEY}"
+
+if [[ -f "$CACHE_FILE" ]] && grep -Fxq "$file_path" "$CACHE_FILE" 2>/dev/null; then
   echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
   exit 0
 fi
@@ -86,6 +102,11 @@ if [[ -n "$DOMAINS" ]]; then
   done
 fi
 
+# Cache the allowed file path to avoid Python invocation in subsequent calls
+mkdir -p "$(dirname "$CACHE_FILE")" 2>/dev/null || true
+echo "$file_path" >> "$CACHE_FILE"
+
 # Allow the tool call to proceed
 echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
 exit 0
+
