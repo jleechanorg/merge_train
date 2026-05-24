@@ -268,28 +268,44 @@ def _reserve_locked(
     dom = registry.domains.get(domain)
     limit = dom.concurrency_limit if dom is not None else 1
 
-    # Check semaphore limit: count distinct other PR numbers holding this domain
     other_holders = [e for e in active_on_domain if e.pr != pr]
-    distinct_other_prs = {e.pr for e in other_holders}
+    whole_domain_other = [e for e in other_holders if e.is_whole_domain]
+    symbol_others = [e for e in other_holders if not e.is_whole_domain]
 
-    if len(distinct_other_prs) >= limit:
-        held = other_holders[0]
-        raise DomainHeldError(
-            f"domain '{domain}' is fully held by PR #{held.pr} "
-            f"(agent={held.agent}, branch={held.branch}, "
-            f"opened_at={held.opened_at}) — concurrency limit reached ({limit})"
-        )
-
-    # Check for direct symbol collisions:
-    for held in other_holders:
-        if not held.is_whole_domain and len(syms) > 0:
-            held_set = set(held.symbols)
-            overlap = held_set.intersection(syms)
+    if not syms:
+        # Whole-domain reservation: semaphore applies to concurrent whole-domain holders.
+        # Symbol-level holders also block (can't take the whole domain over existing symbols).
+        distinct_whole_prs = {e.pr for e in whole_domain_other}
+        if len(distinct_whole_prs) >= limit:
+            conflict = whole_domain_other[0]
+            raise DomainHeldError(
+                f"domain '{domain}' is fully held by PR #{conflict.pr} "
+                f"(agent={conflict.agent}, branch={conflict.branch}, "
+                f"opened_at={conflict.opened_at}) — concurrency limit reached ({limit})"
+            )
+        if symbol_others:
+            held = symbol_others[0]
+            raise DomainHeldError(
+                f"domain '{domain}' has symbol locks held by "
+                f"PR #{held.pr} (symbols={','.join(held.symbols)}) — "
+                "whole-domain reservation refused"
+            )
+    else:
+        # Symbol-level reservation: whole-domain holders always block;
+        # symbol-level holders block only on overlap. Semaphore does not apply.
+        for holder in whole_domain_other:
+            raise DomainHeldError(
+                f"domain '{domain}' is fully held by PR #{holder.pr} "
+                f"(agent={holder.agent}, branch={holder.branch}, "
+                f"opened_at={holder.opened_at})"
+            )
+        for holder in symbol_others:
+            overlap = set(holder.symbols).intersection(syms)
             if overlap:
                 raise DomainHeldError(
                     f"symbol(s) {','.join(sorted(overlap))} in domain "
-                    f"'{domain}' held by PR #{held.pr} (agent={held.agent}, "
-                    f"branch={held.branch})"
+                    f"'{domain}' held by PR #{holder.pr} (agent={holder.agent}, "
+                    f"branch={holder.branch})"
                 )
 
     entry = LockEntry(
@@ -520,25 +536,32 @@ def check(
         dom = registry.domains.get(domain)
         limit = dom.concurrency_limit if dom is not None else 1
 
-        # Check semaphore limit first: count distinct other PR numbers holding this domain
         other_holders = [e for e in domain_holders if pr is None or e.pr != pr]
-        distinct_other_prs = {e.pr for e in other_holders}
+        whole_domain_other = [e for e in other_holders if e.is_whole_domain]
+        symbol_others = [e for e in other_holders if not e.is_whole_domain]
 
-        if len(distinct_other_prs) >= limit:
-            # Concurrency limit reached! Report conflict with one of the other holders
-            conflict = other_holders[0]
-            held.append((domain, conflict))
-            continue
-
-        # Semaphore limit is not reached. But check for direct symbol collisions
-        # (co-editing the exact same symbol is a strict conflict):
         touched = per_domain_symbols[domain]
-        conflict = None
-        for holder in other_holders:
-            if not holder.is_whole_domain and touched is not None:
-                if touched.intersection(holder.symbols):
-                    conflict = holder
-                    break
+        conflict: Optional[LockEntry] = None
+
+        if touched is None:
+            # Whole-domain check: semaphore applies to concurrent whole-domain holders.
+            # Symbol-level holders also collide (whole-domain write would stomp them).
+            distinct_whole_prs = {e.pr for e in whole_domain_other}
+            if len(distinct_whole_prs) >= limit:
+                conflict = whole_domain_other[0]
+            elif symbol_others:
+                conflict = symbol_others[0]
+        else:
+            # Symbol-level check: whole-domain holders always collide;
+            # symbol-level holders collide only on symbol overlap. No semaphore.
+            for holder in whole_domain_other:
+                conflict = holder
+                break
+            if conflict is None:
+                for holder in symbol_others:
+                    if touched.intersection(holder.symbols):
+                        conflict = holder
+                        break
 
         if conflict is None:
             free.append(domain)
