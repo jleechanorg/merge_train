@@ -88,10 +88,61 @@ else
   CLI="python3 -c 'import sys; from merge_train.domain_lock import main; sys.exit(main())'"
 fi
 
+# ── Symbol extraction ────────────────────────────────────────────────────────
+# For Edit calls on Python files, extract which symbol (function/class) is
+# being modified from old_string so we can do symbol-level check + reserve.
+SYMBOLS=""
+if [[ "$tool_name" == "Edit" && "$file_path" == *.py ]]; then
+  old_string="$(echo "$payload" | python3 -c "
+import sys,json
+try:
+  d=json.load(sys.stdin)
+  print(d.get('tool_input',{}).get('old_string',''))
+except: print('')
+" 2>/dev/null || true)"
+  if [[ -n "$old_string" ]]; then
+    SYMBOLS="$(python3 -c "
+import sys, ast, pathlib
+old_str = sys.argv[1]
+fp = sys.argv[2]
+if not pathlib.Path(fp).exists():
+    sys.exit(0)
+try:
+    src = pathlib.Path(fp).read_text(encoding='utf-8', errors='replace')
+    tree = ast.parse(src)
+except SyntaxError:
+    sys.exit(0)
+idx = src.find(old_str)
+if idx < 0:
+    sys.exit(0)
+line_no = src[:idx].count('\n') + 1
+result = []
+for node in ast.walk(tree):
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if not hasattr(node, 'end_lineno'):
+            continue
+        if node.col_offset == 0 and node.lineno <= line_no <= node.end_lineno:
+            result.append(node.name)
+            if isinstance(node, ast.ClassDef):
+                for child in ast.walk(node):
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        if child.lineno <= line_no <= child.end_lineno:
+                            result.append(f'{node.name}.{child.name}')
+if result:
+    print(result[-1])
+" "$old_string" "$REPO_ROOT/$file_path" 2>/dev/null || true)"
+  fi
+fi
+
+SYMBOLS_ARG=""
+if [[ -n "$SYMBOLS" ]]; then
+  SYMBOLS_ARG="--symbols $SYMBOLS"
+fi
+
 # Check domain lock status for this file — capture stdout for the denial message.
 # Use `if !` to avoid set -e trapping the non-zero exit from the check command.
-CHECK_JSON="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" --json 2>/dev/null || true)"
-if ! eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" >/dev/null 2>&1; then
+CHECK_JSON="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" ${SYMBOLS_ARG} --json 2>/dev/null || true)"
+if ! eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" ${SYMBOLS_ARG} >/dev/null 2>&1; then
   # check exits 1: real enforced domain is held.
   HELD_INFO="$(echo "$CHECK_JSON" | python3 -c "
 import sys,json
@@ -105,23 +156,26 @@ except: print('held')
   exit 0
 fi
 
-# If domain is free, automatically reserve it.
+# If domain is free, automatically reserve it (with symbol scope if extracted).
 DOMAINS="$(echo "$CHECK_JSON" \
   | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d.get('free_domains',[]))) " 2>/dev/null || true)"
 
 if [[ -n "$DOMAINS" ]]; then
   for DOMAIN in $DOMAINS; do
-    eval "$CLI" --registry "$REGISTRY" reserve --domain "$DOMAIN" --pr "$PR" --agent "$AGENT" --branch "$BRANCH" >/dev/null 2>&1 || true
+    eval "$CLI" --registry "$REGISTRY" reserve --domain "$DOMAIN" --pr "$PR" --agent "$AGENT" --branch "$BRANCH" ${SYMBOLS_ARG} >/dev/null 2>&1 || true
   done
 fi
 
 # Emit advisory warning if any advisory-mode domains had conflicts (allow, but warn).
-# Advisory files are NOT cached so the warning fires on every edit.
+# Include symbol info if available. Advisory files are NOT cached.
+ADVISORY_SYM="$SYMBOLS"
 ADVISORY_INFO="$(echo "$CHECK_JSON" | python3 -c "
 import sys,json
 try:
   d=json.load(sys.stdin)
-  parts=[f\"{x['domain']} by PR#{x['holder']['pr']} agent={x['holder']['agent']}\" for x in d.get('advisory_held',[])]
+  sym='${ADVISORY_SYM}'
+  sym_note = f' (symbol: {sym})' if sym else ''
+  parts=[f\"{x['domain']}{sym_note} by PR#{x['holder']['pr']} agent={x['holder']['agent']}\" for x in d.get('advisory_held',[])]
   print('; '.join(parts))
 except: print('')
 " 2>/dev/null || true)"

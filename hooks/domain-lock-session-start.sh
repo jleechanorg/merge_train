@@ -108,9 +108,9 @@ else
   CLI="python3 -c 'import sys; from merge_train.domain_lock import main; sys.exit(main())'"
 fi
 
-# CHECK first — fail fast if held
+# CHECK first — fail fast if held (--diff-mode for symbol-level granularity)
 echo "merge_train: checking domains for ${#FILES[@]} file(s) (PR #${PR}, agent=${AGENT})..." >&2
-if ! eval "$CLI" "${REG_ARG[@]}" "${LOG_ARG[@]}" check --files "${FILES[@]}" "${PR_ARG[@]}"; then
+if ! eval "$CLI" "${REG_ARG[@]}" "${LOG_ARG[@]}" check --files "${FILES[@]}" "${PR_ARG[@]}" --diff-mode; then
   RC=$?
   if [[ $RC -eq 1 ]]; then
     echo "merge_train: REFUSED — a domain is held by another PR. Start a different task." >&2
@@ -121,20 +121,57 @@ if ! eval "$CLI" "${REG_ARG[@]}" "${LOG_ARG[@]}" check --files "${FILES[@]}" "${
   fi
 fi
 
-# RESERVE if not dry-run
+# RESERVE if not dry-run — symbol-level: extract touched symbols per file from git diff
 if [[ "$DRY_RUN" != "1" ]]; then
-  echo "merge_train: reserving domains for PR #${PR}..." >&2
-  # Get unique domains for these files
-  DOMAINS="$(eval "$CLI" "${REG_ARG[@]}" "${LOG_ARG[@]}" audit --files "${FILES[@]}" 2>/dev/null \
-    | python3 -c "import sys,json; data=json.load(sys.stdin); print(' '.join({e['domain'] for e in data.get('entries',[]) if e.get('domain') and e.get('domain')!='__unmapped__'}))" 2>/dev/null || true)"
-
-  if [[ -n "$DOMAINS" ]]; then
-    for DOMAIN in $DOMAINS; do
-      eval "$CLI" "${REG_ARG[@]}" "${LOG_ARG[@]}" reserve \
-        --domain "$DOMAIN" --pr "$PR" --agent "$AGENT" --branch "$BRANCH" 2>/dev/null || true
-    done
-    echo "merge_train: domains reserved for PR #${PR}: ${DOMAINS}" >&2
-  fi
+  echo "merge_train: reserving domains for PR #${PR} (symbol-level)..." >&2
+  # Extract per-domain symbol map from git diff, then reserve each domain with its symbols.
+  _MT_SCRIPT="$(mktemp /tmp/mt_reserve_XXXXXX.py)"
+  cat > "$_MT_SCRIPT" << 'PYEOF'
+import subprocess, sys, json, shlex
+sys.path.insert(0, sys.argv[1])  # REPO_ROOT
+registry_path = sys.argv[2]
+pr = sys.argv[3]
+agent = sys.argv[4]
+branch = sys.argv[5]
+files = sys.argv[6:]
+repo_root = sys.argv[1]
+try:
+    from merge_train.domain_lock import load_registry
+    from merge_train.symbols import resolve_touched_symbols
+except ImportError:
+    sys.exit(0)
+registry = load_registry(registry_path)
+per_file, fallback = resolve_touched_symbols(files, cwd=repo_root)
+domain_symbols = {}
+for f in files:
+    domain = registry.domain_for_path(f)
+    if not domain:
+        continue
+    if f in per_file and per_file[f] is not None:
+        existing = domain_symbols.get(domain, [])
+        if existing is None:
+            continue
+        domain_symbols[domain] = list(set(existing) | per_file[f])
+    else:
+        domain_symbols[domain] = None
+import shutil
+cli = ["domain_lock"] if shutil.which("domain_lock") else ["python3", "-m", "merge_train.domain_lock"]
+for domain, syms in domain_symbols.items():
+    sym_arg = ["--symbols", ",".join(sorted(syms))] if syms else []
+    sym_str = f"symbols={','.join(sorted(syms))}" if syms else "whole-domain"
+    result = subprocess.run(
+        cli + ["--registry", registry_path, "reserve",
+               "--domain", domain, "--pr", pr,
+               "--agent", agent, "--branch", branch] + sym_arg,
+        capture_output=True, text=True, cwd=repo_root
+    )
+    if result.returncode == 0:
+        print(f"merge_train: RESERVED: {domain} ({sym_str}) PR#{pr}", file=sys.stderr)
+    else:
+        print(f"merge_train: reserve failed for {domain}: {result.stderr.strip()}", file=sys.stderr)
+PYEOF
+  python3 "$_MT_SCRIPT" "$REPO_ROOT" "$REGISTRY" "$PR" "$AGENT" "$BRANCH" "${FILES[@]}" 2>&1 >&2 || true
+  rm -f "$_MT_SCRIPT"
 fi
 
 exit 0

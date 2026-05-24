@@ -703,6 +703,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="resolve touched Python symbols from staged git diff "
              "(allows symbol-level co-tenancy on the same file)",
     )
+    pr_ck.add_argument(
+        "--symbols", default="",
+        help="comma-separated touched symbol names (overrides --diff-mode; "
+             "enables symbol-level check without staged git diff)",
+    )
 
 
     pr_ls = sub.add_parser("list", help="list locks")
@@ -886,7 +891,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         log = LockLog(args.log)
         touched_map: Optional[dict[str, Optional[set[str]]]] = None
         diff_fallback: list[str] = []
-        if args.diff_mode:
+        if getattr(args, "symbols", ""):
+            syms = set(s.strip() for s in args.symbols.split(",") if s.strip())
+            touched_map = {f: syms for f in args.files}
+        elif args.diff_mode:
             from merge_train.symbols import resolve_touched_symbols
             cwd = Path(args.git_cwd) if args.git_cwd else None
             per_file, fallback = resolve_touched_symbols(args.files, cwd=cwd)
