@@ -54,8 +54,8 @@ if [[ -f "$CACHE_FILE" ]] && grep -Fxq "$file_path" "$CACHE_FILE" 2>/dev/null; t
   exit 0
 fi
 
-# Check for domain registry
-REGISTRY="$REPO_ROOT/file_domains.yaml"
+# Check for domain registry (MERGE_TRAIN_REGISTRY overrides default for testing)
+REGISTRY="${MERGE_TRAIN_REGISTRY:-$REPO_ROOT/file_domains.yaml}"
 if [[ ! -f "$REGISTRY" ]]; then
   echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
   exit 0
@@ -84,15 +84,23 @@ fi
 
 # Check domain lock status for this file — capture stdout for the denial message.
 # Use `if !` to avoid set -e trapping the non-zero exit from the check command.
-if ! CHECK_OUT="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" 2>&1)"; then
-  # check exits 1 and prints "HELD: <domain> by PR#<n> ..." to stdout
-  HELD_INFO="${CHECK_OUT:-held}"
+CHECK_JSON="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" --json 2>/dev/null || true)"
+if ! eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" >/dev/null 2>&1; then
+  # check exits 1: real enforced domain is held.
+  HELD_INFO="$(echo "$CHECK_JSON" | python3 -c "
+import sys,json
+try:
+  d=json.load(sys.stdin)
+  parts=[f\"HELD: {x['domain']} by PR#{x['holder']['pr']} agent={x['holder']['agent']} branch={x['holder']['branch']}\" for x in d.get('held',[])]
+  print('; '.join(parts))
+except: print('held')
+" 2>/dev/null || echo "held")"
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"reason\":\"merge_train: REFUSED — $HELD_INFO. Start a different task.\"}}"
   exit 0
 fi
 
-# If domain is free, automatically reserve it. Use check --json which already ran above.
-DOMAINS="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" --json 2>/dev/null \
+# If domain is free, automatically reserve it.
+DOMAINS="$(echo "$CHECK_JSON" \
   | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d.get('free_domains',[]))) " 2>/dev/null || true)"
 
 if [[ -n "$DOMAINS" ]]; then
@@ -101,11 +109,26 @@ if [[ -n "$DOMAINS" ]]; then
   done
 fi
 
-# Cache the allowed file path to avoid Python invocation in subsequent calls
+# Emit advisory warning if any advisory-mode domains had conflicts (allow, but warn).
+# Advisory files are NOT cached so the warning fires on every edit.
+ADVISORY_INFO="$(echo "$CHECK_JSON" | python3 -c "
+import sys,json
+try:
+  d=json.load(sys.stdin)
+  parts=[f\"{x['domain']} by PR#{x['holder']['pr']} agent={x['holder']['agent']}\" for x in d.get('advisory_held',[])]
+  print('; '.join(parts))
+except: print('')
+" 2>/dev/null || true)"
+
+if [[ -n "$ADVISORY_INFO" ]]; then
+  echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"reason\":\"merge_train: ADVISORY WARN — $ADVISORY_INFO. Proceeding (warn-only mode).\"}}"
+  exit 0
+fi
+
+# Cache the allowed file path to avoid Python invocation in subsequent calls (clean allow only).
 mkdir -p "$(dirname "$CACHE_FILE")" 2>/dev/null || true
 echo "$file_path" >> "$CACHE_FILE"
 
-# Allow the tool call to proceed
 echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
 exit 0
 

@@ -466,6 +466,7 @@ class CheckResult:
     held: list[tuple[str, LockEntry]]  # (domain, holder)
     unmapped: list[str]
     touched_symbols: dict[str, set[str]] = dataclasses.field(default_factory=dict)
+    advisory_held: list[tuple[str, LockEntry]] = dataclasses.field(default_factory=list)  # warn-only conflicts
 
     @property
     def ok(self) -> bool:
@@ -503,6 +504,7 @@ def check(
     active_all = log.active_all()
     free: list[str] = []
     held: list[tuple[str, LockEntry]] = []
+    advisory_held_list: list[tuple[str, LockEntry]] = []
     unmapped = grouped.pop("__unmapped__", [])
 
     # Aggregate touched symbols per domain. Three states per path:
@@ -565,6 +567,8 @@ def check(
 
         if conflict is None:
             free.append(domain)
+        elif dom is not None and dom.advisory:
+            advisory_held_list.append((domain, conflict))
         else:
             held.append((domain, conflict))
 
@@ -576,6 +580,7 @@ def check(
             d: (s if s is not None else set())
             for d, s in per_domain_symbols.items()
         },
+        advisory_held=advisory_held_list,
     )
 
 
@@ -902,6 +907,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                     {"domain": d, "holder": dataclasses.asdict(e)}
                     for d, e in result.held
                 ],
+                "advisory_held": [
+                    {"domain": d, "holder": dataclasses.asdict(e)}
+                    for d, e in result.advisory_held
+                ],
                 "unmapped_files": result.unmapped,
                 "touched_symbols": {
                     d: sorted(s) for d, s in result.touched_symbols.items()
@@ -917,6 +926,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             if diff_fallback:
                 print(f"WARN: symbol-resolution fallback (whole-domain): "
                       f"{', '.join(diff_fallback)}", file=sys.stderr)
+            for d, holder in result.advisory_held:
+                sym_note = (
+                    f" symbols={','.join(holder.symbols)}"
+                    if holder.symbols else ""
+                )
+                print(f"ADVISORY: {d} by PR#{holder.pr} "
+                      f"agent={holder.agent} branch={holder.branch}{sym_note}")
             if not result.held:
                 print(f"FREE: {len(result.free)} domain(s) clear "
                       f"({', '.join(result.free) or 'none'})")
