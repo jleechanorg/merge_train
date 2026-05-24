@@ -129,15 +129,16 @@ class LockEntry:
     closed_at: Optional[str] = None
     note: Optional[str] = None
     symbols: tuple[str, ...] = ()
+    override: bool = False  # True when reserved despite a conflict
 
     def to_json(self) -> str:
         d = dataclasses.asdict(self)
-        # Normalize symbols: drop the field if empty so old logs round-trip
-        # unchanged and stay diff-clean.
         if not d.get("symbols"):
             d.pop("symbols", None)
         else:
             d["symbols"] = list(d["symbols"])
+        if not d.get("override"):
+            d.pop("override", None)
         return json.dumps(d, separators=(",", ":"))
 
     @classmethod
@@ -248,6 +249,9 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+_OVERRIDE_PHRASE = "CONFLICT APPROVED"
+
+
 def _reserve_locked(
     log: LockLog,
     registry: Registry,
@@ -258,6 +262,7 @@ def _reserve_locked(
     branch: str,
     symbols: Iterable[str] = (),
     now: Optional[str] = None,
+    override: str = "",
 ) -> LockEntry:
     """Core reserve logic — caller must hold log.lock()."""
     if domain not in registry.domains:
@@ -279,18 +284,21 @@ def _reserve_locked(
     whole_domain_other = [e for e in other_holders if e.is_whole_domain]
     symbol_others = [e for e in other_holders if not e.is_whole_domain]
 
+    _approved = override == _OVERRIDE_PHRASE
+
     if not syms:
         # Whole-domain reservation: semaphore applies to concurrent whole-domain holders.
         # Symbol-level holders also block (can't take the whole domain over existing symbols).
         distinct_whole_prs = {e.pr for e in whole_domain_other}
         if len(distinct_whole_prs) >= limit:
-            conflict = whole_domain_other[0]
-            raise DomainHeldError(
-                f"domain '{domain}' is fully held by PR #{conflict.pr} "
-                f"(agent={conflict.agent}, branch={conflict.branch}, "
-                f"opened_at={conflict.opened_at}) — concurrency limit reached ({limit})"
-            )
-        if symbol_others:
+            if not _approved:
+                conflict = whole_domain_other[0]
+                raise DomainHeldError(
+                    f"domain '{domain}' is fully held by PR #{conflict.pr} "
+                    f"(agent={conflict.agent}, branch={conflict.branch}, "
+                    f"opened_at={conflict.opened_at}) — concurrency limit reached ({limit})"
+                )
+        if symbol_others and not _approved:
             held = symbol_others[0]
             raise DomainHeldError(
                 f"domain '{domain}' has symbol locks held by "
@@ -301,14 +309,15 @@ def _reserve_locked(
         # Symbol-level reservation: whole-domain holders always block;
         # symbol-level holders block only on overlap. Semaphore does not apply.
         for holder in whole_domain_other:
-            raise DomainHeldError(
-                f"domain '{domain}' is fully held by PR #{holder.pr} "
-                f"(agent={holder.agent}, branch={holder.branch}, "
-                f"opened_at={holder.opened_at})"
-            )
+            if not _approved:
+                raise DomainHeldError(
+                    f"domain '{domain}' is fully held by PR #{holder.pr} "
+                    f"(agent={holder.agent}, branch={holder.branch}, "
+                    f"opened_at={holder.opened_at})"
+                )
         for holder in symbol_others:
             overlap = set(holder.symbols).intersection(syms)
-            if overlap:
+            if overlap and not _approved:
                 raise DomainHeldError(
                     f"symbol(s) {','.join(sorted(overlap))} in domain "
                     f"'{domain}' held by PR #{holder.pr} (agent={holder.agent}, "
@@ -323,6 +332,7 @@ def _reserve_locked(
         opened_at=now or _utcnow(),
         status="active",
         symbols=syms,
+        override=_approved,
     )
     log.append(entry)
     return entry
@@ -338,6 +348,7 @@ def reserve(
     branch: str,
     symbols: Iterable[str] = (),
     now: Optional[str] = None,
+    override: str = "",
 ) -> LockEntry:
     """Reserve *domain* (or specific symbols within it) for *pr*/*agent*.
 
@@ -351,6 +362,9 @@ def reserve(
     Re-reserving on a domain you already hold is rejected — callers
     should release first if they need to change symbol scope.
 
+    Pass ``override=_OVERRIDE_PHRASE`` to force-reserve despite conflicts.
+    The entry is written with ``override=True`` for audit purposes.
+
     Raises :class:`DomainHeldError` on conflict, :class:`UnknownPathError`
     on unknown domain.
     """
@@ -358,7 +372,7 @@ def reserve(
         return _reserve_locked(
             log, registry,
             domain=domain, pr=pr, agent=agent, branch=branch,
-            symbols=symbols, now=now,
+            symbols=symbols, now=now, override=override,
         )
 
 
@@ -487,6 +501,7 @@ def check(
     files: Iterable[str],
     pr: Optional[int] = None,
     touched_symbols_by_path: Optional[dict[str, Optional[set[str]]]] = None,
+    override: str = "",
 ) -> CheckResult:
     """Check whether *files* collide with any active reservation.
 
@@ -572,7 +587,7 @@ def check(
                         conflict = holder
                         break
 
-        if conflict is None:
+        if conflict is None or override == _OVERRIDE_PHRASE:
             free.append(domain)
         elif dom is not None and dom.advisory:
             advisory_held_list.append((domain, conflict))
@@ -676,6 +691,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="check for conflicts without acquiring the lock; exits 0 if "
              "the domain is free, 1 if held, and prints WOULD-RESERVE",
     )
+    pr_re.add_argument(
+        "--override", default="",
+        help=f"type '{_OVERRIDE_PHRASE}' to force-reserve despite a held domain "
+             "(conflict bypassed; entry logged with override=true)",
+    )
 
     pr_rp = sub.add_parser(
         "reserve-plan",
@@ -715,7 +735,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="comma-separated touched symbol names (overrides --diff-mode; "
              "enables symbol-level check without staged git diff)",
     )
-
+    pr_ck.add_argument(
+        "--override", default="",
+        help=f"type '{_OVERRIDE_PHRASE}' to treat held domains as free",
+    )
 
     pr_ls = sub.add_parser("list", help="list locks")
     pr_ls.add_argument("--status", default="active",
@@ -807,6 +830,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 domain=args.domain, pr=args.pr,
                 agent=args.agent, branch=args.branch,
                 symbols=syms,
+                override=getattr(args, "override", ""),
             )
         except DomainHeldError as exc:
             print(f"DENIED: {exc}", file=sys.stderr)
@@ -814,7 +838,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         except UnknownPathError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
-        print(f"RESERVED: {_fmt_entry(entry)}")
+        tag = "OVERRIDE-RESERVED" if entry.override else "RESERVED"
+        print(f"{tag}: {_fmt_entry(entry)}")
         return 0
 
     if args.cmd == "reserve-plan":
@@ -913,6 +938,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             log, registry,
             files=args.files, pr=args.pr,
             touched_symbols_by_path=touched_map,
+            override=getattr(args, "override", ""),
         )
         if args.json:
             payload = {
