@@ -107,12 +107,32 @@ echo "merge_train: python = $PYTHON_BIN ($PY_VERSION)"
 echo
 
 # ------------------------------------------------------------------------- #
-# 2. Install the package (development install from source)
+# 2. Install the package (uv tool install — one binary, shared across repos)
 # ------------------------------------------------------------------------- #
 
-echo "[1/5] Installing merge_train package..."
-uv tool install "$MERGE_TRAIN_ROOT" --reinstall --quiet
-echo "  ok: domain_lock at $(command -v domain_lock)"
+echo "[1/5] Installing merge_train CLI (domain_lock)..."
+_DL_BIN="$(command -v domain_lock 2>/dev/null || true)"
+_DL_SHEBANG="$(head -1 "$_DL_BIN" 2>/dev/null || true)"
+if [[ -n "$_DL_BIN" && "$_DL_SHEBANG" == *"uv/tools"* ]]; then
+    echo "  skip: already installed via uv at $_DL_BIN"
+    echo "  note: run 'uv tool install $MERGE_TRAIN_ROOT --reinstall' to upgrade"
+else
+    if [[ -n "$_DL_BIN" ]]; then
+        echo "  found stale binary at $_DL_BIN (not uv tool env) — reinstalling"
+    fi
+    uv tool install "$MERGE_TRAIN_ROOT" --reinstall --quiet
+    _DL_BIN="$(command -v domain_lock 2>/dev/null || true)"
+    echo "  installed: $_DL_BIN"
+fi
+
+# Verify the binary is functional
+if [[ -z "$(command -v domain_lock 2>/dev/null)" ]]; then
+    echo "  WARN: domain_lock not on PATH — add ~/.local/bin to PATH, then re-run."
+elif domain_lock check --help >/dev/null 2>&1; then
+    echo "  working: $(command -v domain_lock) — one binary, shared across all repos with file_domains.yaml"
+else
+    echo "  WARN: domain_lock binary found but --help failed — try: uv tool install $MERGE_TRAIN_ROOT --reinstall"
+fi
 echo
 
 # ------------------------------------------------------------------------- #
