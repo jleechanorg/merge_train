@@ -268,6 +268,13 @@ def _reserve_locked(
     dom = registry.domains.get(domain)
     limit = dom.concurrency_limit if dom is not None else 1
 
+    # Idempotency: if this PR already holds domain with same or covering symbols, no-op.
+    own_active = [e for e in active_on_domain if e.pr == pr]
+    if own_active:
+        existing = own_active[-1]
+        if not syms or (not existing.is_whole_domain and set(syms).issubset(set(existing.symbols))):
+            return existing  # already held — don't append duplicate
+
     other_holders = [e for e in active_on_domain if e.pr != pr]
     whole_domain_other = [e for e in other_holders if e.is_whole_domain]
     symbol_others = [e for e in other_holders if not e.is_whole_domain]
