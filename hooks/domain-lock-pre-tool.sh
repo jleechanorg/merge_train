@@ -44,6 +44,12 @@ if [[ -z "$REPO_ROOT" ]]; then
   exit 0
 fi
 
+# Relativize absolute file_path against REPO_ROOT so fnmatch patterns like
+# "tests/*.py" match correctly (absolute paths are never matched otherwise).
+if [[ "$file_path" == "$REPO_ROOT/"* ]]; then
+  file_path="${file_path#$REPO_ROOT/}"
+fi
+
 # ── Caching Layer ────────────────────────────────────────────────────────────
 SESSION_KEY="${CLAUDE_SESSION_ID:-${AO_SESSION_ID:-$$}}"
 REPO_HASH="$(echo "$REPO_ROOT" | md5 -q 2>/dev/null || echo "$REPO_ROOT" | md5sum 2>/dev/null | cut -d' ' -f1 || echo "unknown")"
