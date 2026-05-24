@@ -3,7 +3,7 @@
 #
 # What this does (idempotent):
 #   1. Verify Python >= 3.10 and git are available.
-#   2. `pip install -e` the merge_train package (development install).
+#   2. `uv tool install` the merge_train package (isolated binary install).
 #   3. In the target repo, create a `file_domains.yaml` skeleton if one
 #      doesn't already exist.
 #   4. Wire per-CLI session-start / session-stop domain-lock hooks:
@@ -91,6 +91,11 @@ if ! command -v git >/dev/null 2>&1; then
     exit 2
 fi
 
+if ! command -v uv >/dev/null 2>&1; then
+    echo "error: 'uv' not found on PATH. Install from https://docs.astral.sh/uv/getting-started/installation/" >&2
+    exit 2
+fi
+
 if [[ ! -d "$TARGET/.git" ]]; then
     echo "error: $TARGET is not a git repository (no .git directory)." >&2
     exit 2
@@ -106,8 +111,8 @@ echo
 # ------------------------------------------------------------------------- #
 
 echo "[1/5] Installing merge_train package..."
-"$PYTHON_BIN" -m pip install -e "$MERGE_TRAIN_ROOT" --quiet
-echo "  ok: $($PYTHON_BIN -c 'import merge_train; print("merge_train", merge_train.__version__)')"
+uv tool install "$MERGE_TRAIN_ROOT" --reinstall --quiet
+echo "  ok: domain_lock at $(command -v domain_lock)"
 echo
 
 # ------------------------------------------------------------------------- #
@@ -427,8 +432,8 @@ echo "[4/5] Smoke-testing CLI..."
 (
     cd "$TARGET"
     if ! command -v domain_lock >/dev/null 2>&1; then
-        echo "  WARN: 'domain_lock' not on PATH. The pip install may have placed"
-        echo "        it in a directory not in PATH. Try: $PYTHON_BIN -m merge_train.domain_lock --help"
+        echo "  WARN: 'domain_lock' not on PATH. Ensure ~/.local/bin is in PATH,"
+        echo "        or run: uv tool install $MERGE_TRAIN_ROOT"
     else
         domain_lock list --status active --registry "$TARGET/file_domains.yaml" 2>/dev/null \
             && echo "  ok: domain_lock CLI reachable, registry parses." \
@@ -458,7 +463,7 @@ cat <<NEXT_EOF
 
   4. Run the merge_train tests to confirm the install is healthy:
 
-       (cd $MERGE_TRAIN_ROOT && $PYTHON_BIN -m pytest tests/ -q)
+       (cd $MERGE_TRAIN_ROOT && python3 -m pytest tests/ -q)
 
 Docs:
   - $MERGE_TRAIN_ROOT/README.md
