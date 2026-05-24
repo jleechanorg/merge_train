@@ -82,19 +82,18 @@ else
   CLI="python3 -c 'import sys; from merge_train.domain_lock import main; sys.exit(main())'"
 fi
 
-# Check domain lock status for this file
-if ! eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" >/dev/null 2>&1; then
-  # Held by another PR! Get details to report
-  HELD_INFO="$(eval "$CLI" --registry "$REGISTRY" audit --files "$file_path" 2>/dev/null | python3 -c "import sys,json; data=json.load(sys.stdin); entries=[e for e in data.get('entries',[]) if e.get('status') == 'held']; print(entries[0]['reason'] if entries else 'held')" 2>/dev/null || echo "held")"
-  
-  # Output the deny decision JSON
-  echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"reason\":\"merge_train: REFUSED — domain is held: $HELD_INFO. Start a different task.\"}}"
+# Check domain lock status for this file — capture stdout for the denial message.
+# Use `if !` to avoid set -e trapping the non-zero exit from the check command.
+if ! CHECK_OUT="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" 2>&1)"; then
+  # check exits 1 and prints "HELD: <domain> by PR#<n> ..." to stdout
+  HELD_INFO="${CHECK_OUT:-held}"
+  echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"reason\":\"merge_train: REFUSED — $HELD_INFO. Start a different task.\"}}"
   exit 0
 fi
 
-# If domain is free, automatically reserve it
-DOMAINS="$(eval "$CLI" --registry "$REGISTRY" audit --files "$file_path" 2>/dev/null \
-  | python3 -c "import sys,json; data=json.load(sys.stdin); print(' '.join({e['domain'] for e in data.get('entries',[]) if e.get('domain') and e.get('domain')!='__unmapped__'}))" 2>/dev/null || true)"
+# If domain is free, automatically reserve it. Use check --json which already ran above.
+DOMAINS="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" --json 2>/dev/null \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d.get('free_domains',[]))) " 2>/dev/null || true)"
 
 if [[ -n "$DOMAINS" ]]; then
   for DOMAIN in $DOMAINS; do
