@@ -136,6 +136,41 @@ fi
 echo
 
 # ------------------------------------------------------------------------- #
+# 2b. Install hook scripts to stable location (~/.local/bin)
+#     Hooks must live outside the source repo so they work if the repo is
+#     moved/deleted, and so all wired paths are repo-independent.
+# ------------------------------------------------------------------------- #
+
+HOOKS_INSTALL_DIR="$HOME/.local/bin"
+mkdir -p "$HOOKS_INSTALL_DIR"
+
+_HOOK_NAMES=(
+    "domain-lock-session-start.sh"
+    "domain-lock-session-stop.sh"
+    "domain-lock-pre-tool.sh"
+    "gemini-domain-lock-guard.sh"
+)
+echo "[1b/5] Installing hook scripts to $HOOKS_INSTALL_DIR..."
+for _hname in "${_HOOK_NAMES[@]}"; do
+    _src="$MERGE_TRAIN_ROOT/hooks/$_hname"
+    _dst="$HOOKS_INSTALL_DIR/$_hname"
+    if [[ -f "$_src" ]]; then
+        cp "$_src" "$_dst"
+        chmod +x "$_dst"
+        echo "  installed: $_dst"
+    else
+        echo "  WARN: source hook not found: $_src (skipping)"
+    fi
+done
+echo
+
+# Canonical installed hook paths (used by all hook config sections below).
+DL_START="$HOOKS_INSTALL_DIR/domain-lock-session-start.sh"
+DL_STOP="$HOOKS_INSTALL_DIR/domain-lock-session-stop.sh"
+CLAUDE_PRE_TOOL="$HOOKS_INSTALL_DIR/domain-lock-pre-tool.sh"
+GEMINI_HOOK_INSTALLED="$HOOKS_INSTALL_DIR/gemini-domain-lock-guard.sh"
+
+# ------------------------------------------------------------------------- #
 # 3. file_domains.yaml skeleton
 # ------------------------------------------------------------------------- #
 
@@ -212,8 +247,6 @@ fi
 
 CODEX_DIR="$TARGET/.codex"
 CODEX_HOOKS="$CODEX_DIR/hooks.json"
-DL_START="$MERGE_TRAIN_ROOT/hooks/domain-lock-session-start.sh"
-DL_STOP="$MERGE_TRAIN_ROOT/hooks/domain-lock-session-stop.sh"
 
 echo "[3a/5] Codex per-repo hooks.json..."
 mkdir -p "$CODEX_DIR"
@@ -267,20 +300,25 @@ echo
 GEMINI_DIR="$TARGET/.gemini"
 GEMINI_GUARD="$GEMINI_DIR/domain-lock-guard.sh"
 GEMINI_SETTINGS="$GEMINI_DIR/settings.json"
-GEMINI_HOOK_TEMPLATE="$MERGE_TRAIN_ROOT/hooks/gemini-domain-lock-guard.sh"
 
 echo "[3b/5] Antigravity (.gemini) per-repo guard..."
 mkdir -p "$GEMINI_DIR"
 
-# Symlink the guard script (or copy if symlinks not desired)
-if [[ -L "$GEMINI_GUARD" ]] && [[ "$(readlink "$GEMINI_GUARD")" == "$GEMINI_HOOK_TEMPLATE" ]]; then
-    echo "  ok: $GEMINI_GUARD already symlinked."
-elif [[ -f "$GEMINI_GUARD" ]]; then
-    echo "  ok: $GEMINI_GUARD already exists (leaving untouched)."
+# Copy guard from installed location (not a symlink to source repo).
+if [[ -f "$GEMINI_GUARD" ]]; then
+    # Replace if it's a stale symlink to the old source-repo path
+    if [[ -L "$GEMINI_GUARD" ]]; then
+        rm "$GEMINI_GUARD"
+        cp "$GEMINI_HOOK_INSTALLED" "$GEMINI_GUARD"
+        chmod +x "$GEMINI_GUARD"
+        echo "  updated: $GEMINI_GUARD (replaced old source-repo symlink)"
+    else
+        echo "  ok: $GEMINI_GUARD already exists (leaving untouched)."
+    fi
 else
-    ln -s "$GEMINI_HOOK_TEMPLATE" "$GEMINI_GUARD"
-    chmod +x "$GEMINI_HOOK_TEMPLATE"
-    echo "  ok: $GEMINI_GUARD -> $GEMINI_HOOK_TEMPLATE"
+    cp "$GEMINI_HOOK_INSTALLED" "$GEMINI_GUARD"
+    chmod +x "$GEMINI_GUARD"
+    echo "  ok: $GEMINI_GUARD (copied from installed)"
 fi
 
 # Patch .gemini/settings.json to call the guard in BeforeTool
@@ -347,10 +385,9 @@ echo
 # ------------------------------------------------------------------------- #
 
 echo "[3d/5] Claude Code global ~/.claude/settings.json..."
-CLAUDE_PRE_TOOL="$MERGE_TRAIN_ROOT/hooks/domain-lock-pre-tool.sh"
-chmod +x "$DL_START" "$DL_STOP" "$CLAUDE_PRE_TOOL"
 
-DL_START="$DL_START" DL_STOP="$DL_STOP" CLAUDE_PRE_TOOL="$CLAUDE_PRE_TOOL" "$PYTHON_BIN" -c '
+DL_START="$DL_START" DL_STOP="$DL_STOP" CLAUDE_PRE_TOOL="$CLAUDE_PRE_TOOL" \
+MERGE_TRAIN_ROOT="$MERGE_TRAIN_ROOT" "$PYTHON_BIN" -c '
 import os, sys, json
 from pathlib import Path
 
@@ -362,6 +399,7 @@ if not settings_path.exists():
 dl_start = os.environ["DL_START"]
 dl_stop = os.environ["DL_STOP"]
 claude_pre_tool = os.environ["CLAUDE_PRE_TOOL"]
+merge_train_root = os.environ["MERGE_TRAIN_ROOT"]
 
 with open(settings_path, "r") as f:
     try:
@@ -374,6 +412,23 @@ with open(settings_path, "r") as f:
 if "hooks" not in data:
     data["hooks"] = {}
 hooks = data["hooks"]
+
+def _is_stale_source_cmd(cmd: str) -> bool:
+    """Return True if cmd points into the merge_train source repo (old style)."""
+    return merge_train_root in cmd and "hooks/" in cmd
+
+def _remove_stale(hook_list: list) -> int:
+    """Remove stale source-repo entries from a hooks list. Returns count removed."""
+    removed = 0
+    for entry in hook_list:
+        orig = entry.get("hooks", [])
+        entry["hooks"] = [h for h in orig if not _is_stale_source_cmd(h.get("command", ""))]
+        removed += len(orig) - len(entry["hooks"])
+    return removed
+
+# Migrate stale source-repo entries out of all hook types
+for event_hooks in hooks.values():
+    _remove_stale(event_hooks)
 
 # 1. Patch SessionStart
 session_start_hooks = hooks.setdefault("SessionStart", [])
@@ -428,7 +483,7 @@ for matcher in ["Edit", "Write"]:
     if not matcher_entry:
         matcher_entry = {"matcher": matcher, "hooks": []}
         pre_tool_hooks.append(matcher_entry)
-    
+
     pre_hook_exists = any(h.get("command") == pre_tool_cmd for h in matcher_entry["hooks"])
     if not pre_hook_exists:
         matcher_entry["hooks"].append({
