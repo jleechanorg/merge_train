@@ -1,0 +1,57 @@
+# merge_train domain registry — used by domain-lock hooks at Edit/Write time.
+
+domains:
+  core-lock:
+    paths:
+      - "merge_train/domain_lock.py"
+    owners:
+      - "@merge-train-core"
+
+  domain-recommender:
+    paths:
+      - "merge_train/domain_recommender.py"
+      - "merge_train/predict.py"
+    owners:
+      - "@merge-train-core"
+
+  symbols:
+    paths:
+      - "merge_train/symbols.py"
+      - "merge_train/symbol_discovery.py"
+    owners:
+      - "@merge-train-core"
+
+  hooks:
+    paths:
+      - "hooks/*.sh"
+    owners:
+      - "@infra"
+    concurrency_limit: 2
+
+  tests:
+    paths:
+      - "tests/*.py"
+    owners:
+      - "@merge-train-core"
+    concurrency_limit: 3
+
+  docs:
+    paths:
+      - "docs/*.md"
+      - "README.md"
+      - "CHANGELOG.md"
+    owners:
+      - "@docs"
+    advisory: true
+
+  ci-workflows:
+    paths:
+      - ".github/workflows/*.yml"
+      - ".github/workflows/*.yaml"
+    owners:
+      - "@infra"
+
+  examples:
+    paths:
+      - "examples/*.yaml"
+    per_pr_unique: true
