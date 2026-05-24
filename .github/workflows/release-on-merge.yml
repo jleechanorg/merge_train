@@ -1,0 +1,42 @@
+name: release-domain-lock-on-merge
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  release-lock:
+    name: Release domain lock for PR ${{ github.event.pull_request.number }}
+    runs-on: ubuntu-latest
+    # Only bother if this repo has a domain registry
+    if: ${{ hashFiles('file_domains.yaml') != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python + uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install merge_train
+        run: uv tool install .
+
+      - name: Release lock for PR #${{ github.event.pull_request.number }}
+        env:
+          # Allow override of log path for teams using a shared network store.
+          # Default: ~/.merge_train/locks/<repo-hash>/pr_domain_locks.jsonl
+          MERGE_TRAIN_LOG: ${{ vars.MERGE_TRAIN_LOG || '' }}
+        run: |
+          PR="${{ github.event.pull_request.number }}"
+          STATUS="${{ github.event.pull_request.merged && 'MERGED' || 'CLOSED' }}"
+          echo "PR #${PR} ${STATUS} — releasing domain locks"
+          if domain_lock release --pr "$PR" --note "auto:${STATUS}:github-actions"; then
+            echo "Locks released for PR #${PR}"
+          else
+            # No active locks is normal (PR may never have reserved, or already released)
+            echo "No active domain locks found for PR #${PR} (ok)"
+          fi

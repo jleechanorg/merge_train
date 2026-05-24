@@ -144,7 +144,37 @@ fi
 CHECK_JSON="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" ${SYMBOLS_ARG} --json 2>/dev/null || true)"
 if ! eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" ${SYMBOLS_ARG} >/dev/null 2>&1; then
   # check exits 1: real enforced domain is held.
-  HELD_INFO="$(echo "$CHECK_JSON" | python3 -c "
+  # ── Stale-lock GC ──────────────────────────────────────────────────────────
+  # For each holder, check if their PR has already merged/closed via gh.
+  # If so, release the stale lock and re-run the check; it may now be free.
+  REPO_REMOTE="$(git remote get-url origin 2>/dev/null | sed 's|.*github.com[:/]||;s|\.git$||' || true)"
+  RELEASED_STALE=0
+  if [[ -n "$REPO_REMOTE" ]] && command -v gh >/dev/null 2>&1; then
+    HOLDER_PRS="$(echo "$CHECK_JSON" | python3 -c "
+import sys,json
+try:
+  d=json.load(sys.stdin)
+  prs={str(x['holder']['pr']) for x in d.get('held',[])}
+  print(' '.join(prs))
+except: print('')
+" 2>/dev/null || true)"
+    for HOLDER_PR in $HOLDER_PRS; do
+      [[ "$HOLDER_PR" == "0" ]] && continue
+      PR_STATE="$(gh pr view "$HOLDER_PR" --repo "$REPO_REMOTE" --json state,mergedAt --jq '.state' 2>/dev/null || true)"
+      if [[ "$PR_STATE" == "MERGED" || "$PR_STATE" == "CLOSED" ]]; then
+        eval "$CLI" --registry "$REGISTRY" release --pr "$HOLDER_PR" --note "stale:auto-gc:$PR_STATE" >/dev/null 2>&1 || true
+        RELEASED_STALE=1
+      fi
+    done
+  fi
+  # Re-run check after GC; if all stale locks released, allow and continue.
+  if [[ "$RELEASED_STALE" -eq 1 ]]; then
+    CHECK_JSON="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" ${SYMBOLS_ARG} --json 2>/dev/null || true)"
+    if eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" ${SYMBOLS_ARG} >/dev/null 2>&1; then
+      # GC cleared the block — fall through to reserve+allow below.
+      :
+    else
+      HELD_INFO="$(echo "$CHECK_JSON" | python3 -c "
 import sys,json
 try:
   d=json.load(sys.stdin)
@@ -152,8 +182,21 @@ try:
   print('; '.join(parts))
 except: print('held')
 " 2>/dev/null || echo "held")"
-  echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"reason\":\"merge_train: REFUSED — $HELD_INFO. Start a different task.\"}}"
-  exit 0
+      echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"reason\":\"merge_train: REFUSED — $HELD_INFO. Start a different task.\"}}"
+      exit 0
+    fi
+  else
+    HELD_INFO="$(echo "$CHECK_JSON" | python3 -c "
+import sys,json
+try:
+  d=json.load(sys.stdin)
+  parts=[f\"HELD: {x['domain']} by PR#{x['holder']['pr']} agent={x['holder']['agent']} branch={x['holder']['branch']}\" for x in d.get('held',[])]
+  print('; '.join(parts))
+except: print('held')
+" 2>/dev/null || echo "held")"
+    echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"reason\":\"merge_train: REFUSED — $HELD_INFO. Start a different task.\"}}"
+    exit 0
+  fi
 fi
 
 # If domain is free, automatically reserve it (with symbol scope if extracted).
