@@ -1077,3 +1077,70 @@ def test_cli_reserve_plan_dry_run_one_held(tmp_path: Path):
     assert r.returncode == 1
     assert "HELD" in r.stderr
     assert "WOULD-RESERVE" in r.stdout
+
+
+# ── Advisory domain tests ─────────────────────────────────────────────────────
+
+def test_advisory_domain_does_not_block(tmp_path: Path):
+    """Advisory domains: check() returns ok=True with advisory_held populated."""
+    reg = _reg({
+        "domains": {
+            "enforced": {"paths": ["a.py"]},
+            "advisory_dom": {"paths": ["b.py"], "advisory": True},
+        }
+    })
+    log = LockLog(tmp_path / "locks.jsonl")
+    reserve(log, reg, domain="advisory_dom", pr=1, agent="a1", branch="b1")
+
+    res = check(log, reg, files=["b.py"], pr=2)
+    assert res.ok, "advisory conflict must not block (ok must be True)"
+    assert res.held == []
+    assert len(res.advisory_held) == 1
+    assert res.advisory_held[0][0] == "advisory_dom"
+
+
+def test_enforced_domain_still_blocks_when_advisory_also_held(tmp_path: Path):
+    """Mix: advisory allows, but enforced still blocks."""
+    reg = _reg({
+        "domains": {
+            "enforced": {"paths": ["a.py"]},
+            "advisory_dom": {"paths": ["b.py"], "advisory": True},
+        }
+    })
+    log = LockLog(tmp_path / "locks.jsonl")
+    reserve(log, reg, domain="enforced", pr=1, agent="a1", branch="b1")
+    reserve(log, reg, domain="advisory_dom", pr=1, agent="a1", branch="b1")
+
+    # Only enforced file: blocked
+    res = check(log, reg, files=["a.py"], pr=2)
+    assert not res.ok
+    assert len(res.held) == 1
+    assert res.advisory_held == []
+
+    # Only advisory file: allowed with warning
+    res2 = check(log, reg, files=["b.py"], pr=2)
+    assert res2.ok
+    assert res2.advisory_held[0][0] == "advisory_dom"
+
+    # Both files: blocked (enforced wins)
+    res3 = check(log, reg, files=["a.py", "b.py"], pr=2)
+    assert not res3.ok
+    assert res3.held[0][0] == "enforced"
+    assert res3.advisory_held[0][0] == "advisory_dom"
+
+
+def test_advisory_not_in_free_domains_so_hook_skips_reserve(tmp_path: Path):
+    """Advisory held domains must not appear in free_domains (hook skips reserve for them)."""
+    reg = _reg({
+        "domains": {
+            "advisory_dom": {"paths": ["b.py"], "advisory": True},
+        }
+    })
+    log = LockLog(tmp_path / "locks.jsonl")
+    reserve(log, reg, domain="advisory_dom", pr=1, agent="a1", branch="b1")
+
+    # check() for PR 2: domain is NOT in free (can't be reserved), but ok=True
+    res = check(log, reg, files=["b.py"], pr=2)
+    assert res.ok
+    assert "advisory_dom" not in res.free, "advisory held domain must not be in free_domains"
+    assert res.advisory_held[0][0] == "advisory_dom"
