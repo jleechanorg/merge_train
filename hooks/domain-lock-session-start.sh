@@ -48,11 +48,24 @@ fi
 BRANCH="${MERGE_TRAIN_BRANCH:-$(git symbolic-ref --short HEAD 2>/dev/null || echo "")}"
 PR="${MERGE_TRAIN_PR:-}"
 if [[ -z "$PR" && -n "$BRANCH" ]]; then
-  # Extract first 2+ digit number from branch name (e.g. feat/pr-7000-foo → 7000)
+  # 1. Try to extract first 2+ digit number from branch name (e.g. feat/pr-7000-foo → 7000)
   PR="$(printf '%s\n' "$BRANCH" | grep -oE '[0-9]{2,}' | head -1 || true)"
 fi
-# If still no PR, use 0 (own-PR check — non-blocking for self-owned locks)
-PR="${PR:-0}"
+
+if [[ -z "$PR" && -n "$BRANCH" ]]; then
+  # 2. Try to query GitHub API for open PR on this branch
+  if command -v gh >/dev/null 2>&1; then
+    PR="$(gh pr view --json number --jq '.number' 2>/dev/null || true)"
+  fi
+fi
+
+if [[ -z "$PR" ]]; then
+  # 3. Generate stable pseudo-PR in the 900000+ range based on branch name checksum
+  # (ensures different branches have unique lock namespaces and PR is never 0)
+  BRANCH_NAME="${BRANCH:-unknown}"
+  checksum_str="$(printf '%s' "$BRANCH_NAME" | cksum 2>/dev/null | cut -d' ' -f1 || echo "0")"
+  PR=$((900000 + (checksum_str % 100000)))
+fi
 
 # ── 3. Detect agent name ──────────────────────────────────────────────────────
 AGENT="${MERGE_TRAIN_AGENT:-}"

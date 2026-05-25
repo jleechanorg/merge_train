@@ -792,6 +792,10 @@ def _fmt_entry(e: LockEntry) -> str:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = _build_parser().parse_args(argv)
+    if getattr(args, "pr", None) == 0:
+        print("error: PR number cannot be 0 (PR 0 is prohibited)", file=sys.stderr)
+        return 2
+
     if args.log == DEFAULT_LOG:
         cwd = Path(args.git_cwd) if args.git_cwd else None
         args.log = _resolve_default_log(cwd)

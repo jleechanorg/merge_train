@@ -1144,3 +1144,14 @@ def test_advisory_not_in_free_domains_so_hook_skips_reserve(tmp_path: Path):
     assert res.ok
     assert "advisory_dom" not in res.free, "advisory held domain must not be in free_domains"
     assert res.advisory_held[0][0] == "advisory_dom"
+
+
+def test_cli_pr_zero_is_prohibited(tmp_path: Path):
+    """CLI must fail and return exit 2 if --pr is 0."""
+    r = _run_cli(tmp_path, "reserve", "--domain", "d1", "--pr", "0", "--agent", "alice", "--branch", "b")
+    assert r.returncode == 2
+    assert "error: PR number cannot be 0" in r.stderr
+
+    r2 = _run_cli(tmp_path, "check", "--files", "a.py", "--pr", "0")
+    assert r2.returncode == 2
+    assert "error: PR number cannot be 0" in r2.stderr
