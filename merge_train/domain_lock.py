@@ -962,29 +962,40 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(json.dumps(payload, indent=2))
         else:
             if result.unmapped:
-                print(f"WARN: unmapped files (no domain): "
+                print(f"⚠️  WARN: unmapped files (no domain): "
                       f"{', '.join(result.unmapped)}", file=sys.stderr)
             if diff_fallback:
-                print(f"WARN: symbol-resolution fallback (whole-domain): "
+                print(f"⚠️  WARN: symbol-resolution fallback (whole-domain): "
                       f"{', '.join(diff_fallback)}", file=sys.stderr)
-            for d, holder in result.advisory_held:
-                sym_note = (
-                    f" symbols={','.join(holder.symbols)}"
-                    if holder.symbols else ""
-                )
-                print(f"ADVISORY: {d} by PR#{holder.pr} "
-                      f"agent={holder.agent} branch={holder.branch}{sym_note}")
-            if not result.held:
-                print(f"FREE: {len(result.free)} domain(s) clear "
-                      f"({', '.join(result.free) or 'none'})")
-            else:
+            
+            # Print a neat header
+            print("\n┌── 🚄 merge_train Domain Status ──────────────────────────────")
+            
+            if result.advisory_held:
+                print("│  ⚠️  ADVISORY CONFLICTS (informational, not blocking):")
+                for d, holder in result.advisory_held:
+                    sym_note = (
+                        f" symbols={','.join(holder.symbols)}"
+                        if holder.symbols else ""
+                    )
+                    print(f"│     • ADVISORY: {d} by PR#{holder.pr} agent={holder.agent} branch={holder.branch}{sym_note}")
+                print("│")
+            
+            if result.held:
+                print("│  ❌ HELD CONFLICTS (blocking):")
                 for d, holder in result.held:
                     sym_note = (
                         f" symbols={','.join(holder.symbols)}"
                         if holder.symbols else ""
                     )
-                    print(f"HELD: {d} by PR#{holder.pr} "
-                          f"agent={holder.agent} branch={holder.branch}{sym_note}")
+                    print(f"│     • HELD: {d} by PR#{holder.pr} agent={holder.agent} branch={holder.branch}{sym_note}")
+                print("│")
+            
+            if not result.held:
+                print(f"│  ✅ FREE: {len(result.free)} domain(s) clear "
+                      f"({', '.join(result.free) or 'none'})")
+            
+            print("└──────────────────────────────────────────────────────────────\n")
         return 0 if result.ok else 1
 
     if args.cmd == "list":

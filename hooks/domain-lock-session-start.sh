@@ -166,9 +166,22 @@ for domain, syms in domain_symbols.items():
         capture_output=True, text=True, cwd=repo_root
     )
     if result.returncode == 0:
-        print(f"merge_train: RESERVED: {domain} ({sym_str}) PR#{pr}", file=sys.stderr)
+        print(f"merge_train:  ✅ RESERVED: {domain} ({sym_str}) for PR #{pr}", file=sys.stderr)
     else:
-        print(f"merge_train: reserve failed for {domain}: {result.stderr.strip()}", file=sys.stderr)
+        is_advisory = False
+        try:
+            dom_meta = registry.domains.get(domain)
+            if dom_meta and dom_meta.advisory:
+                is_advisory = True
+        except:
+            pass
+        err_msg = result.stderr.strip()
+        if "DENIED: " in err_msg:
+            err_msg = err_msg.replace("DENIED: ", "")
+        if is_advisory:
+            print(f"merge_train:  ⚠️  Advisory hold active for {domain}: {err_msg}", file=sys.stderr)
+        else:
+            print(f"merge_train:  ❌ Reserve failed for {domain}: {err_msg}", file=sys.stderr)
 PYEOF
   python3 "$_MT_SCRIPT" "$REPO_ROOT" "$REGISTRY" "$PR" "$AGENT" "$BRANCH" "${FILES[@]}" 2>&1 >&2 || true
   rm -f "$_MT_SCRIPT"
