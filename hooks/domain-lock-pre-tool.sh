@@ -44,6 +44,18 @@ if [[ -z "$REPO_ROOT" ]]; then
   exit 0
 fi
 
+# Skip checking entirely if the file is outside the repository root.
+# (Memory files like ~/.claude/projects/... or global configs are never checked)
+if [[ "$file_path" != "$REPO_ROOT/"* && "$file_path" == /* ]]; then
+  echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
+  exit 0
+fi
+
+if [[ "$file_path" == "~"* ]]; then
+  echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
+  exit 0
+fi
+
 # Relativize absolute file_path against REPO_ROOT so fnmatch patterns like
 # "tests/*.py" match correctly (absolute paths are never matched otherwise).
 if [[ "$file_path" == "$REPO_ROOT/"* ]]; then
