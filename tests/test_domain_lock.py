@@ -1155,3 +1155,24 @@ def test_cli_pr_zero_is_prohibited(tmp_path: Path):
     r2 = _run_cli(tmp_path, "check", "--files", "a.py", "--pr", "0")
     assert r2.returncode == 2
     assert "error: PR number cannot be 0" in r2.stderr
+
+
+def test_logging_to_tmp(tmp_path: Path):
+    """Test that all CLI invocations log their execution details to /tmp/merge_train.log."""
+    import os
+    log_path = "/tmp/merge_train.log"
+    
+    if os.path.exists(log_path):
+        try:
+            os.remove(log_path)
+        except PermissionError:
+            pass
+            
+    r = _run_cli(tmp_path, "list", "--status", "all")
+    assert r.returncode == 0
+    
+    assert os.path.exists(log_path), f"Log file at {log_path} was not created"
+    with open(log_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "list --status all" in content
+    assert "exit=0" in content

@@ -790,7 +790,45 @@ def _fmt_entry(e: LockEntry) -> str:
     return base
 
 
+def _log_to_tmp(argv: list[str], exit_code: int, error_msg: str = ""):
+    try:
+        log_path = "/tmp/merge_train.log"
+        import datetime, os
+        timestamp = datetime.datetime.now().isoformat()
+        cmd_str = " ".join(argv)
+        pid = os.getpid()
+        log_line = f"[{timestamp}] PID={pid} cmd='{cmd_str}' exit={exit_code}"
+        if error_msg:
+            log_line += f" err='{error_msg}'"
+        log_line += "\n"
+        
+        try:
+            fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o666)
+            with open(fd, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except PermissionError:
+            pass
+    except Exception:
+        pass
+
+
 def main(argv: Optional[list[str]] = None) -> int:
+    import sys
+    run_argv = argv if argv is not None else sys.argv[1:]
+    exit_code = 2
+    err_msg = ""
+    try:
+        exit_code = _main_impl(argv)
+        return exit_code
+    except Exception as e:
+        err_msg = str(e)
+        exit_code = 2
+        raise
+    finally:
+        _log_to_tmp(run_argv, exit_code, err_msg)
+
+
+def _main_impl(argv: Optional[list[str]] = None) -> int:
     args = _build_parser().parse_args(argv)
     if getattr(args, "pr", None) == 0:
         print("error: PR number cannot be 0 (PR 0 is prohibited)", file=sys.stderr)
