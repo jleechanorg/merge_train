@@ -328,7 +328,7 @@ def _make_diff_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
     reg.write_text(yaml.safe_dump({
         "domains": {"shared": {"paths": ["shared.py"]}}
     }))
-    log = repo / "log.jsonl"
+    log = tmp_path / "log.jsonl"
     return repo, reg, log
 
 

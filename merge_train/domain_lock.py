@@ -38,6 +38,20 @@ DEFAULT_REGISTRY = "file_domains.yaml"
 DEFAULT_LOG = "<auto>"
 
 
+def _get_git_toplevel(cwd: Path | str | None = None) -> Path | None:
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=False,
+            cwd=str(cwd) if cwd is not None else None,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return Path(res.stdout.strip()).resolve()
+    except FileNotFoundError:
+        pass
+    return None
+
+
 def _resolve_default_log(cwd: Path | str | None = None) -> str:
     base = Path.home() / ".merge_train" / "locks"
     try:
@@ -881,6 +895,20 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
     if args.log == DEFAULT_LOG:
         cwd = Path(args.git_cwd) if args.git_cwd else None
         args.log = _resolve_default_log(cwd)
+
+    if args.log:
+        try:
+            log_path = Path(args.log).resolve()
+            curr = log_path
+            while not curr.exists() and curr.parent != curr:
+                curr = curr.parent
+            if curr.exists():
+                toplevel = _get_git_toplevel(curr)
+                if toplevel is not None:
+                    print(f"error: lock log path '{args.log}' cannot be inside a git repository worktree", file=sys.stderr)
+                    return 2
+        except Exception:
+            pass
 
     if args.cmd == "reserve":
         try:
