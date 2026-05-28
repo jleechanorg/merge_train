@@ -233,7 +233,27 @@ class LockLog:
         for entry in self.entries():
             key = (entry.domain, entry.pr, tuple(entry.symbols))
             latest[key] = entry
-        return [e for e in latest.values() if e.status == "active"]
+        
+        active_entries = []
+        for entry in latest.values():
+            if entry.status != "active":
+                continue
+            if entry.symbols:
+                try:
+                    dt_str = entry.opened_at
+                    if dt_str.endswith("Z"):
+                        dt_str = dt_str[:-1] + "+00:00"
+                    opened_dt = datetime.fromisoformat(dt_str)
+                    if opened_dt.tzinfo is None:
+                        now_dt = datetime.now()
+                    else:
+                        now_dt = datetime.now(timezone.utc)
+                    if (now_dt - opened_dt).total_seconds() > 14 * 24 * 3600:
+                        continue
+                except Exception:
+                    pass
+            active_entries.append(entry)
+        return active_entries
 
 
 def load_registry(path: str | os.PathLike = DEFAULT_REGISTRY) -> Registry:

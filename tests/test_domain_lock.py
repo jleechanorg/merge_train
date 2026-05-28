@@ -1176,3 +1176,36 @@ def test_logging_to_tmp(tmp_path: Path):
         content = f.read()
     assert "list --status all" in content
     assert "exit=0" in content
+
+
+def test_ignore_stale_symbol_locks(tmp_path: Path):
+    """Symbol locks older than 14 days must be ignored."""
+    reg = _reg({
+        "domains": {
+            "d1": {"paths": ["a.py"]},
+            "d2": {"paths": ["b.py"]},
+        }
+    })
+    log = LockLog(tmp_path / "locks.jsonl")
+    
+    import datetime
+    from datetime import timezone
+    old_time = (datetime.datetime.now(timezone.utc) - datetime.timedelta(days=15)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    from merge_train.domain_lock import LockEntry
+    e1 = LockEntry(domain="d1", pr=1, agent="a", branch="b", opened_at=old_time, status="active", symbols=())
+    log.append(e1)
+    
+    e2 = LockEntry(domain="d2", pr=2, agent="a", branch="b", opened_at=old_time, status="active", symbols=("my_symbol",))
+    log.append(e2)
+    
+    recent_time = datetime.datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    e3 = LockEntry(domain="d2", pr=3, agent="a", branch="b", opened_at=recent_time, status="active", symbols=("other_symbol",))
+    log.append(e3)
+    
+    active = log.active_all()
+    active_prs = [e.pr for e in active]
+    
+    assert 1 in active_prs
+    assert 3 in active_prs
+    assert 2 not in active_prs
