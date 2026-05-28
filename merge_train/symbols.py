@@ -320,9 +320,7 @@ def resolve_touched_symbols(
     for path in paths:
         try:
             per_file[path] = touched_symbols_for_staged_file(path, cwd=cwd)
-        except UnsupportedLanguageError:
-            fallback.append(path)
-        except (RuntimeError, FileNotFoundError):
+        except Exception:
             fallback.append(path)
     return per_file, fallback
 

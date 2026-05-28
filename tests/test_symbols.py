@@ -422,3 +422,16 @@ def test_touched_markdown_symbols_no_overlap():
     diff = "@@ -1,1 +1,1 @@\n-# Plan\n+# Changed Plan"
     syms = _touched_markdown_symbols(new_source=src, diff_text=diff)
     assert len(syms) == 0
+
+
+def test_resolve_touched_symbols_general_exception_goes_to_fallback(git_repo: Path, monkeypatch):
+    import merge_train.symbols
+    def mock_raise(*args, **kwargs):
+        raise ValueError("unexpected parse error")
+    
+    monkeypatch.setattr(merge_train.symbols, "touched_symbols_for_staged_file", mock_raise)
+    
+    per_file, fallback = resolve_touched_symbols(["any_file.py"], cwd=git_repo)
+    assert "any_file.py" not in per_file
+    assert "any_file.py" in fallback
+
