@@ -17,7 +17,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -161,6 +160,7 @@ class LockLog:
 
     def __init__(self, path: str | os.PathLike):
         self.path = Path(path)
+        self._active_fd = None
 
     @contextmanager
     def lock(self):
@@ -169,32 +169,55 @@ class LockLog:
         On platforms without fcntl (e.g. Windows), this is a no-op.
         """
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        fd = self.path.open("a", encoding="utf-8")
+        fd = self.path.open("a+", encoding="utf-8")
         try:
             if _HAS_FCNTL:
                 fcntl.flock(fd, fcntl.LOCK_EX)
+            self._active_fd = fd
             yield fd
         finally:
+            self._active_fd = None
             if _HAS_FCNTL:
                 fcntl.flock(fd, fcntl.LOCK_UN)
             fd.close()
 
     def append(self, entry: LockEntry) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(entry.to_json() + "\n")
+        if self._active_fd is not None:
+            self._active_fd.seek(0, 2)
+            self._active_fd.write(entry.to_json() + "\n")
+            self._active_fd.flush()
+        else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a", encoding="utf-8") as fh:
+                fh.write(entry.to_json() + "\n")
 
     def entries(self) -> list[LockEntry]:
-        if not self.path.exists():
-            return []
-        out: list[LockEntry] = []
-        with self.path.open("r", encoding="utf-8") as fh:
-            for raw in fh:
+        if self._active_fd is not None:
+            self._active_fd.seek(0)
+            out: list[LockEntry] = []
+            for raw in self._active_fd:
                 raw = raw.strip()
                 if not raw or raw.startswith("#"):
                     continue
                 out.append(LockEntry.from_json(raw))
-        return out
+            return out
+        else:
+            if not self.path.exists():
+                return []
+            out: list[LockEntry] = []
+            with self.path.open("r", encoding="utf-8") as fh:
+                if _HAS_FCNTL:
+                    fcntl.flock(fh, fcntl.LOCK_SH)
+                try:
+                    for raw in fh:
+                        raw = raw.strip()
+                        if not raw or raw.startswith("#"):
+                            continue
+                        out.append(LockEntry.from_json(raw))
+                finally:
+                    if _HAS_FCNTL:
+                        fcntl.flock(fh, fcntl.LOCK_UN)
+            return out
 
     def active(self) -> dict[str, LockEntry]:
         """Active reservations keyed by domain — *file-level only*.
@@ -813,7 +836,8 @@ def _fmt_entry(e: LockEntry) -> str:
 def _log_to_tmp(argv: list[str], exit_code: int, error_msg: str = ""):
     try:
         log_path = "/tmp/merge_train.log"
-        import datetime, os
+        import datetime
+        import os
         timestamp = datetime.datetime.now().isoformat()
         cmd_str = " ".join(argv)
         pid = os.getpid()
