@@ -174,7 +174,15 @@ if ! eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" ${
   # ── Stale-lock GC ──────────────────────────────────────────────────────────
   # For each holder, check if their PR has already merged/closed via gh.
   # If so, release the stale lock and re-run the check; it may now be free.
-  REPO_REMOTE="$(git remote get-url origin 2>/dev/null | sed 's|.*github.com[:/]||;s|\.git$||' || true)"
+  echo "merge_train: [Diagnostics] File '$file_path' is locked. Checking active lock holders for stale states..." >&2
+  REPO_REMOTE="$(git remote get-url origin 2>/dev/null | python3 -c "
+import sys
+url = sys.stdin.read().strip()
+if url:
+    if url.endswith('.git'): url = url[:-4]
+    print(url.replace(':', '/').split('github.com/')[-1].lstrip('/'))
+" 2>/dev/null || true)"
+  
   RELEASED_STALE=0
   if [[ -n "$REPO_REMOTE" ]] && command -v gh >/dev/null 2>&1; then
     HOLDER_PRS="$(echo "$CHECK_JSON" | python3 -c "
@@ -185,19 +193,33 @@ try:
   print(' '.join(prs))
 except: print('')
 " 2>/dev/null || true)"
+    echo "merge_train: [Diagnostics] Found active lock holder PRs: $HOLDER_PRS" >&2
     for HOLDER_PR in $HOLDER_PRS; do
       [[ "$HOLDER_PR" == "0" ]] && continue
-      PR_STATE="$(gh pr view "$HOLDER_PR" --repo "$REPO_REMOTE" --json state,mergedAt --jq '.state' 2>/dev/null || true)"
+      echo "merge_train: [Diagnostics] Querying state for PR#$HOLDER_PR in repository $REPO_REMOTE..." >&2
+      PR_STATE="$(gh pr view "$HOLDER_PR" --repo "$REPO_REMOTE" --json state --jq '.state' 2>/dev/null || true)"
+      echo "merge_train: [Diagnostics] PR#$HOLDER_PR state is '$PR_STATE'" >&2
       if [[ "$PR_STATE" == "MERGED" || "$PR_STATE" == "CLOSED" ]]; then
-        eval "$CLI" --registry "$REGISTRY" release --pr "$HOLDER_PR" --note "stale:auto-gc:$PR_STATE" >/dev/null 2>&1 || true
+        echo "merge_train: [Diagnostics] Lock held by PR#$HOLDER_PR is stale (state: $PR_STATE). Releasing lock..." >&2
+        eval "$CLI" --registry "$REGISTRY" release --pr "$HOLDER_PR" --note "stale:auto-gc:$PR_STATE" --force >/dev/null 2>&1 || true
         RELEASED_STALE=1
       fi
     done
+  else
+    if [[ -z "$REPO_REMOTE" ]]; then
+      echo "merge_train: [Diagnostics] Git remote 'origin' not found or failed to parse. Stale check skipped." >&2
+    fi
+    if ! command -v gh >/dev/null 2>&1; then
+      echo "merge_train: [Diagnostics] GitHub CLI 'gh' not found. Stale check skipped." >&2
+    fi
   fi
+
   # Re-run check after GC; if all stale locks released, allow and continue.
   if [[ "$RELEASED_STALE" -eq 1 ]]; then
+    echo "merge_train: [Diagnostics] Re-evaluating lock status after stale lock cleanup..." >&2
     CHECK_JSON="$(eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" ${SYMBOLS_ARG} --json 2>/dev/null || true)"
     if eval "$CLI" --registry "$REGISTRY" check --files "$file_path" --pr "$PR" ${SYMBOLS_ARG} >/dev/null 2>&1; then
+      echo "merge_train: [Diagnostics] Success! Stale lock cleanup cleared the conflict." >&2
       # GC cleared the block — fall through to reserve+allow below.
       :
     else
@@ -209,6 +231,7 @@ try:
   print('; '.join(parts))
 except: print('held')
 " 2>/dev/null || echo "held")"
+      echo "merge_train: [Diagnostics] BLOCKING: Stale locks released, but active conflict remains: $HELD_INFO" >&2
       echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"reason\":\"merge_train: REFUSED — $HELD_INFO. Start a different task.\"}}"
       exit 0
     fi
@@ -221,6 +244,7 @@ try:
   print('; '.join(parts))
 except: print('held')
 " 2>/dev/null || echo "held")"
+    echo "merge_train: [Diagnostics] BLOCKING: No stale locks could be cleaned up. Active conflict remains: $HELD_INFO" >&2
     echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"reason\":\"merge_train: REFUSED — $HELD_INFO. Start a different task.\"}}"
     exit 0
   fi

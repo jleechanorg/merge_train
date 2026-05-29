@@ -52,6 +52,24 @@ def _get_git_toplevel(cwd: Path | str | None = None) -> Path | None:
     return None
 
 
+def _get_repo_name(remote_url: str) -> str:
+    url = remote_url.strip()
+    if not url:
+        return ""
+    if url.endswith(".git"):
+        url = url[:-4]
+    if "github.com:" in url:
+        return url.split("github.com:")[-1]
+    elif "github.com/" in url:
+        return url.split("github.com/")[-1]
+    elif ":" in url:
+        return url.split(":")[-1]
+    elif url.count("/") >= 2:
+        parts = url.split("/")
+        return "/".join(parts[-2:])
+    return url
+
+
 def _resolve_default_log(cwd: Path | str | None = None) -> str:
     base = Path.home() / ".merge_train" / "locks"
     try:
@@ -776,6 +794,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pr_rl.add_argument("--pr", type=int, required=True)
     pr_rl.add_argument("--domain", default=None)
     pr_rl.add_argument("--note", default=None)
+    pr_rl.add_argument("--force", action="store_true", default=False,
+                       help="Force release even if the PR is still open and touches domain files")
 
     pr_ck = sub.add_parser("check", help="check files against active reservations")
     pr_ck.add_argument("--files", nargs="+", required=True)
@@ -1020,6 +1040,77 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
 
     if args.cmd == "release":
         log = LockLog(args.log)
+        if not getattr(args, "force", False):
+            repo_name = None
+            try:
+                res = subprocess.run(
+                    ["git", "remote", "get-url", "origin"],
+                    capture_output=True, text=True, check=False,
+                    cwd=Path(args.git_cwd) if args.git_cwd else None,
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    repo_name = _get_repo_name(res.stdout.strip())
+            except Exception:
+                pass
+
+            if not repo_name:
+                print("warning: git remote 'origin' unavailable; proceeding without explicit repo flag", file=sys.stderr)
+
+            gh_cmd = ["gh", "pr", "view", str(args.pr), "--json", "state,files"]
+            if repo_name:
+                gh_cmd.extend(["--repo", repo_name])
+
+            gh_success = False
+            pr_state = None
+            pr_files = []
+            try:
+                proc = subprocess.run(gh_cmd, capture_output=True, text=True, check=False)
+                if proc.returncode == 0:
+                    try:
+                        data = json.loads(proc.stdout)
+                        pr_state = data.get("state")
+                        pr_files = [f["path"] for f in data.get("files", [])]
+                        gh_success = True
+                    except Exception as e:
+                        print(f"warning: failed to parse gh output: {e}", file=sys.stderr)
+                else:
+                    print(f"warning: gh pr view failed: {proc.stderr.strip()}", file=sys.stderr)
+            except FileNotFoundError:
+                print("warning: gh CLI not found; proceeding without PR state verification", file=sys.stderr)
+            except Exception as e:
+                print(f"warning: error running gh CLI: {e}", file=sys.stderr)
+
+            if gh_success and pr_state == "OPEN":
+                active_all = log.active_all()
+                to_release_domains = {
+                    e.domain for e in active_all
+                    if e.pr == args.pr and (args.domain is None or e.domain == args.domain)
+                }
+
+                if to_release_domains:
+                    try:
+                        registry = load_registry(args.registry)
+                    except FileNotFoundError as exc:
+                        print(f"warning: registry not found, skipping overlap check: {exc}", file=sys.stderr)
+                        registry = None
+
+                    if registry is not None:
+                        overlapping_domains = set()
+                        for f in pr_files:
+                            resolved_dom = registry.domain_for_path(f)
+                            if resolved_dom in to_release_domains:
+                                overlapping_domains.add(resolved_dom)
+
+                        if overlapping_domains:
+                            sorted_overlapping = sorted(list(overlapping_domains))
+                            print(
+                                f"DENIED: Refusing to release active lock for open PR #{args.pr} "
+                                f"because it still modifies files in the locked domain(s): {sorted_overlapping}. "
+                                f"Use --force to override.",
+                                file=sys.stderr
+                            )
+                            return 1
+
         released = release(log, pr=args.pr, domain=args.domain, note=args.note)
         if not released:
             print(f"no active reservations for PR #{args.pr}", file=sys.stderr)
