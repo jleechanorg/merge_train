@@ -181,6 +181,7 @@ class LockEntry:
     note: Optional[str] = None
     symbols: tuple[str, ...] = ()
     override: bool = False  # True when reserved despite a conflict
+    intra_pr_exclusive: bool = False  # True when reserved under agent-aware mode
 
     def to_json(self) -> str:
         d = dataclasses.asdict(self)
@@ -190,6 +191,8 @@ class LockEntry:
             d["symbols"] = list(d["symbols"])
         if not d.get("override"):
             d.pop("override", None)
+        if not d.get("intra_pr_exclusive"):
+            d.pop("intra_pr_exclusive", None)
         return json.dumps(d, separators=(",", ":"))
 
     @classmethod
@@ -400,7 +403,11 @@ def _reserve_locked(
         # In agent-aware mode a sibling agent on the same claim is "other".
         if e.claim_id != claim:
             return False
-        if intra_pr_exclusive and e.agent != agent:
+        # Use the persisted mode from the entry OR the current call's mode.
+        # If either the existing lock OR the current request is exclusive,
+        # treat different agents as "other".
+        exclusive = e.intra_pr_exclusive or intra_pr_exclusive
+        if exclusive and e.agent != agent:
             return False
         return True
 
@@ -427,7 +434,7 @@ def _reserve_locked(
         # Whole-domain reservation: semaphore applies to concurrent whole-domain holders.
         # Symbol-level holders also block (can't take the whole domain over existing symbols).
         distinct_whole_claims = {
-            (h.claim_id, h.agent) if intra_pr_exclusive else h.claim_id
+            (h.claim_id, h.agent) if (h.intra_pr_exclusive or intra_pr_exclusive) else h.claim_id
             for h in whole_domain_other
         }
         if len(distinct_whole_claims) >= limit:
@@ -473,6 +480,7 @@ def _reserve_locked(
         status="active",
         symbols=syms,
         override=_approved,
+        intra_pr_exclusive=intra_pr_exclusive,
     )
     log.append(entry)
     return entry
@@ -587,6 +595,7 @@ def reserve_plan(
                         closed_at=now or _utcnow(),
                         note=rollback_note,
                         symbols=done.symbols,
+                        intra_pr_exclusive=done.intra_pr_exclusive,
                     ))
                 raise
             written.append(entry)
@@ -632,6 +641,7 @@ def release(
                 closed_at=now or _utcnow(),
                 note=note,
                 symbols=entry.symbols,
+                intra_pr_exclusive=entry.intra_pr_exclusive,
             )
             log.append(rel)
             released.append(rel)
