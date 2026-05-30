@@ -667,6 +667,8 @@ def check(
     *,
     files: Iterable[str],
     pr: Optional[int] = None,
+    branch: Optional[str] = None,
+    agent: Optional[str] = None,
     touched_symbols_by_path: Optional[dict[str, Optional[set[str]]]] = None,
     override: str = "",
 ) -> CheckResult:
@@ -688,6 +690,11 @@ def check(
        - **In dict, value ``None``** → whole-domain fallback (parse failure)
        - **In dict, value ``set``** → symbol-level result; even an empty
          set means "resolution succeeded, no symbols touched" (genuinely free)
+
+    Optional *branch* and *agent* parameters enable claim-aware conflict
+    detection: when provided, reservations held by the same claim (and,
+    if ``intra_pr_exclusive`` is ON, the same agent) are excluded from
+    the conflict set (same "own" vs "other" logic as :func:`reserve`).
     """
     grouped = registry.domains_for_paths(files)
     active_all = log.active_all()
@@ -727,7 +734,27 @@ def check(
         dom = registry.domains.get(domain)
         limit = dom.concurrency_limit if dom is not None else 1
 
-        other_holders = [e for e in domain_holders if pr is None or e.pr != pr]
+        # Filter "own" reservations using the same claim-aware logic as reserve.
+        # When neither pr nor branch is given, all holders are "other" (no claim identity).
+        if pr is None and branch is None:
+            other_holders = domain_holders
+        else:
+            claim = _claim_id(pr, branch)
+            # Resolve agent-aware mode from the domain registry setting (no override here).
+            intra_pr_exclusive = bool(dom is not None and dom.intra_pr_exclusive)
+            
+            def _is_own(e: LockEntry) -> bool:
+                if e.claim_id != claim:
+                    return False
+                # When agent-aware mode is ON for the domain, treat different agents as "other".
+                # Use the persisted mode from the entry OR the domain's registry setting.
+                exclusive = e.intra_pr_exclusive or intra_pr_exclusive
+                if exclusive and agent is not None and e.agent != agent:
+                    return False
+                return True
+            
+            other_holders = [e for e in domain_holders if not _is_own(e)]
+        
         whole_domain_other = [e for e in other_holders if e.is_whole_domain]
         symbol_others = [e for e in other_holders if not e.is_whole_domain]
 
@@ -908,6 +935,11 @@ def _build_parser() -> argparse.ArgumentParser:
     pr_ck.add_argument("--files", nargs="+", required=True)
     pr_ck.add_argument("--pr", type=int, default=None,
                        help="PR being checked; its own reservations don't self-conflict")
+    pr_ck.add_argument("--branch", default=None,
+                       help="branch claim being checked (for pre-PR workflows)")
+    pr_ck.add_argument("--agent", default=None,
+                       help="agent identity; when intra_pr_exclusive is ON, only this agent's "
+                            "reservations on the same claim are self-exempt")
     pr_ck.add_argument("--json", action="store_true", help="JSON output")
     pr_ck.add_argument(
         "--diff-mode", action="store_true",
@@ -1264,6 +1296,8 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
         result = check(
             log, registry,
             files=args.files, pr=args.pr,
+            branch=getattr(args, "branch", None),
+            agent=getattr(args, "agent", None),
             touched_symbols_by_path=touched_map,
             override=getattr(args, "override", ""),
         )
