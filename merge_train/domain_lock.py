@@ -956,7 +956,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _fmt_entry(e: LockEntry) -> str:
-    base = f"{e.domain}\tPR#{e.pr}\t{e.agent}\t{e.branch}\t{e.opened_at}\t{e.status}"
+    claim = f"PR#{e.pr}" if e.pr is not None else f"branch:{e.branch}"
+    base = f"{e.domain}\t{claim}\t{e.agent}\t{e.branch}\t{e.opened_at}\t{e.status}"
     if e.symbols:
         base += f"\tsymbols={','.join(e.symbols)}"
     if e.closed_at:
