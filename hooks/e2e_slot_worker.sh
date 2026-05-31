@@ -59,26 +59,46 @@ EOF
 # Acquire lock BEFORE starting agent (or verify existing lock)
 echo "  Acquiring lock..."
 set +e
-LOCK_RESULT=$(python -m merge_train.domain_lock \
-    --registry "$REGISTRY" \
-    --log "$LOCK_LOG" \
-    --git-cwd "$MCTRL_REPO" \
-    reserve-plan \
-    --pr "$SYNTHETIC_PR" \
-    --agent "$AGENT_ID" \
-    --branch "$BRANCH" \
-    --plan "$PLAN_FILE" 2>&1)
+if command -v domain_lock &>/dev/null; then
+  LOCK_RESULT=$(domain_lock \
+      --registry "$REGISTRY" \
+      --log "$LOCK_LOG" \
+      --git-cwd "$MCTRL_REPO" \
+      reserve-plan \
+      --pr "$SYNTHETIC_PR" \
+      --agent "$AGENT_ID" \
+      --branch "$BRANCH" \
+      --plan "$PLAN_FILE" 2>&1)
+else
+  LOCK_RESULT=$(python -m merge_train.domain_lock \
+      --registry "$REGISTRY" \
+      --log "$LOCK_LOG" \
+      --git-cwd "$MCTRL_REPO" \
+      reserve-plan \
+      --pr "$SYNTHETIC_PR" \
+      --agent "$AGENT_ID" \
+      --branch "$BRANCH" \
+      --plan "$PLAN_FILE" 2>&1)
+fi
 LOCK_EXIT=$?
 set -e
 
 if [ $LOCK_EXIT -ne 0 ]; then
     # Lock may already be held by us (e.g., runner pre-reserved it)
     # Check if it's our lock
-    CHECK_RESULT=$(python -m merge_train.domain_lock \
-        --registry "$REGISTRY" \
-        --log "$LOCK_LOG" \
-        --git-cwd "$MCTRL_REPO" \
-        list --status active --json 2>&1)
+    if command -v domain_lock &>/dev/null; then
+      CHECK_RESULT=$(domain_lock \
+          --registry "$REGISTRY" \
+          --log "$LOCK_LOG" \
+          --git-cwd "$MCTRL_REPO" \
+          list --status active --json 2>&1)
+    else
+      CHECK_RESULT=$(python -m merge_train.domain_lock \
+          --registry "$REGISTRY" \
+          --log "$LOCK_LOG" \
+          --git-cwd "$MCTRL_REPO" \
+          list --status active --json 2>&1)
+    fi
     OUR_LOCK=$(echo "$CHECK_RESULT" | python3 -c "
 import json, sys
 data = json.loads(sys.stdin.read())
@@ -105,11 +125,19 @@ echo "  Lock is active — starting agent."
 # Release lock on early exit (worktree failure, cd failure)
 cleanup_lock() {
     echo "  Releasing lock for slot-${SLOT_N} due to early exit" >&2
-    python -m merge_train.domain_lock \
-        --registry "$REGISTRY" \
-        --log "$LOCK_LOG" \
-        --git-cwd "$MCTRL_REPO" \
-        release --pr "$SYNTHETIC_PR" 2>/dev/null || true
+    if command -v domain_lock &>/dev/null; then
+      domain_lock \
+          --registry "$REGISTRY" \
+          --log "$LOCK_LOG" \
+          --git-cwd "$MCTRL_REPO" \
+          release --pr "$SYNTHETIC_PR" 2>/dev/null || true
+    else
+      python -m merge_train.domain_lock \
+          --registry "$REGISTRY" \
+          --log "$LOCK_LOG" \
+          --git-cwd "$MCTRL_REPO" \
+          release --pr "$SYNTHETIC_PR" 2>/dev/null || true
+    fi
 }
 trap cleanup_lock EXIT
 

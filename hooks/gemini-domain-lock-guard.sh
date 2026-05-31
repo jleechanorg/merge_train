@@ -33,11 +33,8 @@ touch "$SENTINEL"
 MERGE_TRAIN_AGENT="${AO_SESSION_ID:+antigravity-${AO_SESSION_ID}}"
 export MERGE_TRAIN_AGENT
 
-HOOK_SCRIPT="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../projects/merge_train/hooks/domain-lock-session-start.sh"
-# Fallback: look for domain-lock-session-start.sh relative to common install paths
-if [[ ! -f "$HOOK_SCRIPT" ]]; then
-  HOOK_SCRIPT="$HOME/projects/merge_train/hooks/domain-lock-session-start.sh"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOOK_SCRIPT="$SCRIPT_DIR/domain-lock-session-start.sh"
 if [[ ! -f "$HOOK_SCRIPT" ]]; then
   # merge_train not installed locally — skip silently
   exit 0

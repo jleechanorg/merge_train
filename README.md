@@ -34,6 +34,8 @@ Production use should cover **all files**. The registry is not meant to be a par
 
 ## Install
 
+**Prerequisite:** [`uv`](https://docs.astral.sh/uv/) must be on your `PATH`.
+
 **Into another repo (recommended):**
 
 ```bash
@@ -42,18 +44,25 @@ cd /path/to/your/repo
 ~/merge_train/install.sh
 ```
 
-`install.sh` is idempotent: it `pip install -e`s the package, drops a starter `file_domains.yaml` skeleton, symlinks the pre-commit hook into `.git/hooks/pre-commit`, and smoke-tests the CLI. The skeleton is not production-complete until you add your real domains plus a final catch-all domain. Flags: `--no-hook`, `--no-yaml`, `--force-hook`, `--python <bin>`.
+`install.sh` is idempotent and does the following:
+
+1. Runs `uv tool install` to install the `merge_train` package and place the `domain_lock` binary on your `PATH` (shared across all repos — no virtualenv per repo).
+2. Drops a starter `file_domains.yaml` skeleton in the target repo if one doesn't already exist.
+3. Wires git hooks and per-agent session hooks (pre-commit, Codex, Antigravity/Gemini, OpenCode, Claude Code) so all agents call `domain_lock` at session start/stop.
+4. Smoke-tests the CLI.
+
+The skeleton is not production-complete until you add your real domains plus a final catch-all domain. Flags: `--no-hook`, `--no-yaml`, `--force-hook`, `--python <bin>`.
 
 **Dev install (working on `merge_train` itself):**
 
 ```bash
 git clone https://github.com/jleechanorg/merge_train.git
 cd merge_train
-pip install -e '.[dev]'
+uv pip install -e '.[dev]'
 python -m pytest tests/ -q   # 213 passed
 ```
 
-Requires Python ≥ 3.10, `PyYAML`, and `git` on `PATH`.
+Requires Python ≥ 3.10, `uv` (https://docs.astral.sh/uv/), `PyYAML`, and `git` on `PATH`.
 
 ## CLI surface
 
@@ -506,7 +515,7 @@ If no git remote can be resolved, the log falls back to `~/.merge_train/locks/de
 ## Tests
 
 ```bash
-pip install -e .
+uv pip install -e '.[dev]'
 python -m pytest tests/ -q     # 213 passed
 ```
 
