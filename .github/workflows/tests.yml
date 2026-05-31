@@ -78,6 +78,9 @@ jobs:
           git config --global user.email "ci@merge-train.test"
           git config --global user.name "merge_train CI"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Create a fresh target repo
         run: |
           mkdir -p target_repo
