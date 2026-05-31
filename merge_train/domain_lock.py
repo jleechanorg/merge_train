@@ -109,6 +109,9 @@ class Domain:
     per_pr_unique: bool = False  # files are per-PR unique; never block each other
     advisory: bool = False       # log conflict but don't block spawning
     concurrency_limit: int = 1   # max concurrent PRs allowed to hold this domain (semaphore)
+    intra_pr_exclusive: bool = False  # opt-in: siblings on the same claim but a
+    # different agent conflict (parallel agents on one PR/branch get exclusive
+    # symbol/domain locks); OFF by default for backward compatibility.
 
 
 @dataclass
@@ -126,10 +129,12 @@ class Registry:
             per_pr_unique = bool(body.get("per_pr_unique", False))
             advisory = bool(body.get("advisory", False))
             concurrency_limit = int(body.get("concurrency_limit", 1))
+            intra_pr_exclusive = bool(body.get("intra_pr_exclusive", False))
             domains[name] = Domain(
                 name=name, paths=paths, owners=owners,
                 per_pr_unique=per_pr_unique, advisory=advisory,
                 concurrency_limit=concurrency_limit,
+                intra_pr_exclusive=intra_pr_exclusive,
             )
         return cls(domains=domains)
 
@@ -158,10 +163,25 @@ class Registry:
         return grouped
 
 
+def _claim_id(pr: Optional[int], branch: str) -> str:
+    """Unified claim identity for conflict partitioning and idempotency.
+
+    A PR-keyed reservation is identified by its PR number; a branch-keyed
+    reservation (no PR yet) is identified by ``branch:<name>``. Keeping both in
+    a single string namespace lets every partition/idempotency check key on one
+    value regardless of whether a PR exists. PR-keyed identities are formatted
+    so that, combined with the unchanged conflict logic, PR-only reservations
+    behave byte-for-byte as before.
+    """
+    if pr is not None:
+        return f"pr:{pr}"
+    return f"branch:{branch}"
+
+
 @dataclass(frozen=True)
 class LockEntry:
     domain: str
-    pr: int
+    pr: Optional[int]
     agent: str
     branch: str
     opened_at: str
@@ -170,6 +190,7 @@ class LockEntry:
     note: Optional[str] = None
     symbols: tuple[str, ...] = ()
     override: bool = False  # True when reserved despite a conflict
+    intra_pr_exclusive: bool = False  # True when reserved under agent-aware mode
 
     def to_json(self) -> str:
         d = dataclasses.asdict(self)
@@ -179,6 +200,8 @@ class LockEntry:
             d["symbols"] = list(d["symbols"])
         if not d.get("override"):
             d.pop("override", None)
+        if not d.get("intra_pr_exclusive"):
+            d.pop("intra_pr_exclusive", None)
         return json.dumps(d, separators=(",", ":"))
 
     @classmethod
@@ -194,6 +217,11 @@ class LockEntry:
     def is_whole_domain(self) -> bool:
         """A reservation with no symbols holds the entire domain."""
         return not self.symbols
+
+    @property
+    def claim_id(self) -> str:
+        """The unified claim identity (PR number or ``branch:<name>``)."""
+        return _claim_id(self.pr, self.branch)
 
 
 class LockLog:
@@ -290,12 +318,14 @@ class LockLog:
         A release is keyed by ``(domain, pr, symbols)``: it clears the
         single reservation whose key matches the last active entry.
         """
-        # Walk entries in order. Treat each (domain, pr, symbols) as
+        # Walk entries in order. Treat each (domain, claim_id, symbols) as
         # an independent lock key. Later entries override earlier ones
-        # with the same key.
-        latest: dict[tuple[str, int, tuple[str, ...]], LockEntry] = {}
+        # with the same key. The claim_id collapses to the PR number for
+        # PR-keyed reservations (back-compat) and to ``branch:<name>`` for
+        # branch-keyed reservations (no PR yet).
+        latest: dict[tuple[str, str, tuple[str, ...]], LockEntry] = {}
         for entry in self.entries():
-            key = (entry.domain, entry.pr, tuple(entry.symbols))
+            key = (entry.domain, entry.claim_id, tuple(entry.symbols))
             latest[key] = entry
         
         active_entries = []
@@ -341,14 +371,28 @@ def _reserve_locked(
     registry: Registry,
     *,
     domain: str,
-    pr: int,
+    pr: Optional[int],
     agent: str,
     branch: str,
     symbols: Iterable[str] = (),
     now: Optional[str] = None,
     override: str = "",
+    intra_pr_exclusive: Optional[bool] = None,
 ) -> LockEntry:
-    """Core reserve logic — caller must hold log.lock()."""
+    """Core reserve logic — caller must hold log.lock().
+
+    Conflict partitioning and idempotency key on a unified *claim identity*
+    (:func:`_claim_id`): a PR number when ``pr`` is given, else ``branch:<name>``.
+    This lets agents reserve before a PR exists while keeping PR-keyed
+    reservations byte-for-byte compatible.
+
+    When the target domain has ``intra_pr_exclusive`` ON (registry setting, or
+    forced via the *intra_pr_exclusive* argument), siblings are partitioned on
+    ``(claim_id, agent)``: a *different* agent on the *same* claim is treated as
+    an "other" holder for conflict purposes, and idempotency requires the same
+    claim AND the same agent. When OFF (default), partitioning is on claim
+    identity alone — today's PR-ownership model.
+    """
     if domain not in registry.domains:
         raise UnknownPathError(f"unknown domain: {domain}")
     syms = tuple(sorted(set(symbols)))
@@ -357,28 +401,56 @@ def _reserve_locked(
     dom = registry.domains.get(domain)
     limit = dom.concurrency_limit if dom is not None else 1
 
-    # Idempotency: if this PR already holds domain with same or covering symbols, no-op.
-    own_active = [e for e in active_on_domain if e.pr == pr]
+    # Resolve the agent-aware mode: explicit arg (CLI flag) wins, else the
+    # per-domain registry setting.
+    if intra_pr_exclusive is None:
+        intra_pr_exclusive = bool(dom is not None and dom.intra_pr_exclusive)
+
+    claim = _claim_id(pr, branch)
+
+    def _is_own(e: LockEntry) -> bool:
+        # In agent-aware mode a sibling agent on the same claim is "other".
+        if e.claim_id != claim:
+            return False
+        # Use the persisted mode from the entry OR the current call's mode.
+        # If either the existing lock OR the current request is exclusive,
+        # treat different agents as "other".
+        exclusive = e.intra_pr_exclusive or intra_pr_exclusive
+        if exclusive and e.agent != agent:
+            return False
+        return True
+
+    # Idempotency: if this claim (agent-aware when ON) already holds the domain
+    # with the same or covering symbols, no-op.
+    own_active = [e for e in active_on_domain if _is_own(e)]
     if own_active:
         existing = own_active[-1]
         if not syms or (not existing.is_whole_domain and set(syms).issubset(set(existing.symbols))):
             return existing  # already held — don't append duplicate
 
-    other_holders = [e for e in active_on_domain if e.pr != pr]
+    other_holders = [e for e in active_on_domain if not _is_own(e)]
     whole_domain_other = [e for e in other_holders if e.is_whole_domain]
     symbol_others = [e for e in other_holders if not e.is_whole_domain]
 
     _approved = override == _OVERRIDE_PHRASE
 
+    def _who(e: LockEntry) -> str:
+        # Human-readable holder identity for error messages: PR# when present,
+        # else the branch claim.
+        return f"PR #{e.pr}" if e.pr is not None else f"branch '{e.branch}'"
+
     if not syms:
         # Whole-domain reservation: semaphore applies to concurrent whole-domain holders.
         # Symbol-level holders also block (can't take the whole domain over existing symbols).
-        distinct_whole_prs = {e.pr for e in whole_domain_other}
-        if len(distinct_whole_prs) >= limit:
+        distinct_whole_claims = {
+            (h.claim_id, h.agent) if (h.intra_pr_exclusive or intra_pr_exclusive) else h.claim_id
+            for h in whole_domain_other
+        }
+        if len(distinct_whole_claims) >= limit:
             if not _approved:
                 conflict = whole_domain_other[0]
                 raise DomainHeldError(
-                    f"domain '{domain}' is fully held by PR #{conflict.pr} "
+                    f"domain '{domain}' is fully held by {_who(conflict)} "
                     f"(agent={conflict.agent}, branch={conflict.branch}, "
                     f"opened_at={conflict.opened_at}) — concurrency limit reached ({limit})"
                 )
@@ -386,7 +458,7 @@ def _reserve_locked(
             held = symbol_others[0]
             raise DomainHeldError(
                 f"domain '{domain}' has symbol locks held by "
-                f"PR #{held.pr} (symbols={','.join(held.symbols)}) — "
+                f"{_who(held)} (agent={held.agent}, symbols={','.join(held.symbols)}) — "
                 "whole-domain reservation refused"
             )
     else:
@@ -395,7 +467,7 @@ def _reserve_locked(
         for holder in whole_domain_other:
             if not _approved:
                 raise DomainHeldError(
-                    f"domain '{domain}' is fully held by PR #{holder.pr} "
+                    f"domain '{domain}' is fully held by {_who(holder)} "
                     f"(agent={holder.agent}, branch={holder.branch}, "
                     f"opened_at={holder.opened_at})"
                 )
@@ -404,7 +476,7 @@ def _reserve_locked(
             if overlap and not _approved:
                 raise DomainHeldError(
                     f"symbol(s) {','.join(sorted(overlap))} in domain "
-                    f"'{domain}' held by PR #{holder.pr} (agent={holder.agent}, "
+                    f"'{domain}' held by {_who(holder)} (agent={holder.agent}, "
                     f"branch={holder.branch})"
                 )
 
@@ -417,6 +489,7 @@ def _reserve_locked(
         status="active",
         symbols=syms,
         override=_approved,
+        intra_pr_exclusive=intra_pr_exclusive,
     )
     log.append(entry)
     return entry
@@ -427,12 +500,13 @@ def reserve(
     registry: Registry,
     *,
     domain: str,
-    pr: int,
+    pr: Optional[int] = None,
     agent: str,
     branch: str,
     symbols: Iterable[str] = (),
     now: Optional[str] = None,
     override: str = "",
+    intra_pr_exclusive: Optional[bool] = None,
 ) -> LockEntry:
     """Reserve *domain* (or specific symbols within it) for *pr*/*agent*.
 
@@ -449,6 +523,11 @@ def reserve(
     Pass ``override=_OVERRIDE_PHRASE`` to force-reserve despite conflicts.
     The entry is written with ``override=True`` for audit purposes.
 
+    Pass ``pr=None`` with a ``branch`` to reserve before a PR exists; conflict
+    detection then keys on the branch claim (``branch:<name>``). When the
+    domain (or *intra_pr_exclusive*) enables agent-aware mode, two different
+    agents on the same claim with overlapping symbols conflict.
+
     Raises :class:`DomainHeldError` on conflict, :class:`UnknownPathError`
     on unknown domain.
     """
@@ -457,6 +536,7 @@ def reserve(
             log, registry,
             domain=domain, pr=pr, agent=agent, branch=branch,
             symbols=symbols, now=now, override=override,
+            intra_pr_exclusive=intra_pr_exclusive,
         )
 
 
@@ -471,11 +551,12 @@ def reserve_plan(
     log: LockLog,
     registry: Registry,
     *,
-    pr: int,
+    pr: Optional[int] = None,
     agent: str,
     branch: str,
     plan: Iterable[PlanItem | dict],
     now: Optional[str] = None,
+    intra_pr_exclusive: Optional[bool] = None,
 ) -> list[LockEntry]:
     """Atomically reserve every leg of *plan* for the same PR/agent/branch.
 
@@ -508,6 +589,7 @@ def reserve_plan(
                     domain=item.domain, pr=pr,
                     agent=agent, branch=branch,
                     symbols=item.symbols, now=now,
+                    intra_pr_exclusive=intra_pr_exclusive,
                 )
             except (DomainHeldError, UnknownPathError):
                 # Roll back everything we wrote in this call.
@@ -522,6 +604,7 @@ def reserve_plan(
                         closed_at=now or _utcnow(),
                         note=rollback_note,
                         symbols=done.symbols,
+                        intra_pr_exclusive=done.intra_pr_exclusive,
                     ))
                 raise
             written.append(entry)
@@ -531,21 +614,29 @@ def reserve_plan(
 def release(
     log: LockLog,
     *,
-    pr: int,
+    pr: Optional[int] = None,
+    branch: Optional[str] = None,
     domain: Optional[str] = None,
     note: Optional[str] = None,
     now: Optional[str] = None,
 ) -> list[LockEntry]:
-    """Release active reservations for *pr* (optionally filter to a domain).
+    """Release active reservations for a claim (optionally filter to a domain).
+
+    The claim is a PR (``pr``) or a branch (``branch``, when no PR exists);
+    matching keys on the unified claim identity so branch-keyed reservations
+    release cleanly. At least one of *pr* / *branch* must be given.
 
     Releases every matching active lock — whole-domain AND symbol-level.
     Returns the list of release entries written, preserving the original
-    ``symbols`` tuple so the (domain, pr, symbols) key matches.
+    ``symbols`` tuple so the (domain, claim, symbols) key matches.
     """
+    if pr is None and branch is None:
+        raise ValueError("release() requires one of pr or branch")
+    target_claim = _claim_id(pr, branch) if branch is not None or pr is not None else None
     released: list[LockEntry] = []
     with log.lock():
         for entry in log.active_all():
-            if entry.pr != pr:
+            if entry.claim_id != target_claim:
                 continue
             if domain and entry.domain != domain:
                 continue
@@ -559,6 +650,7 @@ def release(
                 closed_at=now or _utcnow(),
                 note=note,
                 symbols=entry.symbols,
+                intra_pr_exclusive=entry.intra_pr_exclusive,
             )
             log.append(rel)
             released.append(rel)
@@ -584,6 +676,8 @@ def check(
     *,
     files: Iterable[str],
     pr: Optional[int] = None,
+    branch: Optional[str] = None,
+    agent: Optional[str] = None,
     touched_symbols_by_path: Optional[dict[str, Optional[set[str]]]] = None,
     override: str = "",
 ) -> CheckResult:
@@ -605,6 +699,11 @@ def check(
        - **In dict, value ``None``** → whole-domain fallback (parse failure)
        - **In dict, value ``set``** → symbol-level result; even an empty
          set means "resolution succeeded, no symbols touched" (genuinely free)
+
+    Optional *branch* and *agent* parameters enable claim-aware conflict
+    detection: when provided, reservations held by the same claim (and,
+    if ``intra_pr_exclusive`` is ON, the same agent) are excluded from
+    the conflict set (same "own" vs "other" logic as :func:`reserve`).
     """
     grouped = registry.domains_for_paths(files)
     active_all = log.active_all()
@@ -644,7 +743,27 @@ def check(
         dom = registry.domains.get(domain)
         limit = dom.concurrency_limit if dom is not None else 1
 
-        other_holders = [e for e in domain_holders if pr is None or e.pr != pr]
+        # Filter "own" reservations using the same claim-aware logic as reserve.
+        # When neither pr nor branch is given, all holders are "other" (no claim identity).
+        if pr is None and branch is None:
+            other_holders = domain_holders
+        else:
+            claim = _claim_id(pr, branch)
+            # Resolve agent-aware mode from the domain registry setting (no override here).
+            intra_pr_exclusive = bool(dom is not None and dom.intra_pr_exclusive)
+            
+            def _is_own(e: LockEntry) -> bool:
+                if e.claim_id != claim:
+                    return False
+                # When agent-aware mode is ON for the domain, treat different agents as "other".
+                # Use the persisted mode from the entry OR the domain's registry setting.
+                exclusive = e.intra_pr_exclusive or intra_pr_exclusive
+                if exclusive and agent is not None and e.agent != agent:
+                    return False
+                return True
+            
+            other_holders = [e for e in domain_holders if not _is_own(e)]
+        
         whole_domain_other = [e for e in other_holders if e.is_whole_domain]
         symbol_others = [e for e in other_holders if not e.is_whole_domain]
 
@@ -762,13 +881,20 @@ def _build_parser() -> argparse.ArgumentParser:
 
     pr_re = sub.add_parser("reserve", help="reserve a domain for a PR/agent")
     pr_re.add_argument("--domain", required=True)
-    pr_re.add_argument("--pr", type=int, required=True)
+    pr_re.add_argument("--pr", type=int, default=None,
+                       help="PR number; optional when --branch is given")
     pr_re.add_argument("--agent", required=True)
     pr_re.add_argument("--branch", required=True)
     pr_re.add_argument(
         "--symbols", default="",
         help="comma-separated symbol names within the domain "
              "(empty = whole-domain lock)",
+    )
+    pr_re.add_argument(
+        "--intra-pr-exclusive", action="store_true", dest="intra_pr_exclusive",
+        help="force agent-aware mode ON for this reserve: a different agent on "
+             "the same PR/branch claim conflicts on overlapping symbols "
+             "(overrides the domain's registry setting)",
     )
     pr_re.add_argument(
         "--dry-run", action="store_true",
@@ -785,7 +911,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "reserve-plan",
         help="atomically reserve multiple (domain, symbols) legs for one PR",
     )
-    pr_rp.add_argument("--pr", type=int, required=True)
+    pr_rp.add_argument("--pr", type=int, default=None,
+                       help="PR number; optional when --branch is given")
     pr_rp.add_argument("--agent", required=True)
     pr_rp.add_argument("--branch", required=True)
     pr_rp.add_argument(
@@ -794,13 +921,20 @@ def _build_parser() -> argparse.ArgumentParser:
              "of {domain, symbols} entries",
     )
     pr_rp.add_argument(
+        "--intra-pr-exclusive", action="store_true", dest="intra_pr_exclusive",
+        help="force agent-aware mode ON for every leg of this plan",
+    )
+    pr_rp.add_argument(
         "--dry-run", action="store_true",
         help="check for conflicts without acquiring locks; exits 0 if all "
              "legs are free, 1 if any is held, and prints WOULD-RESERVE per leg",
     )
 
-    pr_rl = sub.add_parser("release", help="release a PR's reservations")
-    pr_rl.add_argument("--pr", type=int, required=True)
+    pr_rl = sub.add_parser("release", help="release a PR's or branch's reservations")
+    pr_rl.add_argument("--pr", type=int, default=None,
+                       help="PR number to release; optional when --branch is given")
+    pr_rl.add_argument("--branch", default=None,
+                       help="branch claim to release (for reservations made with no PR)")
     pr_rl.add_argument("--domain", default=None)
     pr_rl.add_argument("--note", default=None)
     pr_rl.add_argument("--force", action="store_true", default=False,
@@ -810,6 +944,11 @@ def _build_parser() -> argparse.ArgumentParser:
     pr_ck.add_argument("--files", nargs="+", required=True)
     pr_ck.add_argument("--pr", type=int, default=None,
                        help="PR being checked; its own reservations don't self-conflict")
+    pr_ck.add_argument("--branch", default=None,
+                       help="branch claim being checked (for pre-PR workflows)")
+    pr_ck.add_argument("--agent", default=None,
+                       help="agent identity; when intra_pr_exclusive is ON, only this agent's "
+                            "reservations on the same claim are self-exempt")
     pr_ck.add_argument("--json", action="store_true", help="JSON output")
     pr_ck.add_argument(
         "--diff-mode", action="store_true",
@@ -874,12 +1013,94 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _fmt_entry(e: LockEntry) -> str:
-    base = f"{e.domain}\tPR#{e.pr}\t{e.agent}\t{e.branch}\t{e.opened_at}\t{e.status}"
+    claim = f"PR#{e.pr}" if e.pr is not None else f"branch:{e.branch}"
+    base = f"{e.domain}\t{claim}\t{e.agent}\t{e.branch}\t{e.opened_at}\t{e.status}"
     if e.symbols:
         base += f"\tsymbols={','.join(e.symbols)}"
     if e.closed_at:
         base += f"\tclosed={e.closed_at}"
     return base
+
+
+def _holder_label(e: LockEntry) -> str:
+    """Human-readable lock owner — PR and branch only (no agent)."""
+    if e.pr is not None:
+        if e.branch:
+            return f"PR#{e.pr} ({e.branch})"
+        return f"PR#{e.pr}"
+    return f"branch={e.branch}"
+
+
+def _file_headline(
+    path: str,
+    touched_map: Optional[dict[str, Optional[set[str]]]],
+) -> str:
+    """Primary line for a conflicting file — always path with extension."""
+    if touched_map is None:
+        return path
+    syms = touched_map.get(path)
+    if syms is None:
+        return f"{path}  (whole file — symbols unavailable)"
+    if not syms:
+        return f"{path}  (no symbols in diff)"
+    return f"{path}  symbols: {', '.join(sorted(syms))}"
+
+
+def _format_check_report(
+    result: CheckResult,
+    registry: Registry,
+    files: Iterable[str],
+    touched_map: Optional[dict[str, Optional[set[str]]]] = None,
+) -> str:
+    """Plain-text domain check report for hooks and CLI."""
+    lines: list[str] = ["", "merge_train domain status", ""]
+    grouped = registry.domains_for_paths(files)
+
+    def _conflict_section(
+        header: str,
+        conflicts: list[tuple[str, LockEntry]],
+    ) -> None:
+        if not conflicts:
+            return
+        lines.append(header)
+        for domain, holder in conflicts:
+            paths = sorted(grouped.get(domain, []))
+            if not paths:
+                paths = [domain]
+            for path in paths:
+                lines.append(f"  {_file_headline(path, touched_map)}")
+                lines.append(f"    held by {_holder_label(holder)}")
+                if holder.symbols:
+                    lines.append(
+                        f"    holder symbols: {', '.join(sorted(holder.symbols))}"
+                    )
+                elif holder.is_whole_domain:
+                    lines.append("    holder lock: whole domain")
+                if touched_map and holder.symbols:
+                    sym_set = touched_map.get(path)
+                    if sym_set:
+                        overlap = sym_set & set(holder.symbols)
+                        if overlap:
+                            lines.append(
+                                f"    overlap: {', '.join(sorted(overlap))}"
+                            )
+        lines.append("")
+
+    _conflict_section(
+        "ADVISORY (informational, not blocking):",
+        result.advisory_held,
+    )
+    _conflict_section("HELD (blocking):", result.held)
+
+    if not result.held:
+        free_files: list[str] = []
+        for domain in result.free:
+            free_files.extend(sorted(grouped.get(domain, [])))
+        free_label = ", ".join(free_files) if free_files else "none"
+        lines.append(f"FREE: {len(free_files)} file(s) clear ({free_label})")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 def _log_to_tmp(argv: list[str], exit_code: int, error_msg: str = ""):
@@ -971,7 +1192,8 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
                     print(f"HELD: {args.domain} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
                     return 1
             sym_part = f" symbols={syms}" if syms else ""
-            print(f"WOULD-RESERVE: {args.domain}\tPR#{args.pr}\t{args.agent}\t{args.branch}{sym_part}")
+            claim_label = f"PR#{args.pr}" if args.pr is not None else f"branch:{args.branch}"
+            print(f"WOULD-RESERVE: {args.domain}\t{claim_label}\t{args.agent}\t{args.branch}{sym_part}")
             return 0
         try:
             entry = reserve(
@@ -980,6 +1202,7 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
                 agent=args.agent, branch=args.branch,
                 symbols=syms,
                 override=getattr(args, "override", ""),
+                intra_pr_exclusive=True if getattr(args, "intra_pr_exclusive", False) else None,
             )
         except DomainHeldError as exc:
             print(f"DENIED: {exc}", file=sys.stderr)
@@ -1035,13 +1258,15 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
                         break
                 else:
                     sym_part = f" symbols={list(syms)}" if syms else ""
-                    print(f"WOULD-RESERVE: {dom}\tPR#{args.pr}\t{args.agent}\t{args.branch}{sym_part}")
+                    claim_label = f"PR#{args.pr}" if args.pr is not None else f"branch:{args.branch}"
+                    print(f"WOULD-RESERVE: {dom}\t{claim_label}\t{args.agent}\t{args.branch}{sym_part}")
             return 1 if held else 0
         try:
             entries = reserve_plan(
                 log, registry,
                 pr=args.pr, agent=args.agent, branch=args.branch,
                 plan=plan_items,
+                intra_pr_exclusive=True if getattr(args, "intra_pr_exclusive", False) else None,
             )
         except DomainHeldError as exc:
             print(f"DENIED: {exc} (plan rolled back)", file=sys.stderr)
@@ -1055,7 +1280,12 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
 
     if args.cmd == "release":
         log = LockLog(args.log)
-        if not getattr(args, "force", False):
+        if args.pr is None and getattr(args, "branch", None) is None:
+            print("error: release requires one of --pr or --branch", file=sys.stderr)
+            return 2
+        # The open-PR safety check only applies to PR-keyed releases; a
+        # branch-keyed claim (no PR) has nothing to query via `gh pr view`.
+        if args.pr is not None and not getattr(args, "force", False):
             repo_name = None
             try:
                 res = subprocess.run(
@@ -1126,9 +1356,14 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
                             )
                             return 1
 
-        released = release(log, pr=args.pr, domain=args.domain, note=args.note)
+        released = release(
+            log, pr=args.pr,
+            branch=getattr(args, "branch", None) if args.pr is None else None,
+            domain=args.domain, note=args.note,
+        )
         if not released:
-            print(f"no active reservations for PR #{args.pr}", file=sys.stderr)
+            claim_label = f"PR #{args.pr}" if args.pr is not None else f"branch '{getattr(args, 'branch', None)}'"
+            print(f"no active reservations for {claim_label}", file=sys.stderr)
             return 1
         for entry in released:
             print(f"RELEASED: {_fmt_entry(entry)}")
@@ -1157,6 +1392,8 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
         result = check(
             log, registry,
             files=args.files, pr=args.pr,
+            branch=getattr(args, "branch", None),
+            agent=getattr(args, "agent", None),
             touched_symbols_by_path=touched_map,
             override=getattr(args, "override", ""),
         )
@@ -1188,34 +1425,12 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
                 print(f"⚠️  WARN: symbol-resolution fallback (whole-domain): "
                       f"{', '.join(diff_fallback)}", file=sys.stderr)
             
-            # Print a neat header
-            print("\n┌── 🚄 merge_train Domain Status ──────────────────────────────")
-            
-            if result.advisory_held:
-                print("│  ⚠️  ADVISORY CONFLICTS (informational, not blocking):")
-                for d, holder in result.advisory_held:
-                    sym_note = (
-                        f" symbols={','.join(holder.symbols)}"
-                        if holder.symbols else ""
-                    )
-                    print(f"│     • ADVISORY: {d} by PR#{holder.pr} agent={holder.agent} branch={holder.branch}{sym_note}")
-                print("│")
-            
-            if result.held:
-                print("│  ❌ HELD CONFLICTS (blocking):")
-                for d, holder in result.held:
-                    sym_note = (
-                        f" symbols={','.join(holder.symbols)}"
-                        if holder.symbols else ""
-                    )
-                    print(f"│     • HELD: {d} by PR#{holder.pr} agent={holder.agent} branch={holder.branch}{sym_note}")
-                print("│")
-            
-            if not result.held:
-                print(f"│  ✅ FREE: {len(result.free)} domain(s) clear "
-                      f"({', '.join(result.free) or 'none'})")
-            
-            print("└──────────────────────────────────────────────────────────────\n")
+            print(
+                _format_check_report(
+                    result, registry, args.files, touched_map,
+                ),
+                end="",
+            )
         return 0 if result.ok else 1
 
     if args.cmd == "list":

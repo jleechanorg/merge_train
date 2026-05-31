@@ -60,13 +60,25 @@ Requires Python ≥ 3.10, `PyYAML`, and `git` on `PATH`.
 ```
 domain_lock reserve            reserve a domain/symbol scope for a PR/agent (symbol-first locking)
 domain_lock reserve-plan       atomically reserve multiple (domain, symbols) legs for one PR
-domain_lock release            release a PR's reservations
+domain_lock release            release a PR's (or branch's) reservations
 domain_lock check              check files against active reservations (--diff-mode for symbol res.)
 domain_lock list               list locks (active|released|all)
 domain_lock audit              dump full registry + lock-log audit JSON
 domain_lock predict-conflicts  dry-run: predict pairwise conflicts + recommend merge order
                                for a set of PRs declared in a YAML plan
 ```
+
+`reserve` / `reserve-plan` flags relevant to the opt-in modes below:
+
+```
+--pr N                  PR number. OPTIONAL when --branch is given (branch-aware mode).
+--branch NAME           branch claim. Required; used as the claim identity when --pr is absent.
+--intra-pr-exclusive    force agent-aware mode ON for this call (overrides the domain's
+                        registry intra_pr_exclusive setting).
+```
+
+`release` accepts `--pr N` **or** `--branch NAME` (one is required); `--branch` releases a
+reservation that was made with no PR.
 
 Global flags work **both** before and after the subcommand:
 
@@ -149,6 +161,78 @@ domain_lock acquire --files mvp_site/world_logic.py README.md \
 ```
 
 `acquire` should resolve mapped files to registry domains, resolve unmapped files to deterministic per-file fallback locks, and reserve all required scopes atomically.
+
+## Claim identity: PR number or branch
+
+Every reservation is keyed on a single **claim identity**:
+
+```
+claim = "pr:<N>"        when --pr is supplied
+claim = "branch:<NAME>" when --pr is absent and --branch is supplied
+```
+
+All conflict partitioning, idempotency, the JSONL lock-log key, and `release`
+matching key on this claim identity. PR-keyed reservations behave exactly as
+before (byte-for-byte back-compat); the claim identity simply generalizes the
+key so two new things become possible:
+
+- **Branch-aware locking (opt-in by omitting `--pr`).** Agents can reserve
+  *before* a PR exists, or in workflows that never open a PR, by passing
+  `--branch` with no `--pr`. Two different branches that lack a PR no longer
+  collapse to the same key — each gets its own `branch:<name>` claim.
+
+  ```bash
+  # Reserve on a branch, no PR yet:
+  domain_lock reserve --domain level_up_core --symbols level_up \
+    --agent codex-1 --branch feat/early-work
+  # Release the branch claim later:
+  domain_lock release --branch feat/early-work
+  ```
+
+  A PR-keyed claim and a branch-keyed claim are *distinct* identities: they do
+  not idempotently merge, so overlapping symbols across them still conflict.
+  `LockEntry.pr` is now optional and serializes as `null` for branch claims;
+  legacy log lines with an integer `pr` parse unchanged.
+
+## Intra-PR agent-aware locking (opt-in)
+
+By default, two agents reserving under the **same** claim are invisible to each
+other — the PR (or branch) *owns* the scope and any of its agents may re-reserve
+idempotently. This is the historical PR-ownership model and remains the default.
+
+When several agents work in parallel on the **same** PR/branch and must not stomp
+each other, enable agent-aware mode so siblings get mutually-exclusive locks. Two
+ways to turn it on:
+
+1. **Per-domain registry setting (preferred — policy lives with the domain):**
+
+   ```yaml
+   domains:
+     level_up_core:
+       paths: [mvp_site/world_logic.py]
+       intra_pr_exclusive: true   # siblings on the same claim must not overlap
+   ```
+
+2. **Per-call CLI flag** (overrides the registry setting for one reserve):
+
+   ```bash
+   domain_lock reserve --domain level_up_core --symbols level_up \
+     --pr 7000 --agent codex-1 --branch feat/foo --intra-pr-exclusive
+   ```
+
+With the mode ON for a domain, conflict partitioning keys on `(claim, agent)`:
+
+- A **different** agent on the **same** claim with **overlapping** symbols (or a
+  whole-domain request over a sibling agent's symbols) raises `DomainHeldError`,
+  exactly like cross-PR symbol overlap.
+- **Disjoint** symbols across sibling agents still coexist.
+- The **same** agent on the **same** claim re-reserving the same/covering symbols
+  stays idempotent (no duplicate, no error).
+
+The mode is OFF by default; existing same-PR multi-agent reservations remain
+permissive. The agent-aware refinement layers uniformly on top of the claim
+identity, so it composes with branch-aware locking (e.g. two agents on the same
+PR-less branch with `intra_pr_exclusive` conflict on overlapping symbols).
 
 ## Symbol-level locks (sub-file granularity)
 
