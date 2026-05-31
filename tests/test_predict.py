@@ -1015,7 +1015,7 @@ def test_detect_repo_from_git_remote_no_git(monkeypatch):
 
 
 def test_enrich_symbols_errors_without_repo_or_remote(tmp_path, monkeypatch):
-    """CLI --enrich-symbols without --repo and no git remote returns exit 2."""
+    """CLI --enrich-symbols (plan mode) without --repo and no git remote returns exit 2."""
     import subprocess as _sp
     import sys as _sys
 
@@ -1044,6 +1044,88 @@ def test_enrich_symbols_errors_without_repo_or_remote(tmp_path, monkeypatch):
     ], capture_output=True, text=True)
     assert r.returncode == 2, r.stderr
     assert "--enrich-symbols requires --repo" in r.stderr
+
+
+def test_from_prs_without_repo_fails_when_enrichment_is_on(tmp_path):
+    """--from-prs with symbol enrichment (default) but no --repo must fail with exit 2.
+
+    Since --from-prs enables symbol enrichment by default and enrichment
+    requires a repo, the CLI must reject the invocation and print a clear error.
+    """
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    gh = fake_bin / "gh"
+    gh.write_text("""#!/bin/sh
+if [ "$1" = "pr" ] && [ "$2" = "diff" ]; then
+  echo mvp_site/world_logic.py
+  exit 0
+fi
+if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  echo branch-$3
+  exit 0
+fi
+exit 1
+""")
+    gh.chmod(0o755)
+
+    import os
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    # No --repo → enrichment cannot proceed → exit 2
+    # Use --git-cwd pointing to tmp_path (not a git repo) so auto-detection also fails.
+    r = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "predict-conflicts", "--from-prs", "1,2",
+        "--no-textual", "--json", "--git-cwd", str(tmp_path),
+    ], capture_output=True, text=True, env=env)
+    assert r.returncode == 2, f"Expected exit 2, got {r.returncode}. stderr={r.stderr!r}"
+    assert "--enrich-symbols requires --repo" in r.stderr
+
+
+def test_from_prs_no_enrich_symbols_skips_enrichment(tmp_path):
+    """--from-prs --no-enrich-symbols must skip symbol enrichment and succeed without --repo."""
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    gh = fake_bin / "gh"
+    gh.write_text("""#!/bin/sh
+if [ "$1" = "pr" ] && [ "$2" = "diff" ]; then
+  echo mvp_site/world_logic.py
+  exit 0
+fi
+if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  echo branch-$3
+  exit 0
+fi
+exit 1
+""")
+    gh.chmod(0o755)
+
+    import os
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    # --no-enrich-symbols → file-level only → no --repo needed → succeeds
+    r = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "predict-conflicts", "--from-prs", "1,2",
+        "--no-enrich-symbols", "--no-textual", "--json",
+    ], capture_output=True, text=True, env=env)
+    # Exit 0 (no domain conflicts) or 1 (domain conflict) — NOT 2 (error)
+    assert r.returncode in (0, 1), f"Expected 0 or 1, got {r.returncode}. stderr={r.stderr!r}"
+    payload = json.loads(r.stdout)
+    assert "input_prs" in payload
+
 
 
 def test_from_prs_fails_closed_when_any_requested_pr_cannot_load(tmp_path):
