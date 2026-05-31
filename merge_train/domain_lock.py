@@ -1007,6 +1007,87 @@ def _fmt_entry(e: LockEntry) -> str:
     return base
 
 
+def _holder_label(e: LockEntry) -> str:
+    """Human-readable lock owner — PR and branch only (no agent)."""
+    if e.pr is not None:
+        if e.branch:
+            return f"PR#{e.pr} ({e.branch})"
+        return f"PR#{e.pr}"
+    return f"branch={e.branch}"
+
+
+def _file_headline(
+    path: str,
+    touched_map: Optional[dict[str, Optional[set[str]]]],
+) -> str:
+    """Primary line for a conflicting file — always path with extension."""
+    if touched_map is None:
+        return path
+    syms = touched_map.get(path)
+    if syms is None:
+        return f"{path}  (whole file — symbols unavailable)"
+    if not syms:
+        return f"{path}  (no symbols in diff)"
+    return f"{path}  symbols: {', '.join(sorted(syms))}"
+
+
+def _format_check_report(
+    result: CheckResult,
+    registry: Registry,
+    files: Iterable[str],
+    touched_map: Optional[dict[str, Optional[set[str]]]] = None,
+) -> str:
+    """Plain-text domain check report for hooks and CLI."""
+    lines: list[str] = ["", "merge_train domain status", ""]
+    grouped = registry.domains_for_paths(files)
+
+    def _conflict_section(
+        header: str,
+        conflicts: list[tuple[str, LockEntry]],
+    ) -> None:
+        if not conflicts:
+            return
+        lines.append(header)
+        for domain, holder in conflicts:
+            paths = sorted(grouped.get(domain, []))
+            if not paths:
+                paths = [domain]
+            for path in paths:
+                lines.append(f"  {_file_headline(path, touched_map)}")
+                lines.append(f"    held by {_holder_label(holder)}")
+                if holder.symbols:
+                    lines.append(
+                        f"    holder symbols: {', '.join(sorted(holder.symbols))}"
+                    )
+                elif holder.is_whole_domain:
+                    lines.append("    holder lock: whole domain")
+                if touched_map and holder.symbols:
+                    sym_set = touched_map.get(path)
+                    if sym_set:
+                        overlap = sym_set & set(holder.symbols)
+                        if overlap:
+                            lines.append(
+                                f"    overlap: {', '.join(sorted(overlap))}"
+                            )
+        lines.append("")
+
+    _conflict_section(
+        "ADVISORY (informational, not blocking):",
+        result.advisory_held,
+    )
+    _conflict_section("HELD (blocking):", result.held)
+
+    if not result.held:
+        free_files: list[str] = []
+        for domain in result.free:
+            free_files.extend(sorted(grouped.get(domain, [])))
+        free_label = ", ".join(free_files) if free_files else "none"
+        lines.append(f"FREE: {len(free_files)} file(s) clear ({free_label})")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _log_to_tmp(argv: list[str], exit_code: int, error_msg: str = ""):
     try:
         log_path = "/tmp/merge_train.log"
@@ -1329,34 +1410,12 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
                 print(f"⚠️  WARN: symbol-resolution fallback (whole-domain): "
                       f"{', '.join(diff_fallback)}", file=sys.stderr)
             
-            # Print a neat header
-            print("\n┌── 🚄 merge_train Domain Status ──────────────────────────────")
-            
-            if result.advisory_held:
-                print("│  ⚠️  ADVISORY CONFLICTS (informational, not blocking):")
-                for d, holder in result.advisory_held:
-                    sym_note = (
-                        f" symbols={','.join(holder.symbols)}"
-                        if holder.symbols else ""
-                    )
-                    print(f"│     • ADVISORY: {d} by PR#{holder.pr} agent={holder.agent} branch={holder.branch}{sym_note}")
-                print("│")
-            
-            if result.held:
-                print("│  ❌ HELD CONFLICTS (blocking):")
-                for d, holder in result.held:
-                    sym_note = (
-                        f" symbols={','.join(holder.symbols)}"
-                        if holder.symbols else ""
-                    )
-                    print(f"│     • HELD: {d} by PR#{holder.pr} agent={holder.agent} branch={holder.branch}{sym_note}")
-                print("│")
-            
-            if not result.held:
-                print(f"│  ✅ FREE: {len(result.free)} domain(s) clear "
-                      f"({', '.join(result.free) or 'none'})")
-            
-            print("└──────────────────────────────────────────────────────────────\n")
+            print(
+                _format_check_report(
+                    result, registry, args.files, touched_map,
+                ),
+                end="",
+            )
         return 0 if result.ok else 1
 
     if args.cmd == "list":
