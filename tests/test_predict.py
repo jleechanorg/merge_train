@@ -1015,7 +1015,7 @@ def test_detect_repo_from_git_remote_no_git(monkeypatch):
 
 
 def test_enrich_symbols_errors_without_repo_or_remote(tmp_path, monkeypatch):
-    """CLI --enrich-symbols without --repo and no git remote returns exit 2."""
+    """CLI --enrich-symbols (plan mode) without --repo and no git remote returns exit 2."""
     import subprocess as _sp
     import sys as _sys
 
@@ -1044,6 +1044,88 @@ def test_enrich_symbols_errors_without_repo_or_remote(tmp_path, monkeypatch):
     ], capture_output=True, text=True)
     assert r.returncode == 2, r.stderr
     assert "--enrich-symbols requires --repo" in r.stderr
+
+
+def test_from_prs_without_repo_fails_when_enrichment_is_on(tmp_path):
+    """--from-prs with symbol enrichment (default) but no --repo must fail with exit 2.
+
+    Since --from-prs enables symbol enrichment by default and enrichment
+    requires a repo, the CLI must reject the invocation and print a clear error.
+    """
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    gh = fake_bin / "gh"
+    gh.write_text("""#!/bin/sh
+if [ "$1" = "pr" ] && [ "$2" = "diff" ]; then
+  echo mvp_site/world_logic.py
+  exit 0
+fi
+if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  echo branch-$3
+  exit 0
+fi
+exit 1
+""")
+    gh.chmod(0o755)
+
+    import os
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    # No --repo → enrichment cannot proceed → exit 2
+    # Use --git-cwd pointing to tmp_path (not a git repo) so auto-detection also fails.
+    r = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "predict-conflicts", "--from-prs", "1,2",
+        "--no-textual", "--json", "--git-cwd", str(tmp_path),
+    ], capture_output=True, text=True, env=env)
+    assert r.returncode == 2, f"Expected exit 2, got {r.returncode}. stderr={r.stderr!r}"
+    assert "--enrich-symbols requires --repo" in r.stderr
+
+
+def test_from_prs_no_enrich_symbols_skips_enrichment(tmp_path):
+    """--from-prs --no-enrich-symbols must skip symbol enrichment and succeed without --repo."""
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    gh = fake_bin / "gh"
+    gh.write_text("""#!/bin/sh
+if [ "$1" = "pr" ] && [ "$2" = "diff" ]; then
+  echo mvp_site/world_logic.py
+  exit 0
+fi
+if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  echo branch-$3
+  exit 0
+fi
+exit 1
+""")
+    gh.chmod(0o755)
+
+    import os
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    # --no-enrich-symbols → file-level only → no --repo needed → succeeds
+    r = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "predict-conflicts", "--from-prs", "1,2",
+        "--no-enrich-symbols", "--no-textual", "--json",
+    ], capture_output=True, text=True, env=env)
+    # Exit 0 (no domain conflicts) or 1 (domain conflict) — NOT 2 (error)
+    assert r.returncode in (0, 1), f"Expected 0 or 1, got {r.returncode}. stderr={r.stderr!r}"
+    payload = json.loads(r.stdout)
+    assert "input_prs" in payload
+
 
 
 def test_from_prs_fails_closed_when_any_requested_pr_cannot_load(tmp_path):
@@ -1128,3 +1210,180 @@ def test_gh_file_content_at_ref_handles_encoding_none(monkeypatch, caplog):
         result = _gh_file_content_at_ref("big.py", "abc", "owner/repo")
     assert result == ""
     assert any("no inline content" in r.message for r in caplog.records)
+
+
+# --------------------------------------------------------------------------- #
+# TDD gap coverage: symbol-level-by-default (feat/symbol-level-by-default)
+# --------------------------------------------------------------------------- #
+
+
+def test_enrich_specs_with_symbols_includes_md_files(monkeypatch):
+    """Gap 1: _enrich_specs_with_symbols must include .md files in enrichable list.
+
+    Previously only .py files were considered; the feature now also enriches
+    Markdown files. Verify that a spec whose only files are .md still triggers
+    symbols_from_files_in_pr and returns a symbols_by_file mapping.
+    """
+    from merge_train import predict as predict_mod
+
+    captured: dict = {}
+
+    def fake_symbols_from_files_in_pr(pr, files, repo):
+        captured["pr"] = pr
+        captured["files"] = list(files)
+        # Simulate discovering 2 headings in a markdown file.
+        return {f: ["## Overview", "## Usage"] for f in files}
+
+    monkeypatch.setattr(
+        predict_mod,
+        "_enrich_specs_with_symbols",
+        predict_mod._enrich_specs_with_symbols,  # keep real impl; patch inner dep
+    )
+    import merge_train.symbol_discovery as _sd
+    monkeypatch.setattr(_sd, "symbols_from_files_in_pr", fake_symbols_from_files_in_pr)
+
+    specs = [
+        PRSpec(pr=42, branch="docs-patch",
+               files=("docs/design/overview.md", "docs/design/usage.md")),
+    ]
+    enriched = predict_mod._enrich_specs_with_symbols(specs, repo="owner/repo")
+
+    # Both .md files must appear in the enrichable set forwarded to symbols_from_files_in_pr
+    assert sorted(captured["files"]) == ["docs/design/overview.md", "docs/design/usage.md"]
+    # The returned spec must have symbols_by_file populated
+    assert len(enriched) == 1
+    assert "docs/design/overview.md" in enriched[0].symbols_by_file
+    assert "docs/design/usage.md" in enriched[0].symbols_by_file
+
+
+def test_from_prs_no_enrich_symbols_produces_whole_domain_conflicts(tmp_path):
+    """Gap 2: --from-prs --no-enrich-symbols must produce whole-domain (empty symbols) output.
+
+    When symbol enrichment is skipped, domain_conflicts in the JSON output
+    must have an empty 'symbols' list (whole-domain lock semantics), not
+    symbol-level entries.
+    """
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({
+        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    gh = fake_bin / "gh"
+    gh.write_text("""#!/bin/sh
+if [ "$1" = "pr" ] && [ "$2" = "diff" ]; then
+  echo mvp_site/world_logic.py
+  exit 0
+fi
+if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  echo branch-$3
+  exit 0
+fi
+exit 1
+""")
+    gh.chmod(0o755)
+
+    import os
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    r = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg),
+        "predict-conflicts", "--from-prs", "1,2",
+        "--no-enrich-symbols", "--no-textual", "--json",
+    ], capture_output=True, text=True, env=env)
+
+    # Must not error (exit 2) — only 0 (no conflict) or 1 (conflict)
+    assert r.returncode in (0, 1), f"Unexpected exit {r.returncode}. stderr={r.stderr!r}"
+    payload = json.loads(r.stdout)
+
+    # Both PRs touch the same domain → should produce a pairwise conflict
+    assert payload["input_prs"] == [1, 2]
+    assert len(payload["pairwise_conflicts"]) == 1
+    dc = payload["pairwise_conflicts"][0]["domain_conflicts"]
+    assert len(dc) == 1
+    assert dc[0]["domain"] == "world"
+    # Whole-domain semantics: symbols list must be empty (no enrichment)
+    assert dc[0]["symbols"] == [], (
+        f"Expected whole-domain (empty symbols) but got {dc[0]['symbols']!r} — "
+        "enrichment must be fully skipped when --no-enrich-symbols is passed"
+    )
+
+
+def test_e2e_pairwise_no_enrich_symbols_skips_enrichment(tmp_path, monkeypatch):
+    """Gap 3: e2e_pairwise_merge_tree.py --no-enrich-symbols must skip enrichment.
+
+    Verifies the script's _merge_tree_result function with enrich_symbols=False
+    does not call symbols_from_pr_diff, and that symbol_overlaps is empty even
+    when overlapping files exist.
+    """
+    import importlib.util
+    import sys as _sys
+    from pathlib import Path
+
+    # Dynamically import the script (not a package)
+    script_path = Path(__file__).parent.parent / "scripts" / "e2e_pairwise_merge_tree.py"
+    spec = importlib.util.spec_from_file_location("e2e_pairwise", script_path)
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+
+    enrichment_called = {"count": 0}
+
+    # Patch subprocess.run to fake git merge-tree + git diff --name-only
+    import subprocess as _sp
+
+    original_run = _sp.run
+
+    def fake_run(cmd, *a, **kw):
+        if isinstance(cmd, list) and "merge-tree" in cmd:
+            # No conflict markers in output
+            return type("P", (), {
+                "returncode": 0,
+                "stdout": b"",
+                "stderr": b"",
+            })()
+        if isinstance(cmd, list) and "diff" in cmd and "--name-only" in cmd:
+            # Both branches touch the same file
+            return type("P", (), {
+                "returncode": 0,
+                "stdout": "mvp_site/world_logic.py\n",
+                "stderr": "",
+            })()
+        return type("P", (), {"returncode": 0, "stdout": b"", "stderr": b""})()
+
+    monkeypatch.setattr(_sp, "run", fake_run)
+
+    # Patch symbols_from_pr_diff to track if enrichment is attempted
+    try:
+        import merge_train.symbol_discovery as _sd
+
+        def fake_symbols_from_pr_diff(pr, repo):
+            enrichment_called["count"] += 1
+            return {}
+
+        monkeypatch.setattr(_sd, "symbols_from_pr_diff", fake_symbols_from_pr_diff)
+    except (ImportError, AttributeError):
+        pass
+
+    result = mod._merge_tree_result(
+        base="origin/main",
+        branch_a="feat-a",
+        branch_b="feat-b",
+        git_cwd=str(tmp_path),
+        pr_a=10,
+        pr_b=20,
+        repo="owner/repo",
+        enrich_symbols=False,  # ← the flag under test
+    )
+
+    # With --no-enrich-symbols, symbol_overlaps must be empty
+    assert result["symbol_overlaps"] == {}, (
+        f"Expected empty symbol_overlaps when enrich_symbols=False, "
+        f"got {result['symbol_overlaps']!r}"
+    )
+    # And the enrichment function must NOT have been called
+    assert enrichment_called["count"] == 0, (
+        f"symbols_from_pr_diff was called {enrichment_called['count']} time(s) "
+        "even though enrich_symbols=False"
+    )

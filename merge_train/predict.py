@@ -594,7 +594,13 @@ def _enrich_specs_with_symbols(
     specs: list["PRSpec"],
     repo: Optional[str],
 ) -> list["PRSpec"]:
-    """Auto-populate ``symbols_by_file`` for specs that declare no symbols."""
+    """Auto-populate ``symbols_by_file`` for specs that declare no symbols.
+
+    Discovers symbols from both Python (``.py``) and Markdown (``.md``)
+    files in the PR diff. Non-Python/non-Markdown files are treated as
+    whole-file edits (fail-closed), which is the correct conservative
+    default for e.g. JSON schemas and CSS.
+    """
     from merge_train.symbol_discovery import symbols_from_files_in_pr
 
     enriched: list[PRSpec] = []
@@ -602,11 +608,12 @@ def _enrich_specs_with_symbols(
         if spec.symbols_by_file:
             enriched.append(spec)
             continue
-        py_files = [f for f in spec.files if f.endswith(".py")]
-        if not py_files:
+        # Include both Python and Markdown files for symbol extraction.
+        enrichable = [f for f in spec.files if f.endswith((".py", ".md"))]
+        if not enrichable:
             enriched.append(spec)
             continue
-        sym_map = symbols_from_files_in_pr(spec.pr, py_files, repo)
+        sym_map = symbols_from_files_in_pr(spec.pr, enrichable, repo)
         if not sym_map:
             enriched.append(spec)
             continue
@@ -625,9 +632,14 @@ def cli_predict_conflicts(
     json_output: bool,
     from_prs: Optional[str] = None,
     repo: Optional[str] = None,
-    enrich_symbols: bool = False,
+    enrich_symbols: bool = True,
 ) -> int:
     """Implementation of ``domain_lock predict-conflicts``.
+
+    Symbol enrichment (``enrich_symbols``) defaults to ``True``. When
+    using ``--from-prs`` via the CLI this is the standard path; callers
+    that hand-author a plan file with pre-declared symbols can pass
+    ``enrich_symbols=False`` to skip the GitHub API round-trips.
 
     Returns the exit code:
     - 0 if no pairwise conflict was detected

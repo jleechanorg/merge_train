@@ -40,10 +40,19 @@ DEFAULT_LOG = "<auto>"
 
 def _get_git_toplevel(cwd: Path | str | None = None) -> Path | None:
     try:
+        # Strip GIT_DIR / GIT_WORK_TREE from the environment so that git
+        # performs pure filesystem discovery.  When git spawns pre-commit hooks
+        # it injects GIT_DIR pointing to the repo's .git directory; without
+        # this, any directory passed as `cwd` would be falsely reported as
+        # inside the hook's own repository.
+        clean_env = {k: v for k, v in os.environ.items()
+                     if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+                                  "GIT_OBJECT_DIRECTORY")}
         res = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True, text=True, check=False,
             cwd=str(cwd) if cwd is not None else None,
+            env=clean_env,
         )
         if res.returncode == 0 and res.stdout.strip():
             return Path(res.stdout.strip()).resolve()
@@ -833,13 +842,19 @@ def _build_parser() -> argparse.ArgumentParser:
                        help="path to YAML/JSON file with a 'prs' list")
     pr_pc.add_argument("--from-prs", metavar="N,M,...",
                        help="comma-separated PR numbers; bypasses --plan, "
-                            "fetches file lists from GitHub via gh")
+                            "fetches file lists from GitHub via gh (symbol "
+                            "enrichment is ON by default with --from-prs)")
     pr_pc.add_argument("--repo", metavar="OWNER/REPO",
-                       help="GitHub repo for --from-prs / --enrich-symbols "
+                       help="GitHub repo for --from-prs / symbol enrichment "
                             "(e.g. jleechanorg/worldarchitect.ai)")
+    # Symbol enrichment: ON by default for --from-prs; opt-out with --no-enrich-symbols.
+    # For --plan mode it remains opt-in via --enrich-symbols (plan may have hand-authored symbols).
+    pr_pc.add_argument("--no-enrich-symbols", action="store_true",
+                       help="disable auto symbol enrichment from gh pr diff "
+                            "(enrichment is on by default when --from-prs is used)")
     pr_pc.add_argument("--enrich-symbols", action="store_true",
-                       help="auto-populate symbols_by_file from gh pr diff "
-                            "for PRs that declare no symbols")
+                       help="force symbol enrichment even when using --plan "
+                            "(always on for --from-prs unless --no-enrich-symbols is set)")
     pr_pc.add_argument("--no-textual", action="store_true",
                        help="skip git merge-tree textual conflict check")
     pr_pc.add_argument("--git-base", default="origin/main",
@@ -1250,6 +1265,15 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
             print("error: one of --plan or --from-prs is required",
                   file=sys.stderr)
             return 2
+        # Symbol enrichment defaults:
+        # - --from-prs: ON unless --no-enrich-symbols is set (symbol-level by default)
+        # - --plan: OFF unless --enrich-symbols is explicitly set (plan may have hand-authored symbols)
+        no_enrich = getattr(args, "no_enrich_symbols", False)
+        explicit_enrich = getattr(args, "enrich_symbols", False)
+        if from_prs:
+            enrich = not no_enrich  # default ON for from-prs
+        else:
+            enrich = explicit_enrich  # default OFF for plan-file
         return cli_predict_conflicts(
             plan_path=plan_path,
             registry=registry,
@@ -1259,7 +1283,7 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
             json_output=args.json,
             from_prs=from_prs,
             repo=getattr(args, "repo", None),
-            enrich_symbols=getattr(args, "enrich_symbols", False),
+            enrich_symbols=enrich,
         )
 
     return 2
