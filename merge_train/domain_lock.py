@@ -40,10 +40,19 @@ DEFAULT_LOG = "<auto>"
 
 def _get_git_toplevel(cwd: Path | str | None = None) -> Path | None:
     try:
+        # Strip GIT_DIR / GIT_WORK_TREE from the environment so that git
+        # performs pure filesystem discovery.  When git spawns pre-commit hooks
+        # it injects GIT_DIR pointing to the repo's .git directory; without
+        # this, any directory passed as `cwd` would be falsely reported as
+        # inside the hook's own repository.
+        clean_env = {k: v for k, v in os.environ.items()
+                     if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+                                  "GIT_OBJECT_DIRECTORY")}
         res = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True, text=True, check=False,
             cwd=str(cwd) if cwd is not None else None,
+            env=clean_env,
         )
         if res.returncode == 0 and res.stdout.strip():
             return Path(res.stdout.strip()).resolve()
