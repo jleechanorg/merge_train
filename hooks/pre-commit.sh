@@ -50,8 +50,8 @@ FILES=( ${STAGED} )
 # Diff-mode lets two PRs edit the same file but disjoint Python symbols.
 # Set MERGE_TRAIN_DIFF_MODE=0 to fall back to file-level checks.
 DIFF_ARG=()
-if [[ "${MERGE_TRAIN_DIFF_MODE:-1}" != "0" ]]; then
-  DIFF_ARG=( --diff-mode )
+if [[ "${MERGE_TRAIN_DIFF_MODE:-1}" == "0" ]]; then
+  DIFF_ARG=( --no-diff-mode )
 fi
 
 if command -v domain_lock >/dev/null 2>&1; then

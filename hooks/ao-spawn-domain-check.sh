@@ -33,7 +33,7 @@ fi
 # shellcheck disable=SC2206
 FILES=( ${MERGE_TRAIN_FILES} )
 
-ARGS=( check --files "${FILES[@]}" )
+ARGS=( check --files "${FILES[@]}" --no-diff-mode )
 if [[ -n "${MERGE_TRAIN_PR:-}" ]]; then
   ARGS+=( --pr "${MERGE_TRAIN_PR}" )
 fi
