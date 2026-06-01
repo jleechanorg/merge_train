@@ -69,7 +69,8 @@ def test_extract_typescript_ranges():
 def test_extract_typescript_arrow_function():
     src = "export const multiply = (x: number, y: number): number => x * y;\n"
     syms = extract_typescript_symbols(src)
-    # Arrow functions with const binding may be captured as "multiply"
+    # Arrow functions with const binding are captured as "multiply"
+    assert any(s.name == "multiply" for s in syms)
 
 
 # --------------------------------------------------------------------------- #
@@ -142,16 +143,6 @@ def test_extract_rust_from_fixture():
     syms = extract_rust_symbols(src)
     names = [s.name for s in syms]
     # Calculator is defined as struct before impl
-    assert "Calculator" in names
-    # add is a top-level standalone function (not in impl)
-    assert "add" in names
-
-
-def test_extract_rust_from_fixture():
-    src = read_fixture("sample.rs")
-    syms = extract_rust_symbols(src)
-    names = [s.name for s in syms]
-    # Calculator is defined as struct (has its own symbol)
     assert "Calculator" in names
     # add is a top-level standalone function (not in impl)
     assert "add" in names

@@ -281,7 +281,8 @@ def symbols_from_pr_diff(
                 continue
             try:
                 syms = touched_symbols(new_source=content, diff_text=file_diff)
-                result[path] = syms
+                if syms:
+                    result[path] = syms
             except SyntaxError as exc:
                 _log.debug("ast parse failed for %s in PR#%s: %s", path, pr_number, exc)
             except Exception as exc:

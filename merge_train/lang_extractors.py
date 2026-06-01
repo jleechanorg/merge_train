@@ -24,12 +24,26 @@ except ImportError:
     pass
 
 
+_TS_LANG_MAP = {
+    "typescript": "typescript",
+    "tsx": "tsx",
+    "javascript": "javascript",
+    "go": "go",
+    "rust": "rust",
+    "java": "java",
+    "c": "c",
+    "cpp": "cpp",
+    "csharp": "c_sharp",  # tree-sitter-languages uses underscore
+}
+
+
 def _parse_ts(language: str, source: bytes) -> Optional[object]:
     """Parse source with tree-sitter and return the tree, or None on failure."""
     if not _TS_AVAILABLE:
         return None
+    ts_lang = _TS_LANG_MAP.get(language, language)
     try:
-        parser = tree_sitter_languages.get_parser(language)
+        parser = tree_sitter_languages.get_parser(ts_lang)
         return parser.parse(source)
     except Exception:
         return None
@@ -39,19 +53,19 @@ def _parse_ts(language: str, source: bytes) -> Optional[object]:
 # TypeScript / JavaScript
 # --------------------------------------------------------------------------- #
 
-def extract_typescript_symbols(source: str) -> list[Symbol]:
+def extract_typescript_symbols(source: str, *, language: str = "typescript") -> list[Symbol]:
     """Extract symbols from TypeScript/JavaScript using tree-sitter or regex fallback."""
     if _TS_AVAILABLE:
         try:
-            return _extract_ts_tree_sitter(source)
+            return _extract_ts_tree_sitter(source, language=language)
         except Exception:
             pass
     return _extract_ts_regex(source)
 
 
-def _extract_ts_tree_sitter(source: str) -> list[Symbol]:
-    """Extract TS/JS symbols via tree-sitter TypeScript grammar."""
-    tree = _parse_ts("typescript", source.encode("utf-8"))
+def _extract_ts_tree_sitter(source: str, *, language: str = "typescript") -> list[Symbol]:
+    """Extract TS/JS symbols via tree-sitter TypeScript/TSX grammar."""
+    tree = _parse_ts(language, source.encode("utf-8"))
     if tree is None:
         raise UnsupportedLanguageError("typescript")
 
@@ -108,7 +122,6 @@ def _get_child(node: object, child_type: str) -> Optional[object]:
 
 _TS_FUNC_RE = re.compile(r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(", re.MULTILINE)
 _TS_CLASS_RE = re.compile(r"^(?:export\s+)?class\s+(\w+)", re.MULTILINE)
-_TS_METHOD_RE = re.compile(r"^\s*(?:async\s+)?(\w+)\s*\([^)]*\)\s*{", re.MULTILINE)
 _TS_ARROW_RE = re.compile(r"^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(", re.MULTILINE)
 _TS_INTERFACE_RE = re.compile(r"^interface\s+(\w+)", re.MULTILINE)
 _TS_TYPE_RE = re.compile(r"^type\s+(\w+)\s*=", re.MULTILINE)
@@ -606,4 +619,7 @@ def extract_symbols_for_language(source: str, language: str) -> list[Symbol]:
     extractor = _EXTRACTORS.get(language)
     if extractor is None:
         raise UnsupportedLanguageError(f"unsupported language: {language}")
+    # Pass language to TS/JS extractors so they use the right tree-sitter grammar
+    if language in ("typescript", "tsx", "javascript", "jsx", "mjs"):
+        return extractor(source, language=language)
     return extractor(source)
