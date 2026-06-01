@@ -1052,9 +1052,13 @@ def _build_parser() -> argparse.ArgumentParser:
                             "reservations on the same claim are self-exempt")
     pr_ck.add_argument("--json", action="store_true", help="JSON output")
     pr_ck.add_argument(
-        "--diff-mode", action="store_true",
+        "--diff-mode", action="store_true", default=True,
         help="resolve touched Python symbols from staged git diff "
-             "(allows symbol-level co-tenancy on the same file)",
+             "(allows symbol-level co-tenancy on the same file) [default: True]",
+    )
+    pr_ck.add_argument(
+        "--no-diff-mode", action="store_true", default=False,
+        help="disable staged git diff symbol resolution (lock entire domain or file)",
     )
     pr_ck.add_argument(
         "--symbols", default="",
@@ -1554,7 +1558,7 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
         if getattr(args, "symbols", ""):
             syms = set(s.strip() for s in args.symbols.split(",") if s.strip())
             touched_map = {f: syms for f in args.files}
-        elif args.diff_mode:
+        elif args.diff_mode and not getattr(args, "no_diff_mode", False):
             from merge_train.symbols import resolve_touched_symbols
             cwd = Path(args.git_cwd) if args.git_cwd else None
             per_file, fallback = resolve_touched_symbols(args.files, cwd=cwd)

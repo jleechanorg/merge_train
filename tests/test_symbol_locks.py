@@ -419,3 +419,43 @@ def test_reserve_many_symbols_refuses_with_summarized_symbols(shared_domain):
         reserve(log, reg, domain="shared", pr=2, agent="a2", branch="b2",
                 symbols=["s1", "s2", "s3", "s4", "s6"])
     assert "4 symbols" in str(exc.value)
+
+
+def test_cli_check_defaults_to_diff_mode_and_supports_no_diff_mode(tmp_path: Path):
+    repo, reg, log = _make_diff_repo(tmp_path)
+    src = (repo / "shared.py").read_text()
+    (repo / "shared.py").write_text(
+        src.replace("    return 1\n", "    return 11\n")
+    )
+    _git(repo, "add", "shared.py")
+    
+    # Reserve "beta" (PR 1). "alpha" is what is touched by PR 2.
+    subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "reserve", "--domain", "shared", "--pr", "1",
+        "--agent", "a", "--branch", "b",
+        "--symbols", "beta",
+    ], check=True, capture_output=True)
+
+    # 1. By default, check uses diff-mode. "shared.py:alpha" touched does not overlap with "beta" lock.
+    r1 = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "--git-cwd", str(repo),
+        "check", "--files", "shared.py", "--pr", "2",
+    ], capture_output=True, text=True)
+    assert r1.returncode == 0, f"stdout={r1.stdout} stderr={r1.stderr}"
+    assert "FREE" in r1.stdout
+
+    # 2. With --no-diff-mode, it falls back to whole-domain/file-level lock. Since "shared" domain is locked, it fails.
+    r2 = subprocess.run([
+        sys.executable, "-m", "merge_train.domain_lock",
+        "--registry", str(reg), "--log", str(log),
+        "--git-cwd", str(repo),
+        "check", "--files", "shared.py", "--pr", "2",
+        "--no-diff-mode",
+    ], capture_output=True, text=True)
+    assert r2.returncode == 1
+    assert "HELD" in r2.stdout
+
