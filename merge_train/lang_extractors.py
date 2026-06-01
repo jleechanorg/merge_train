@@ -440,28 +440,43 @@ def _capture_java_nodes(node: object, out: list[Symbol], class_name: Optional[st
 
 
 _JAVA_METHOD_RE = re.compile(
-    r"^(?:public|private|protected|static)?\s*(?:\w+\s+)*(\w+)\s*\(",
-    re.MULTILINE,
+    r"^(?:public|private|protected|static|final|native|synchronized|abstract|default)?\s*(?:\w+\s+)*(\w+)\s*\(",
 )
-_JAVA_CLASS_RE = re.compile(r"^(?:public\s+)?class\s+(\w+)", re.MULTILINE)
+_JAVA_CLASS_RE = re.compile(r"^(?:(?:public|protected|private|static|final|abstract)\s+)*class\s+(\w+)")
 
 
 def _extract_java_regex(source: str) -> list[Symbol]:
     """Regex-based Java symbol extractor (fallback)."""
     out: list[Symbol] = []
     lines = source.splitlines()
-    class_stack: list[str] = []
+    class_stack: list[tuple[str, int]] = []
+    brace_level = 0
+    java_ignored_keywords = {"if", "for", "while", "switch", "catch", "synchronized", "super", "this", "new"}
 
     for i, line in enumerate(lines, start=1):
-        m = _JAVA_CLASS_RE.match(line)
-        if m:
-            class_stack.append(m.group(1))
-            out.append(Symbol(name=m.group(1), start=i, end=i))
-            continue
+        stripped = line.strip()
+        class_declared_this_line = False
 
-        m = _JAVA_METHOD_RE.match(line)
-        if m and class_stack:
-            out.append(Symbol(name=f"{class_stack[-1]}.{m.group(1)}", start=i, end=i))
+        m = _JAVA_CLASS_RE.match(stripped)
+        if m:
+            class_name = m.group(1)
+            class_stack.append((class_name, brace_level))
+            out.append(Symbol(name=class_name, start=i, end=i))
+            class_declared_this_line = True
+        else:
+            m = _JAVA_METHOD_RE.match(stripped)
+            if m and class_stack:
+                method_name = m.group(1)
+                if method_name not in java_ignored_keywords:
+                    out.append(Symbol(name=f"{class_stack[-1][0]}.{method_name}", start=i, end=i))
+
+        # Update brace level for the line
+        brace_level += line.count("{") - line.count("}")
+
+        # Pop classes that have been closed
+        if not class_declared_this_line:
+            while class_stack and brace_level <= class_stack[-1][1]:
+                class_stack.pop()
 
     return out
 
@@ -610,10 +625,9 @@ def _capture_csharp_nodes(node: object, out: list[Symbol], class_name: Optional[
         _capture_csharp_nodes(child, out, class_name)
 
 
-_CSHARP_CLASS_RE = re.compile(r"^(?:public\s+)?class\s+(\w+)", re.MULTILINE)
+_CSHARP_CLASS_RE = re.compile(r"^(?:(?:public|protected|private|static|internal|sealed|abstract|partial)\s+)*class\s+(\w+)")
 _CSHARP_METHOD_RE = re.compile(
-    r"^(?:public|private|protected|internal|static|virtual|override)?\s*(?:\w+\s+)*(\w+)\s*\(",
-    re.MULTILINE,
+    r"^(?:public|private|protected|internal|static|virtual|override|abstract|sealed|partial|async)?\s*(?:\w+\s+)*(\w+)\s*\(",
 )
 
 
@@ -621,18 +635,34 @@ def _extract_csharp_regex(source: str) -> list[Symbol]:
     """Regex-based C# symbol extractor (fallback)."""
     out: list[Symbol] = []
     lines = source.splitlines()
-    class_stack: list[str] = []
+    class_stack: list[tuple[str, int]] = []
+    brace_level = 0
+    csharp_ignored_keywords = {"if", "for", "foreach", "while", "switch", "catch", "lock", "using", "new"}
 
     for i, line in enumerate(lines, start=1):
-        m = _CSHARP_CLASS_RE.match(line)
-        if m:
-            class_stack.append(m.group(1))
-            out.append(Symbol(name=m.group(1), start=i, end=i))
-            continue
+        stripped = line.strip()
+        class_declared_this_line = False
 
-        m = _CSHARP_METHOD_RE.match(line)
-        if m and class_stack:
-            out.append(Symbol(name=f"{class_stack[-1]}.{m.group(1)}", start=i, end=i))
+        m = _CSHARP_CLASS_RE.match(stripped)
+        if m:
+            class_name = m.group(1)
+            class_stack.append((class_name, brace_level))
+            out.append(Symbol(name=class_name, start=i, end=i))
+            class_declared_this_line = True
+        else:
+            m = _CSHARP_METHOD_RE.match(stripped)
+            if m and class_stack:
+                method_name = m.group(1)
+                if method_name not in csharp_ignored_keywords:
+                    out.append(Symbol(name=f"{class_stack[-1][0]}.{method_name}", start=i, end=i))
+
+        # Update brace level for the line
+        brace_level += line.count("{") - line.count("}")
+
+        # Pop classes that have been closed
+        if not class_declared_this_line:
+            while class_stack and brace_level <= class_stack[-1][1]:
+                class_stack.pop()
 
     return out
 

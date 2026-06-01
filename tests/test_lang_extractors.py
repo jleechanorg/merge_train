@@ -311,3 +311,53 @@ def test_extract_symbols_for_language_unknown_raises():
 
     with pytest.raises(UnsupportedLanguageError):
         extract_symbols_for_language("x = 1", "unknown_language")
+
+
+def test_extract_java_regex_indentation_and_class_pop():
+    from merge_train.lang_extractors import _extract_java_regex
+    src = (
+        "  public class Foo {\n"
+        "      public void bar() {\n"
+        "          if (x) {\n"
+        "          }\n"
+        "      }\n"
+        "  }\n"
+        "  class Bar {\n"
+        "      public void baz() {}\n"
+        "  }\n"
+    )
+    syms = _extract_java_regex(src)
+    names = [s.name for s in syms]
+    assert "Foo" in names
+    assert "Foo.bar" in names
+    assert "Bar" in names
+    assert "Bar.baz" in names
+    assert "Foo.baz" not in names
+    assert "Bar.bar" not in names
+
+
+def test_extract_csharp_regex_indentation_and_class_pop():
+    from merge_train.lang_extractors import _extract_csharp_regex
+    src = (
+        "  public class Foo\n"
+        "  {\n"
+        "      public void Bar()\n"
+        "      {\n"
+        "          if (x)\n"
+        "          {\n"
+        "          }\n"
+        "      }\n"
+        "  }\n"
+        "  class Bar\n"
+        "  {\n"
+        "      public void Baz() {}\n"
+        "  }\n"
+    )
+    syms = _extract_csharp_regex(src)
+    names = [s.name for s in syms]
+    assert "Foo" in names
+    assert "Foo.Bar" in names
+    assert "Bar" in names
+    assert "Bar.Baz" in names
+    assert "Foo.Baz" not in names
+    assert "Bar.Bar" not in names
