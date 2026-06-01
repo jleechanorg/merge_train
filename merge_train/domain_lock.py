@@ -456,9 +456,10 @@ def _reserve_locked(
                 )
         if symbol_others and not _approved:
             held = symbol_others[0]
+            syms_str = f"{len(held.symbols)} symbols" if len(held.symbols) > 3 else ",".join(held.symbols)
             raise DomainHeldError(
                 f"domain '{domain}' has symbol locks held by "
-                f"{_who(held)} (agent={held.agent}, symbols={','.join(held.symbols)}) — "
+                f"{_who(held)} (agent={held.agent}, symbols={syms_str}) — "
                 "whole-domain reservation refused"
             )
     else:
@@ -474,8 +475,10 @@ def _reserve_locked(
         for holder in symbol_others:
             overlap = set(holder.symbols).intersection(syms)
             if overlap and not _approved:
+                sorted_overlap = sorted(overlap)
+                overlap_str = f"{len(sorted_overlap)} symbols" if len(sorted_overlap) > 3 else ",".join(sorted_overlap)
                 raise DomainHeldError(
-                    f"symbol(s) {','.join(sorted(overlap))} in domain "
+                    f"symbol(s) {overlap_str} in domain "
                     f"'{domain}' held by {_who(holder)} (agent={holder.agent}, "
                     f"branch={holder.branch})"
                 )
@@ -1119,8 +1122,10 @@ def _format_check_report(
             for holder, paths in holder_to_paths.items():
                 lines.append(f"    Held by: {_holder_label(holder)}")
                 if holder.symbols:
+                    sorted_syms = sorted(holder.symbols)
+                    syms_str = f"{len(sorted_syms)} symbols" if len(sorted_syms) > 3 else ", ".join(sorted_syms)
                     lines.append(
-                        f"      Lock details: holder symbols: {', '.join(sorted(holder.symbols))}"
+                        f"      Lock details: holder symbols: {syms_str}"
                     )
                 elif holder.is_whole_domain:
                     lines.append("      Lock details: holder lock: whole domain")
@@ -1138,8 +1143,10 @@ def _format_check_report(
                         if sym_set:
                             overlap = sym_set & set(holder.symbols)
                             if overlap:
+                                sorted_overlap = sorted(overlap)
+                                overlap_str = f"{len(sorted_overlap)} symbols" if len(sorted_overlap) > 3 else ", ".join(sorted_overlap)
                                 lines.append(
-                                    f"        overlap: {', '.join(sorted(overlap))}"
+                                    f"        overlap: {overlap_str}"
                                 )
                                 
                 if non_code_files:

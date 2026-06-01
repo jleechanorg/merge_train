@@ -399,3 +399,23 @@ def test_cli_check_diff_mode_json_includes_fallback(tmp_path: Path):
     payload = json.loads(r.stdout)
     assert "fallback_files" in payload
     assert "config.yaml" in payload["fallback_files"]
+
+
+def test_reserve_many_symbols_refuses_with_summarized_symbols(shared_domain):
+    log, reg = shared_domain
+    # Reserve a domain with 5 symbols
+    reserve(log, reg, domain="shared", pr=1, agent="a", branch="b",
+            symbols=["s1", "s2", "s3", "s4", "s5"])
+    
+    # Try to reserve the whole domain — should fail and raise DomainHeldError
+    # showing "5 symbols" instead of listing them all
+    with pytest.raises(DomainHeldError) as exc:
+        reserve(log, reg, domain="shared", pr=2, agent="a2", branch="b2")
+    assert "5 symbols" in str(exc.value)
+    
+    # Try to reserve overlapping symbols (s1, s2, s3, s4, s6) — should fail
+    # showing "4 symbols" in the error because 4 of them overlap
+    with pytest.raises(DomainHeldError) as exc:
+        reserve(log, reg, domain="shared", pr=2, agent="a2", branch="b2",
+                symbols=["s1", "s2", "s3", "s4", "s6"])
+    assert "4 symbols" in str(exc.value)
