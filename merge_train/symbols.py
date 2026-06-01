@@ -444,7 +444,7 @@ def resolve_touched_symbols(
     """Resolve every path to its set of touched symbols.
 
     Returns ``(per_file, file_level_fallback)`` where:
-      * ``per_file`` maps path -> set of touched symbol names (Python/Markdown)
+      * ``per_file`` maps path -> set of touched symbol names
       * ``file_level_fallback`` lists paths that couldn't be symbol-resolved
         (unsupported type, missing, parse error) — callers fall back to
         whole-domain collision for these.
@@ -455,7 +455,11 @@ def resolve_touched_symbols(
         try:
             per_file[path] = touched_symbols_for_staged_file(path, cwd=cwd)
         except Exception:
-            fallback.append(path)
+            lang = language_for_path(path)
+            if lang != "python":
+                per_file[path] = {f"file:{path}"}
+            else:
+                fallback.append(path)
     return per_file, fallback
 
 

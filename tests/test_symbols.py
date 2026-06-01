@@ -341,8 +341,8 @@ def test_resolve_touched_symbols_mixed_python_and_other(git_repo: Path):
     _git(git_repo, "add", "m.py", "x.txt")
 
     per_file, fallback = resolve_touched_symbols(["m.py", "x.txt"], cwd=git_repo)
-    assert per_file == {"m.py": {"m.py:alpha"}}
-    assert fallback == ["x.txt"]
+    assert per_file == {"m.py": {"m.py:alpha"}, "x.txt": {"file:x.txt"}}
+    assert fallback == []
 
 
 def test_resolve_touched_symbols_missing_file_falls_back(git_repo: Path):
