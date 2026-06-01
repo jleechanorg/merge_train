@@ -270,6 +270,29 @@ def symbols_from_pr_diff(
             except (SymbolResolutionError, Exception):
                 pass
             continue
+        if is_python_path(path):
+            hunks = parse_hunks(file_diff)
+            if not hunks:
+                continue
+            content = ""
+            if repo and head_ref:
+                content = _gh_file_content_at_ref(path, head_ref, repo)
+            if not content:
+                continue
+            try:
+                syms = touched_symbols(new_source=content, diff_text=file_diff)
+                result[path] = syms
+            except SyntaxError as exc:
+                _log.debug("ast parse failed for %s in PR#%s: %s", path, pr_number, exc)
+            except Exception as exc:
+                _log.debug("touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc)
+            continue
+
+        # Multi-language: use lang_extractors for all other supported types
+        from merge_train.lang_extractors import extract_symbols_for_language
+        lang = language_for_path(path)
+        if lang is None:
+            continue  # already checked is_supported_path above, but guard anyway
         hunks = parse_hunks(file_diff)
         if not hunks:
             continue
@@ -279,12 +302,17 @@ def symbols_from_pr_diff(
         if not content:
             continue
         try:
-            syms = touched_symbols(new_source=content, diff_text=file_diff)
-            result[path] = syms
-        except SyntaxError as exc:
-            _log.debug("ast parse failed for %s in PR#%s: %s", path, pr_number, exc)
+            symbols = extract_symbols_for_language(content, lang)
+            touched: set[str] = set()
+            for sym in symbols:
+                for hunk in hunks:
+                    if sym.overlaps(hunk.start, hunk.end):
+                        touched.add(sym.name)
+                        break
+            if touched:
+                result[path] = touched
         except Exception as exc:
-            _log.debug("touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc)
+            _log.debug("lang_extractors failed for %s in PR#%s: %s", path, pr_number, exc)
     return result
 
 
@@ -328,6 +356,30 @@ def symbols_from_files_in_pr(
             except (SymbolResolutionError, Exception):
                 pass
             continue
+        if is_python_path(path):
+            hunks = parse_hunks(file_diff)
+            if not hunks:
+                continue
+            content = ""
+            if repo and head_ref:
+                content = _gh_file_content_at_ref(path, head_ref, repo)
+            if not content:
+                continue
+            try:
+                syms = touched_symbols(new_source=content, diff_text=file_diff)
+                if syms:
+                    result[path] = syms
+            except SyntaxError as exc:
+                _log.debug("ast parse failed for %s in PR#%s: %s", path, pr_number, exc)
+            except Exception as exc:
+                _log.debug("touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc)
+            continue
+
+        # Multi-language: use lang_extractors for all other supported types
+        from merge_train.lang_extractors import extract_symbols_for_language
+        lang = language_for_path(path)
+        if lang is None:
+            continue
         hunks = parse_hunks(file_diff)
         if not hunks:
             continue
@@ -337,11 +389,15 @@ def symbols_from_files_in_pr(
         if not content:
             continue
         try:
-            syms = touched_symbols(new_source=content, diff_text=file_diff)
-            if syms:
-                result[path] = syms
-        except SyntaxError as exc:
-            _log.debug("ast parse failed for %s in PR#%s: %s", path, pr_number, exc)
+            symbols = extract_symbols_for_language(content, lang)
+            touched: set[str] = set()
+            for sym in symbols:
+                for hunk in hunks:
+                    if sym.overlaps(hunk.start, hunk.end):
+                        touched.add(sym.name)
+                        break
+            if touched:
+                result[path] = touched
         except Exception as exc:
-            _log.debug("touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc)
+            _log.debug("lang_extractors failed for %s in PR#%s: %s", path, pr_number, exc)
     return result

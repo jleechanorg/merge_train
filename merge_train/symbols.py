@@ -351,6 +351,11 @@ def touched_symbols_for_staged_file(
             # Multi-language: use lang_extractors
             from merge_train.lang_extractors import extract_symbols_for_language
             symbols = extract_symbols_for_language(new_source, lang)
+            # Fail-closed: non-empty source with no extractable symbols
+            if new_source.strip() and not symbols:
+                raise SymbolResolutionError(
+                    f"non-empty {lang} source yielded no symbols — falling back to file-level"
+                )
             hunks = parse_hunks(diff)
             syms = set()
             for sym in symbols:
