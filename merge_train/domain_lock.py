@@ -363,6 +363,60 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+_PR_STATE_CACHE: dict[int, bool] = {}
+
+
+def _is_pr_closed_or_merged_cached(
+    pr: int,
+    repo_name: Optional[str] = None,
+    cwd: Optional[Path | str] = None,
+) -> bool:
+    if "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ:
+        if not os.environ.get("FORCE_GH_CHECK"):
+            return False
+    if pr >= 900000:
+        return False
+    if pr in _PR_STATE_CACHE:
+        return _PR_STATE_CACHE[pr]
+
+    if not repo_name:
+        try:
+            res = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=str(cwd) if cwd is not None else None,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                repo_name = _get_repo_name(res.stdout.strip())
+        except Exception:
+            pass
+
+    gh_cmd = ["gh", "pr", "view", str(pr), "--json", "state", "--jq", ".state"]
+    if repo_name:
+        gh_cmd.extend(["--repo", repo_name])
+
+    try:
+        proc = subprocess.run(
+            gh_cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(cwd) if cwd is not None else None,
+        )
+        if proc.returncode == 0:
+            state = proc.stdout.strip().upper()
+            if state in ("MERGED", "CLOSED"):
+                _PR_STATE_CACHE[pr] = True
+                return True
+    except Exception:
+        pass
+
+    _PR_STATE_CACHE[pr] = False
+    return False
+
+
 _OVERRIDE_PHRASE = "CONFLICT APPROVED"
 
 
@@ -429,6 +483,28 @@ def _reserve_locked(
             return existing  # already held — don't append duplicate
 
     other_holders = [e for e in active_on_domain if not _is_own(e)]
+
+    # Auto-heal closed/merged PR locks
+    healed_any = False
+    for holder in list(other_holders):
+        if holder.pr is not None and holder.pr < 900000:
+            if _is_pr_closed_or_merged_cached(holder.pr):
+                rel = LockEntry(
+                    domain=holder.domain,
+                    pr=holder.pr,
+                    agent=holder.agent,
+                    branch=holder.branch,
+                    opened_at=holder.opened_at,
+                    status="released",
+                    closed_at=now or _utcnow(),
+                    note="auto-released: PR closed/merged during reserve",
+                    symbols=holder.symbols,
+                    intra_pr_exclusive=holder.intra_pr_exclusive,
+                )
+                log.append(rel)
+                other_holders.remove(holder)
+                healed_any = True
+
     whole_domain_other = [e for e in other_holders if e.is_whole_domain]
     symbol_others = [e for e in other_holders if not e.is_whole_domain]
 
@@ -766,7 +842,29 @@ def check(
                 return True
             
             other_holders = [e for e in domain_holders if not _is_own(e)]
-        
+
+        # Auto-heal closed/merged PR locks
+        healed_any = False
+        for holder in list(other_holders):
+            if holder.pr is not None and holder.pr < 900000:
+                if _is_pr_closed_or_merged_cached(holder.pr):
+                    rel = LockEntry(
+                        domain=holder.domain,
+                        pr=holder.pr,
+                        agent=holder.agent,
+                        branch=holder.branch,
+                        opened_at=holder.opened_at,
+                        status="released",
+                        closed_at=_utcnow(),
+                        note="auto-released: PR closed/merged during check",
+                        symbols=holder.symbols,
+                        intra_pr_exclusive=holder.intra_pr_exclusive,
+                    )
+                    with log.lock():
+                        log.append(rel)
+                    other_holders.remove(holder)
+                    healed_any = True
+
         whole_domain_other = [e for e in other_holders if e.is_whole_domain]
         symbol_others = [e for e in other_holders if not e.is_whole_domain]
 
