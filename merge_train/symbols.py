@@ -295,7 +295,8 @@ def touched_symbols_for_staged_file(
         return set()
     new_source = staged_content_for_file(path, cwd=cwd)
     try:
-        return touched_symbols(new_source=new_source, diff_text=diff)
+        syms = touched_symbols(new_source=new_source, diff_text=diff)
+        return {f"{path}:{s}" for s in syms}
     except SymbolResolutionError as exc:
         raise UnsupportedLanguageError(
             f"symbol resolution failed for {path}: {exc}"
