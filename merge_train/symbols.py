@@ -88,10 +88,14 @@ LANG_EXTENSIONS = {
 
 
 def language_for_path(path: str) -> str | None:
-    """Return the language identifier for a file path, or None if unsupported."""
-    for ext, lang in LANG_EXTENSIONS.items():
+    """Return the language identifier for a file path, or None if unsupported.
+
+    Checks from longest extension to shortest so that e.g. .tsx matches
+    tsx not typescript, .jsx matches jsx not javascript.
+    """
+    for ext in sorted(LANG_EXTENSIONS.keys(), key=len, reverse=True):
         if path.endswith(ext):
-            return lang
+            return LANG_EXTENSIONS[ext]
     return None
 
 
