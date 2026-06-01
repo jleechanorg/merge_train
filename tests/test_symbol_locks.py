@@ -397,8 +397,8 @@ def test_cli_check_diff_mode_json_includes_fallback(tmp_path: Path):
         "--diff-mode", "--json",
     ], capture_output=True, text=True)
     payload = json.loads(r.stdout)
-    assert "fallback_files" in payload
-    assert "config.yaml" in payload["fallback_files"]
+    assert "fallback_files" not in payload
+    assert "config.yaml" in payload["unmapped_files"]
 
 
 def test_reserve_many_symbols_refuses_with_summarized_symbols(shared_domain):
