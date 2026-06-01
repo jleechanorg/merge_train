@@ -176,17 +176,24 @@ def _capture_go_nodes(node: object, out: list[Symbol]) -> None:
     """Recursively walk Go tree-sitter nodes."""
     node_type = node.type  # type: ignore[attr-defined]
 
-    if node_type in ("function_declaration", "method_declaration", "type_declaration"):
-        name_node = None
-        if node_type == "function_declaration":
-            name_node = _get_child(node, "identifier")
-        elif node_type == "method_declaration":
-            # Method name is the identifier inside the function declaration
-            # receiver: (p *Person)
-            name_node = _get_child(node, "identifier")
-        elif node_type == "type_declaration":
-            name_node = _get_child(node, "identifier")
-
+    if node_type in ("function_declaration",):
+        name_node = _get_child(node, "identifier")
+        if name_node is not None:
+            start = name_node.start_point[0] + 1  # type: ignore[attr-defined]
+            end = node.end_point[0] + 1  # type: ignore[attr-defined]
+            out.append(Symbol(name=name_node.text.decode("utf-8"), start=start, end=end))  # type: ignore[attr-defined]
+    elif node_type in ("type_declaration",):
+        # Type name is in type_spec > type_identifier
+        type_spec = _get_child(node, "type_spec")
+        if type_spec is not None:
+            name_node = _get_child(type_spec, "type_identifier") or _get_child(type_spec, "identifier")
+            if name_node is not None:
+                start = name_node.start_point[0] + 1  # type: ignore[attr-defined]
+                end = node.end_point[0] + 1  # type: ignore[attr-defined]
+                out.append(Symbol(name=name_node.text.decode("utf-8"), start=start, end=end))  # type: ignore[attr-defined]
+    elif node_type in ("method_declaration",):
+        # Method name is in field_identifier (not identifier) on the receiver
+        name_node = _get_child(node, "field_identifier")
         if name_node is not None:
             start = name_node.start_point[0] + 1  # type: ignore[attr-defined]
             end = node.end_point[0] + 1  # type: ignore[attr-defined]
@@ -269,11 +276,14 @@ def _capture_rust_nodes(node: object, out: list[Symbol], impl_trait: Optional[st
             end = node.end_point[0] + 1  # type: ignore[attr-defined]
             out.append(Symbol(name=name_node.text.decode("utf-8"), start=start, end=end))  # type: ignore[attr-defined]
     elif node_type == "impl_item":
-        # Get the trait/type being implemented
-        type_node = _get_child(node, "identifier")
+        # Get the trait/type being implemented — type is in the "type" field
+        # which contains a type_identifier, not a direct identifier child
+        type_field = _get_child(node, "type")
         trait_name = None
-        if type_node is not None:
-            trait_name = type_node.text.decode("utf-8")  # type: ignore[attr-defined]
+        if type_field is not None:
+            name_node = _get_child(type_field, "type_identifier") or _get_child(type_field, "identifier")
+            if name_node is not None:
+                trait_name = name_node.text.decode("utf-8")  # type: ignore[attr-defined]
         for child in node.children:  # type: ignore[attr-defined]
             _capture_rust_nodes(child, out, trait_name)
         return
@@ -438,7 +448,13 @@ def _capture_cpp_nodes(node: object, out: list[Symbol], class_name: Optional[str
                 _capture_cpp_nodes(child, out, cn)
         return
     elif node_type == "function_definition":
-        name_node = _get_child(node, "identifier")
+        # Function name is in declarator > function_declarator > identifier
+        declarator = _get_child(node, "declarator")
+        name_node = None
+        if declarator is not None:
+            name_node = _get_child(declarator, "identifier")
+        if name_node is None:
+            name_node = _get_child(node, "identifier")
         if name_node is not None:
             start = name_node.start_point[0] + 1  # type: ignore[attr-defined]
             end = node.end_point[0] + 1  # type: ignore[attr-defined]
