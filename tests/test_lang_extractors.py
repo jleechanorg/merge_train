@@ -86,7 +86,7 @@ def test_extract_go_symbols_function():
 def test_extract_go_symbols_method():
     src = "func (c *Config) GetHost() string {\n    return c.Host\n}\n"
     syms = extract_go_symbols(src)
-    assert any(s.name == "GetHost" for s in syms)
+    assert any(s.name == "Config.GetHost" for s in syms)
 
 
 def test_extract_go_symbols_type():
@@ -100,8 +100,10 @@ def test_extract_go_from_fixture():
     syms = extract_go_symbols(src)
     names = [s.name for s in syms]
     assert "Add" in names
-    assert "GetHost" in names
+    assert "Config.GetHost" in names
     assert "User" in names
+    assert "User.Greet" in names
+    assert "Calculator.Add" in names
 
 
 def test_extract_go_ranges():

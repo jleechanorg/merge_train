@@ -185,6 +185,38 @@ def _extract_go_tree_sitter(source: str) -> list[Symbol]:
     return out
 
 
+def _extract_go_receiver_type_from_str(receiver_str: str) -> str:
+    """Helper to extract receiver type name from receiver parameter string."""
+    receiver_str = receiver_str.strip()
+    parts = receiver_str.split()
+    if not parts:
+        return ""
+    type_part = parts[-1]
+    type_part = type_part.lstrip("*")
+    if "." in type_part:
+        type_part = type_part.split(".")[-1]
+    return type_part
+
+
+def _get_go_receiver_type(node: object) -> Optional[str]:
+    """Find receiver parameter list and extract the receiver type name recursively."""
+    receiver_list = _get_child(node, "parameter_list")
+    if receiver_list is None:
+        return None
+
+    def find_type_name(n: object) -> Optional[str]:
+        ntype = getattr(n, "type", "")
+        if ntype == "type_identifier":
+            return getattr(n, "text", b"").decode("utf-8")
+        for child in getattr(n, "children", []):
+            res = find_type_name(child)
+            if res:
+                return res
+        return None
+
+    return find_type_name(receiver_list)
+
+
 def _capture_go_nodes(node: object, out: list[Symbol]) -> None:
     """Recursively walk Go tree-sitter nodes."""
     node_type = node.type  # type: ignore[attr-defined]
@@ -210,14 +242,20 @@ def _capture_go_nodes(node: object, out: list[Symbol]) -> None:
         if name_node is not None:
             start = name_node.start_point[0] + 1  # type: ignore[attr-defined]
             end = node.end_point[0] + 1  # type: ignore[attr-defined]
-            out.append(Symbol(name=name_node.text.decode("utf-8"), start=start, end=end))  # type: ignore[attr-defined]
+            method_name = name_node.text.decode("utf-8")  # type: ignore[attr-defined]
+            receiver_type = _get_go_receiver_type(node)
+            if receiver_type:
+                symbol_name = f"{receiver_type}.{method_name}"
+            else:
+                symbol_name = method_name
+            out.append(Symbol(name=symbol_name, start=start, end=end))  # type: ignore[attr-defined]
 
     for child in node.children:  # type: ignore[attr-defined]
         _capture_go_nodes(child, out)
 
 
 _GO_FUNC_RE = re.compile(r"^func\s+(\w+)\s*\(", re.MULTILINE)
-_GO_METHOD_RE = re.compile(r"^func\s+\([^)]+\)\s+(\w+)\s*\(", re.MULTILINE)
+_GO_METHOD_RE = re.compile(r"^func\s+\(([^)]+)\)\s+(\w+)\s*\(", re.MULTILINE)
 _GO_TYPE_RE = re.compile(r"^type\s+(\w+)\s+(struct|interface)", re.MULTILINE)
 
 
@@ -229,7 +267,14 @@ def _extract_go_regex(source: str) -> list[Symbol]:
     for i, line in enumerate(lines, start=1):
         m = _GO_METHOD_RE.match(line)
         if m:
-            out.append(Symbol(name=m.group(1), start=i, end=i))
+            receiver_str = m.group(1)
+            method_name = m.group(2)
+            receiver_type = _extract_go_receiver_type_from_str(receiver_str)
+            if receiver_type:
+                name = f"{receiver_type}.{method_name}"
+            else:
+                name = method_name
+            out.append(Symbol(name=name, start=i, end=i))
             continue
 
         m = _GO_FUNC_RE.match(line)
