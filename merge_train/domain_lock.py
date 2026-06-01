@@ -1046,6 +1046,45 @@ def _file_headline(
     return f"{path}  symbols: {', '.join(sorted(syms))}"
 
 
+CODE_EXTENSIONS = {
+    ".py", ".js", ".ts", ".tsx", ".jsx", ".css", ".html", ".go", ".rs",
+    ".c", ".cpp", ".h", ".rb", ".php", ".sh", ".bash", ".yaml", ".yml",
+}
+
+
+def _classify_files(
+    paths: list[str],
+    touched_map: Optional[dict[str, Optional[set[str]]]]
+) -> tuple[list[str], list[str]]:
+    code_files = []
+    non_code_files = []
+    for p in paths:
+        ext = Path(p).suffix.lower()
+        name = Path(p).name.lower()
+        
+        # Check explicit asset/log extensions
+        is_asset = ext in (
+            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",
+            ".webm", ".mp4", ".m4v", ".avi", ".mov", ".vtt",
+            ".log", ".sha256", ".md5", ".jsonl", ".json",
+        ) or name == "sha256sums"
+        
+        if is_asset:
+            non_code_files.append(p)
+        elif touched_map is not None:
+            syms = touched_map.get(p)
+            if syms is None and ext not in CODE_EXTENSIONS:
+                non_code_files.append(p)
+            else:
+                code_files.append(p)
+        else:
+            if ext not in CODE_EXTENSIONS:
+                non_code_files.append(p)
+            else:
+                code_files.append(p)
+    return code_files, non_code_files
+
+
 def _format_check_report(
     result: CheckResult,
     registry: Registry,
@@ -1063,27 +1102,56 @@ def _format_check_report(
         if not conflicts:
             return
         lines.append(header)
+        
+        # Group conflicts by domain, then by holder
+        from collections import defaultdict
+        domain_to_holder_to_paths = defaultdict(lambda: defaultdict(list))
+        
         for domain, holder in conflicts:
             paths = sorted(grouped.get(domain, []))
             if not paths:
                 paths = [domain]
-            for path in paths:
-                lines.append(f"  {_file_headline(path, touched_map)}")
-                lines.append(f"    held by {_holder_label(holder)}")
+            domain_to_holder_to_paths[domain][holder].extend(paths)
+            
+        for domain in sorted(domain_to_holder_to_paths.keys()):
+            lines.append(f"  • Domain: {domain}")
+            holder_to_paths = domain_to_holder_to_paths[domain]
+            for holder, paths in holder_to_paths.items():
+                lines.append(f"    Held by: {_holder_label(holder)}")
                 if holder.symbols:
                     lines.append(
-                        f"    holder symbols: {', '.join(sorted(holder.symbols))}"
+                        f"      Lock details: holder symbols: {', '.join(sorted(holder.symbols))}"
                     )
                 elif holder.is_whole_domain:
-                    lines.append("    holder lock: whole domain")
-                if touched_map and holder.symbols:
-                    sym_set = touched_map.get(path)
-                    if sym_set:
-                        overlap = sym_set & set(holder.symbols)
-                        if overlap:
-                            lines.append(
-                                f"    overlap: {', '.join(sorted(overlap))}"
-                            )
+                    lines.append("      Lock details: holder lock: whole domain")
+                
+                paths = sorted(list(set(paths)))
+                code_files, non_code_files = _classify_files(paths, touched_map)
+                
+                if code_files or non_code_files:
+                    lines.append("      Files:")
+                    
+                for path in code_files:
+                    lines.append(f"        - {_file_headline(path, touched_map)}")
+                    if touched_map and holder.symbols:
+                        sym_set = touched_map.get(path)
+                        if sym_set:
+                            overlap = sym_set & set(holder.symbols)
+                            if overlap:
+                                lines.append(
+                                    f"        overlap: {', '.join(sorted(overlap))}"
+                                )
+                                
+                if non_code_files:
+                    if len(non_code_files) > 3:
+                        sample = non_code_files[:2]
+                        sample_str = ", ".join(sample)
+                        lines.append(
+                            f"        - {len(non_code_files)} asset & log files (e.g., {sample_str}, and {len(non_code_files) - 2} more)"
+                        )
+                    else:
+                        for path in non_code_files:
+                            lines.append(f"        - {_file_headline(path, touched_map)}")
         lines.append("")
 
     _conflict_section(
