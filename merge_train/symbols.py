@@ -265,6 +265,68 @@ def staged_content_for_file(path: str, *, cwd: Optional[Path] = None) -> str:
     return _run_git(["show", f":{path}"], cwd=cwd)
 
 
+def _find_merge_base(cwd: Optional[Path] = None) -> Optional[str]:
+    """Find the common ancestor (merge-base) of HEAD and origin/main or main."""
+    for base_ref in ("origin/main", "main"):
+        try:
+            proc = subprocess.run(
+                ["git", "merge-base", base_ref, "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=str(cwd) if cwd is not None else None,
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                return proc.stdout.strip()
+        except Exception:
+            pass
+    return None
+
+
+def _diff_and_source_for_file(
+    path: str,
+    *,
+    cwd: Optional[Path] = None,
+) -> tuple[str, str]:
+    """Get the diff and the post-edit content for a file, supporting staged,
+    unstaged, and committed (vs origin/main or main) changes.
+
+    Returns (diff_text, new_source_text).
+    Raises ValueError if there are no changes or if the source cannot be loaded.
+    """
+    # 1. Staged changes
+    diff = staged_diff_for_file(path, cwd=cwd)
+    if diff.strip():
+        try:
+            new_source = staged_content_for_file(path, cwd=cwd)
+            return diff, new_source
+        except Exception:
+            pass
+
+    # 2. Fallback to committed changes (vs origin/main or main) or unstaged changes
+    try:
+        base = _find_merge_base(cwd=cwd)
+        if base:
+            diff = _run_git(["diff", base, "-U0", "--no-color", "--", path], cwd=cwd)
+        else:
+            diff = _run_git(["diff", "HEAD", "-U0", "--no-color", "--", path], cwd=cwd)
+    except Exception:
+        raise ValueError("failed to get git diff")
+
+    if diff.strip():
+        file_path = Path(cwd) / path if cwd else Path(path)
+        if file_path.exists():
+            try:
+                new_source = file_path.read_text(encoding="utf-8")
+                return diff, new_source
+            except Exception as exc:
+                raise ValueError(f"failed to read file on disk: {exc}")
+        else:
+            raise ValueError("file does not exist on disk")
+    else:
+        raise ValueError("no changes detected in diff")
+
+
 def touched_symbols_for_staged_file(
     path: str,
     *,
@@ -277,10 +339,10 @@ def touched_symbols_for_staged_file(
     should treat that as a file-level collision.
     """
     if is_markdown_path(path):
-        diff = staged_diff_for_file(path, cwd=cwd)
-        if not diff.strip():
+        try:
+            diff, new_source = _diff_and_source_for_file(path, cwd=cwd)
+        except ValueError:
             return set()
-        new_source = staged_content_for_file(path, cwd=cwd)
         file_stem = Path(path).stem
         try:
             return _touched_markdown_symbols(new_source=new_source, diff_text=diff, file_stem=file_stem)
@@ -288,12 +350,15 @@ def touched_symbols_for_staged_file(
             raise UnsupportedLanguageError(
                 f"markdown symbol resolution failed for {path}: {exc}"
             ) from exc
+
     if not is_python_path(path):
         raise UnsupportedLanguageError(f"symbol extraction supports .py and .md only: {path}")
-    diff = staged_diff_for_file(path, cwd=cwd)
-    if not diff.strip():
+
+    try:
+        diff, new_source = _diff_and_source_for_file(path, cwd=cwd)
+    except ValueError:
         return set()
-    new_source = staged_content_for_file(path, cwd=cwd)
+
     try:
         syms = touched_symbols(new_source=new_source, diff_text=diff)
         return {f"{path}:{s}" for s in syms}
