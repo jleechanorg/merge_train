@@ -83,7 +83,7 @@ def test_report_shows_pr_and_branch_for_holder(tmp_path: Path):
 
     report = _format_check_report(result, reg, ["a.py"], touched)
 
-    assert "held by PR#7178 (fix/conclude-finalize-prompt)" in report
+    assert "Held by: PR#7178 (fix/conclude-finalize-prompt)" in report
 
 
 def test_report_shows_your_symbols_on_file_line(tmp_path: Path):
@@ -183,7 +183,7 @@ def test_report_free_lists_file_paths_not_domain_names(tmp_path: Path):
     assert "d2" not in report
 
 
-def test_report_emits_one_block_per_conflicting_file(tmp_path: Path):
+def test_report_groups_conflicting_files_under_single_holder(tmp_path: Path):
     log = LockLog(tmp_path / "log.jsonl")
     reg = Registry.from_dict({
         "domains": {"mvp-llm": {"paths": ["mvp/llm/**"]}},
@@ -204,7 +204,7 @@ def test_report_emits_one_block_per_conflicting_file(tmp_path: Path):
 
     report = _format_check_report(result, reg, files, touched)
 
-    assert report.count("held by PR#7178 (fix/llm)") == 2
+    assert report.count("Held by: PR#7178 (fix/llm)") == 1
     assert "mvp/llm/handler.py  symbols: handle_request" in report
     assert "mvp/llm/prompts.py  symbols: build_prompt" in report
 
@@ -247,4 +247,23 @@ def test_report_file_level_mode_without_touched_map(tmp_path: Path):
 
     report = _format_check_report(result, reg, ["a.py"])
 
-    assert "  a.py\n    held by PR#1" in report
+    assert "• Domain: d1" in report
+    assert "Held by: PR#1 (b)" in report
+    assert "- a.py" in report
+
+
+def test_report_summarizes_large_lists_of_assets(tmp_path: Path):
+    log = LockLog(tmp_path / "log.jsonl")
+    reg = Registry.from_dict({"domains": {"docs": {"paths": ["docs/**"]}}})
+    reserve(log, reg, domain="docs", pr=7178, agent="x", branch="fix/docs")
+    
+    files = [
+        f"docs/evidence/pr-7173/{i}_story_action.png" for i in range(10)
+    ]
+    result = check(log, reg, files=files, pr=999)
+    
+    report = _format_check_report(result, reg, files)
+    
+    assert "10 asset & log files" in report
+    assert "e.g., docs/evidence/pr-7173/0_story_action.png" in report
+    assert "and 8 more" in report
