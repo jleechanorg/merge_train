@@ -435,3 +435,100 @@ def test_resolve_touched_symbols_general_exception_goes_to_fallback(git_repo: Pa
     assert "any_file.py" not in per_file
     assert "any_file.py" in fallback
 
+
+def test_touched_symbols_committed_changes(git_repo: Path):
+    src_orig = (
+        "def alpha():\n"
+        "    return 1\n"
+        "\n"
+        "def beta():\n"
+        "    return 2\n"
+    )
+    (git_repo / "m.py").write_text(src_orig)
+    _git(git_repo, "add", "m.py")
+    _git(git_repo, "commit", "-q", "-m", "init")
+
+    # Create a feature branch and make committed changes compared to main
+    _git(git_repo, "checkout", "-b", "feature")
+    
+    src_new = src_orig.replace("    return 2\n", "    return 22\n")
+    (git_repo / "m.py").write_text(src_new)
+    _git(git_repo, "add", "m.py")
+    _git(git_repo, "commit", "-q", "-m", "update beta")
+
+    # Now there are NO staged changes (git diff --cached is empty).
+    # But there is a committed change on the feature branch compared to main.
+    touched = touched_symbols_for_staged_file("m.py", cwd=git_repo)
+    assert touched == {"m.py:beta"}
+
+
+def test_touched_symbols_unstaged_changes(git_repo: Path):
+    src_orig = (
+        "def alpha():\n"
+        "    return 1\n"
+        "\n"
+        "def beta():\n"
+        "    return 2\n"
+    )
+    (git_repo / "m.py").write_text(src_orig)
+    _git(git_repo, "add", "m.py")
+    _git(git_repo, "commit", "-q", "-m", "init")
+
+    # Make unstaged changes in the working tree
+    src_new = src_orig.replace("    return 1\n", "    return 11\n")
+    (git_repo / "m.py").write_text(src_new)
+
+    # Staged diff is empty. Unstaged diff has the change.
+    touched = touched_symbols_for_staged_file("m.py", cwd=git_repo)
+    assert touched == {"m.py:alpha"}
+
+
+def test_touched_symbols_staged_and_unstaged_combined(git_repo: Path):
+    src_orig = (
+        "def alpha():\n"
+        "    return 1\n"
+        "\n"
+        "def beta():\n"
+        "    return 2\n"
+    )
+    (git_repo / "m.py").write_text(src_orig)
+    _git(git_repo, "add", "m.py")
+    _git(git_repo, "commit", "-q", "-m", "init")
+
+    # Stage a change in alpha
+    src_staged = src_orig.replace("    return 1\n", "    return 11\n")
+    (git_repo / "m.py").write_text(src_staged)
+    _git(git_repo, "add", "m.py")
+
+    # Modify beta in the working tree (unstaged)
+    src_unstaged = src_staged.replace("    return 2\n", "    return 22\n")
+    (git_repo / "m.py").write_text(src_unstaged)
+
+    # Since staged_diff is not empty, we extract from the staged diff/content only!
+    # Staged diff only has alpha changed, not beta.
+    touched = touched_symbols_for_staged_file("m.py", cwd=git_repo)
+    assert touched == {"m.py:alpha"}
+
+
+def test_touched_markdown_symbols_committed_and_unstaged(git_repo: Path):
+    src_orig = "# Title\n\n## slot-01\ncontent 1\n\n## slot-02\ncontent 2\n"
+    (git_repo / "plan.md").write_text(src_orig)
+    _git(git_repo, "add", "plan.md")
+    _git(git_repo, "commit", "-q", "-m", "init")
+
+    _git(git_repo, "checkout", "-b", "feature-md")
+    src_committed = src_orig.replace("content 1", "content 11")
+    (git_repo / "plan.md").write_text(src_committed)
+    _git(git_repo, "add", "plan.md")
+    _git(git_repo, "commit", "-q", "-m", "commit md change")
+
+    # Unstaged change in slot-02
+    src_unstaged = src_committed.replace("content 2", "content 22")
+    (git_repo / "plan.md").write_text(src_unstaged)
+
+    # Since there are no staged changes, we fall back to git diff against main (the merge base)
+    # and read plan.md on disk.
+    # The diff against main compares main vs working tree, so it sees changes in BOTH slot-01 and slot-02!
+    touched = touched_symbols_for_staged_file("plan.md", cwd=git_repo)
+    assert touched == {"md:plan.slot_01", "md:plan.slot_02"}
+

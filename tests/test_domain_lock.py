@@ -1130,3 +1130,101 @@ def test_cli_rejects_log_inside_git_worktree(tmp_path: Path):
     assert r.returncode == 0
     assert outside_log.exists()
 
+
+def test_check_auto_heals_closed_pr(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("FORCE_GH_CHECK", "1")
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
+    
+    log_file = tmp_path / "locks.jsonl"
+    log = LockLog(log_file)
+    
+    from merge_train.domain_lock import LockEntry, check, load_registry
+    e1 = LockEntry(domain="d1", pr=42, agent="a", branch="b", opened_at="2026-06-01T12:00:00Z", status="active", symbols=())
+    log.append(e1)
+    
+    import subprocess
+    original_run = subprocess.run
+    
+    def mock_run(cmd, *args, **kwargs):
+        if "gh" in cmd and "pr" in cmd and "view" in cmd and "42" in cmd:
+            class MockProc:
+                returncode = 0
+                stdout = "MERGED\n"
+                stderr = ""
+            return MockProc()
+        if "git" in cmd:
+            class MockProc:
+                returncode = 0
+                stdout = "https://github.com/owner/repo.git\n"
+                stderr = ""
+            return MockProc()
+        return original_run(cmd, *args, **kwargs)
+        
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    
+    registry = load_registry(reg)
+    res = check(log, registry, files=["a.py"], pr=43, branch="feature", agent="other")
+    
+    assert "d1" in res.free
+    assert not res.held
+    
+    active = log.active_all()
+    assert not active
+    
+    entries = list(log.entries())
+    assert len(entries) == 2
+    assert entries[1].status == "released"
+    assert entries[1].pr == 42
+    assert "PR closed/merged" in entries[1].note
+
+
+def test_reserve_auto_heals_closed_pr(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("FORCE_GH_CHECK", "1")
+    reg = tmp_path / "reg.yaml"
+    reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
+    
+    log_file = tmp_path / "locks.jsonl"
+    log = LockLog(log_file)
+    
+    from merge_train.domain_lock import LockEntry, _reserve_locked, load_registry
+    e1 = LockEntry(domain="d1", pr=42, agent="a", branch="b", opened_at="2026-06-01T12:00:00Z", status="active", symbols=())
+    log.append(e1)
+    
+    import subprocess
+    original_run = subprocess.run
+    
+    def mock_run(cmd, *args, **kwargs):
+        if "gh" in cmd and "pr" in cmd and "view" in cmd and "42" in cmd:
+            class MockProc:
+                returncode = 0
+                stdout = "CLOSED\n"
+                stderr = ""
+            return MockProc()
+        if "git" in cmd:
+            class MockProc:
+                returncode = 0
+                stdout = "https://github.com/owner/repo.git\n"
+                stderr = ""
+            return MockProc()
+        return original_run(cmd, *args, **kwargs)
+        
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    
+    registry = load_registry(reg)
+    with log.lock():
+        entry = _reserve_locked(log, registry, domain="d1", pr=43, agent="c", branch="feature")
+        
+    assert entry.pr == 43
+    assert entry.status == "active"
+    
+    active = log.active_all()
+    assert len(active) == 1
+    assert active[0].pr == 43
+    
+    entries = list(log.entries())
+    assert len(entries) == 3
+    assert entries[1].status == "released"
+    assert entries[1].pr == 42
+
+
