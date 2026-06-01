@@ -320,7 +320,7 @@ def test_touched_symbols_for_staged_file_detects_changed_function(git_repo: Path
     _git(git_repo, "add", "m.py")
 
     touched = touched_symbols_for_staged_file("m.py", cwd=git_repo)
-    assert touched == {"beta"}
+    assert touched == {"m.py:beta"}
 
 
 def test_touched_symbols_for_staged_file_non_python_raises(git_repo: Path):
@@ -341,7 +341,7 @@ def test_resolve_touched_symbols_mixed_python_and_other(git_repo: Path):
     _git(git_repo, "add", "m.py", "x.txt")
 
     per_file, fallback = resolve_touched_symbols(["m.py", "x.txt"], cwd=git_repo)
-    assert per_file == {"m.py": {"alpha"}}
+    assert per_file == {"m.py": {"m.py:alpha"}}
     assert fallback == ["x.txt"]
 
 

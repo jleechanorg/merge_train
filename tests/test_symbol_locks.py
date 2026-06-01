@@ -369,7 +369,7 @@ def test_cli_check_diff_mode_overlap_is_held(tmp_path: Path):
         "--registry", str(reg), "--log", str(log),
         "reserve", "--domain", "shared", "--pr", "1",
         "--agent", "a", "--branch", "b",
-        "--symbols", "beta",
+        "--symbols", "shared.py:beta",
     ], check=True, capture_output=True)
     r = subprocess.run([
         sys.executable, "-m", "merge_train.domain_lock",
@@ -382,7 +382,7 @@ def test_cli_check_diff_mode_overlap_is_held(tmp_path: Path):
     payload = json.loads(r.stdout)
     assert payload["ok"] is False
     assert payload["held"][0]["domain"] == "shared"
-    assert "beta" in payload["touched_symbols"]["shared"]
+    assert "shared.py:beta" in payload["touched_symbols"]["shared"]
 
 
 def test_cli_check_diff_mode_json_includes_fallback(tmp_path: Path):
