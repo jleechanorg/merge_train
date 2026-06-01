@@ -37,6 +37,16 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
+multilang = [
+    "tree-sitter>=0.22",
+    "tree-sitter-typescript>=0.21",
+    "tree-sitter-go>=0.21",
+    "tree-sitter-rust>=0.21",
+    "tree-sitter-java>=0.21",
+    "tree-sitter-c>=0.21",
+    "tree-sitter-cpp>=0.21",
+    "tree-sitter-c-sharp>=0.21",
+]
 
 [project.urls]
 Homepage      = "https://github.com/jleechanorg/merge_train"

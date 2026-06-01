@@ -32,11 +32,13 @@ from merge_train.symbols import (
     UnsupportedLanguageError,
     is_python_path,
     is_markdown_path,
+    is_supported_path,
     parse_hunks,
     staged_content_for_file,
     staged_diff_for_file,
     touched_symbols,
     touched_symbols_for_staged_file,
+    language_for_path,
 )
 
 
@@ -100,7 +102,7 @@ def symbols_from_staged_diff(
     result: dict[str, set[str]] = {}
     for path in proc.stdout.splitlines():
         path = path.strip()
-        if not path or (not is_python_path(path) and not is_markdown_path(path)):
+        if not path or not is_supported_path(path):
             continue
         try:
             syms = touched_symbols_for_staged_file(path, cwd=cwd)
@@ -249,7 +251,7 @@ def symbols_from_pr_diff(
     result: dict[str, set[str]] = {}
 
     for path, file_diff in file_diffs.items():
-        if not is_python_path(path) and not is_markdown_path(path):
+        if not is_supported_path(path):
             continue
         if is_markdown_path(path):
             from merge_train.symbols import extract_markdown_symbols, _touched_markdown_symbols
@@ -307,7 +309,7 @@ def symbols_from_files_in_pr(
     for path, file_diff in file_diffs.items():
         if path not in requested:
             continue
-        if not is_python_path(path) and not is_markdown_path(path):
+        if not is_supported_path(path):
             continue
         if is_markdown_path(path):
             from merge_train.symbols import _touched_markdown_symbols

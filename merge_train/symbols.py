@@ -62,6 +62,48 @@ def _node_range(node: ast.AST) -> Optional[tuple[int, int]]:
     return (start, end)
 
 
+# --------------------------------------------------------------------------- #
+# Language dispatcher
+# --------------------------------------------------------------------------- #
+
+LANG_EXTENSIONS = {
+    ".py": "python",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".mjs": "javascript",
+    ".go": "go",
+    ".rs": "rust",
+    ".java": "java",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".cs": "csharp",
+    ".md": "markdown",
+}
+
+
+def language_for_path(path: str) -> str | None:
+    """Return the language identifier for a file path, or None if unsupported."""
+    for ext, lang in LANG_EXTENSIONS.items():
+        if path.endswith(ext):
+            return lang
+    return None
+
+
+def is_supported_path(path: str) -> bool:
+    """True if the path has a supported extension for symbol extraction."""
+    return language_for_path(path) is not None
+
+
+# --------------------------------------------------------------------------- #
+# Python symbol extraction (AST-based)
+# --------------------------------------------------------------------------- #
+
 def extract_symbols(source: str) -> list[Symbol]:
     """Extract top-level symbols and methods from Python source.
 
@@ -76,6 +118,10 @@ def extract_symbols(source: str) -> list[Symbol]:
 
     Raises :class:`SyntaxError` if the source can't be parsed.
     """
+    return _extract_python(source)
+
+
+def _extract_python(source: str) -> list[Symbol]:
     tree = ast.parse(source)
     out: list[Symbol] = []
 
@@ -272,9 +318,9 @@ def touched_symbols_for_staged_file(
 ) -> set[str]:
     """Resolve touched symbols for a staged file via git plumbing.
 
-    Supports Python (.py) and Markdown (.md). Raises
-    :class:`UnsupportedLanguageError` for other file types — callers
-    should treat that as a file-level collision.
+    Supports Python (.py), Markdown (.md), and all languages in LANG_EXTENSIONS.
+    Raises :class:`UnsupportedLanguageError` for unsupported file types —
+    callers should treat that as a file-level collision.
     """
     if is_markdown_path(path):
         diff = staged_diff_for_file(path, cwd=cwd)
@@ -288,16 +334,32 @@ def touched_symbols_for_staged_file(
             raise UnsupportedLanguageError(
                 f"markdown symbol resolution failed for {path}: {exc}"
             ) from exc
-    if not is_python_path(path):
-        raise UnsupportedLanguageError(f"symbol extraction supports .py and .md only: {path}")
+
+    lang = language_for_path(path)
+    if lang is None:
+        raise UnsupportedLanguageError(f"symbol extraction supports known types only: {path}")
+
     diff = staged_diff_for_file(path, cwd=cwd)
     if not diff.strip():
         return set()
     new_source = staged_content_for_file(path, cwd=cwd)
+
     try:
-        syms = touched_symbols(new_source=new_source, diff_text=diff)
+        if lang == "python":
+            syms = touched_symbols(new_source=new_source, diff_text=diff)
+        else:
+            # Multi-language: use lang_extractors
+            from merge_train.lang_extractors import extract_symbols_for_language
+            symbols = extract_symbols_for_language(new_source, lang)
+            hunks = parse_hunks(diff)
+            syms = set()
+            for sym in symbols:
+                for hunk in hunks:
+                    if sym.overlaps(hunk.start, hunk.end):
+                        syms.add(sym.name)
+                        break
         return {f"{path}:{s}" for s in syms}
-    except SymbolResolutionError as exc:
+    except (SymbolResolutionError, SyntaxError) as exc:
         raise UnsupportedLanguageError(
             f"symbol resolution failed for {path}: {exc}"
         ) from exc
