@@ -822,7 +822,8 @@ def check(
     for domain in grouped:
         domain_holders = [e for e in active_all if e.domain == domain]
         if not domain_holders:
-            free.append(domain)
+            if not domain.startswith("file:"):
+                free.append(domain)
             continue
 
         dom = registry.domains.get(domain)
@@ -898,7 +899,8 @@ def check(
                         break
 
         if conflict is None or override == _OVERRIDE_PHRASE:
-            free.append(domain)
+            if not domain.startswith("file:"):
+                free.append(domain)
         elif dom is not None and dom.advisory:
             advisory_held_list.append((domain, conflict))
         else:
@@ -911,6 +913,7 @@ def check(
         touched_symbols={
             d: (s if s is not None else set())
             for d, s in per_domain_symbols.items()
+            if not d.startswith("file:")
         },
         advisory_held=advisory_held_list,
     )
