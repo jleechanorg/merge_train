@@ -395,6 +395,27 @@ echo
 
 
 # ------------------------------------------------------------------------- #
+# 4e. Per-agent hook installers (new in Phase C)
+#     Routes to the `merge_train install-hooks` CLI for the Claude agent
+#     (the agent that benefits most from the per-user PreToolUse wiring).
+#     For Codex and OpenCode, install.sh still writes the per-repo configs
+#     in step 3a-3c, but the per-user installer is the canonical entry
+#     point going forward.
+# ------------------------------------------------------------------------- #
+
+echo "[3e/5] Per-agent hook installer (Claude)..."
+if command -v merge_train >/dev/null 2>&1; then
+    if merge_train install-hooks --agent claude >/dev/null 2>&1; then
+        echo "  ok: merge_train install-hooks --agent claude"
+    else
+        echo "  WARN: merge_train install-hooks --agent claude failed (non-fatal; install.sh per-user wiring above is the fallback)"
+    fi
+else
+    echo "  skip: merge_train CLI not on PATH (run: uv tool install $MERGE_TRAIN_ROOT --reinstall)"
+fi
+echo
+
+# ------------------------------------------------------------------------- #
 # 5. Smoke test
 # ------------------------------------------------------------------------- #
 
@@ -429,6 +450,11 @@ cat <<NEXT_EOF
   3. Run the merge_train tests to confirm the install is healthy:
 
        (cd $MERGE_TRAIN_ROOT && python3 -m pytest tests/ -q)
+
+  4. Verify the per-agent hooks are wired and working (Phase C):
+
+       merge_train install-hooks --agent all
+       merge_train test-hooks --agent all
 
 Docs:
   - $MERGE_TRAIN_ROOT/README.md
