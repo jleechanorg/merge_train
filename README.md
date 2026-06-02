@@ -450,26 +450,46 @@ Override with `MERGE_TRAIN_LOG=/path/to/locks.jsonl` or `--log /path/to/locks.js
 
 ## Hooks
 
-### Pre-spawn gate (orchestrator integration)
+Hooks **warn** about conflicts rather than blocking on domain reservations.
+Domain locking (reserve/release/check) has been removed from all hooks.
+Conflict detection uses `predict-conflicts --from-prs` which compares open PRs
+pairwise and surfaces symbol-level overlaps as non-blocking warnings.
 
-Wire `hooks/ao-spawn-domain-check.sh` into your agent spawner. The orchestrator supplies the files the agent will modify (from the task spec / bead / PR design doc):
+### Pre-spawn conflict prediction (orchestrator integration)
+
+Wire `hooks/predict-spawn-check.sh` into your agent spawner. The orchestrator
+supplies the files the agent will modify. The hook always exits 0 but prints
+a structured warning to stderr if conflicts are detected:
 
 ```bash
 export MERGE_TRAIN_FILES="mvp_site/world_logic.py mvp_site/rewards_engine.py"
-export MERGE_TRAIN_PR=7000
-./hooks/ao-spawn-domain-check.sh
-# exit 0 = spawn allowed, 1 = held (refuse spawn), 2 = config error
+export MERGE_TRAIN_PR=7000        # optional — included in open-PR comparison
+./hooks/predict-spawn-check.sh
+# exit 0 always; conflicts are printed as warnings to stderr
 ```
 
-This hook is a pre-spawn **gate**, not the full acquisition protocol. A production orchestrator should use it as a fast refusal check, then call `reserve` or `reserve-plan` before actually launching the agent. Otherwise two orchestrators can both observe "free" and race each other.
+### PreToolUse hook (Claude Code)
+
+Wire `hooks/conflict-warn-pre-tool.sh` as the Claude Code `PreToolUse` hook
+(replacing `domain-lock-pre-tool.sh`). It always returns `permissionDecision=allow`.
+Conflict detection happened at spawn time — no per-edit blocking.
+
+### Gemini / Antigravity session guard
+
+`hooks/gemini-conflict-warn.sh` fires once per session (sentinel-gated) and
+calls `predict-spawn-check.sh`. Replaces `gemini-domain-lock-guard.sh`. Always
+exits 0.
 
 ### Claude / OpenCode / Codex hook installers
 
 Current repo state:
 
-- Supported now: generic shell integration through `hooks/ao-spawn-domain-check.sh` plus the Git pre-commit hook.
-- Not supported yet: first-class installers that patch Claude Code, OpenCode, or Codex config files for you.
-- Not proven yet: an end-to-end fixture that installs each agent hook, attempts a conflicting spawn, observes refusal, releases the lock, and observes a clean spawn.
+- Supported now: generic shell integration through `hooks/predict-spawn-check.sh`
+  plus the Git pre-commit hook.
+- Not supported yet: first-class installers that patch Claude Code, OpenCode, or
+  Codex config files for you.
+- Not proven yet: an end-to-end fixture that installs each agent hook, triggers a
+  conflicting spawn, and observes the warning output.
 
 The integration target is:
 
