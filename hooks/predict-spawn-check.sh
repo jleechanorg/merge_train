@@ -38,12 +38,12 @@ if [[ -z "${MERGE_TRAIN_FILES:-}" ]]; then
 fi
 
 # ── Resolve the predict-conflicts CLI ────────────────────────────────────────
-# predict-conflicts is a subcommand of domain_lock (pyproject.toml entry point)
-# or callable as: python3 -m merge_train.domain_lock predict-conflicts
-if command -v domain_lock >/dev/null 2>&1; then
-  CLI_PREFIX="domain_lock"
+# predict-conflicts is a standalone entry point (pyproject.toml entry point)
+# or callable as: python3 -m merge_train.predict predict-conflicts
+if command -v predict-conflicts >/dev/null 2>&1; then
+  CLI_PREFIX="predict-conflicts"
 else
-  CLI_PREFIX="python3 -c 'import sys; from merge_train.domain_lock import main; sys.exit(main())'"
+  CLI_PREFIX="python3 -m merge_train.predict"
 fi
 
 # ── Collect open PR numbers from GitHub ──────────────────────────────────────
