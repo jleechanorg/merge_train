@@ -361,3 +361,132 @@ def test_extract_csharp_regex_indentation_and_class_pop():
     assert "Bar.Baz" in names
     assert "Foo.Baz" not in names
     assert "Bar.Bar" not in names
+
+
+# --------------------------------------------------------------------------- #
+# TypeScript -- additional coverage: interface, type alias, export, async arrow
+# --------------------------------------------------------------------------- #
+
+def test_extract_typescript_interface():
+    src = "interface UserService {\n    getUser(id: string): User;\n}\n"
+    syms = extract_typescript_symbols(src)
+    names = [s.name for s in syms]
+    assert "UserService" in names
+
+
+def test_extract_typescript_type_alias():
+    src = "type UserId = string;\ntype Handler = (req: Request) => void;\n"
+    syms = extract_typescript_symbols(src)
+    names = [s.name for s in syms]
+    assert "UserId" in names
+    assert "Handler" in names
+
+
+def test_extract_typescript_exported_function():
+    src = "export function processRequest(req: Request): Response {\n    return {};\n}\n"
+    syms = extract_typescript_symbols(src)
+    assert any(s.name == "processRequest" for s in syms)
+
+
+def test_extract_typescript_async_arrow_function():
+    src = "const fetchData = async (url: string) => {\n    return await fetch(url);\n};\n"
+    syms = extract_typescript_symbols(src)
+    assert any(s.name == "fetchData" for s in syms)
+
+
+def test_extract_typescript_class_and_interface_together():
+    src = (
+        "interface Greetable {\n"
+        "    greet(): string;\n"
+        "}\n"
+        "class Greeter implements Greetable {\n"
+        "    greet() { return 'hello'; }\n"
+        "}\n"
+    )
+    syms = extract_typescript_symbols(src)
+    names = [s.name for s in syms]
+    assert "Greetable" in names
+    assert "Greeter" in names
+
+
+# --------------------------------------------------------------------------- #
+# Go -- additional coverage: plain func, pointer receiver, interface type
+# --------------------------------------------------------------------------- #
+
+def test_extract_go_plain_function_no_receiver():
+    src = "func Compute(x int, y int) int {\n    return x + y\n}\n"
+    syms = extract_go_symbols(src)
+    assert any(s.name == "Compute" for s in syms)
+
+
+def test_extract_go_method_pointer_receiver():
+    src = "func (s *Server) HandleRequest(w http.ResponseWriter, r *http.Request) {\n}\n"
+    syms = extract_go_symbols(src)
+    assert any(s.name == "Server.HandleRequest" for s in syms)
+
+
+def test_extract_go_interface_type():
+    src = "type Stringer interface {\n    String() string\n}\n"
+    syms = extract_go_symbols(src)
+    assert any(s.name == "Stringer" for s in syms)
+
+
+def test_extract_go_struct_and_interface_together():
+    src = (
+        "type Writer interface {\n"
+        "    Write(p []byte) (int, error)\n"
+        "}\n"
+        "type FileWriter struct {\n"
+        "    path string\n"
+        "}\n"
+    )
+    syms = extract_go_symbols(src)
+    names = [s.name for s in syms]
+    assert "Writer" in names
+    assert "FileWriter" in names
+
+
+# --------------------------------------------------------------------------- #
+# Routing -- .ts / .tsx / .go file extensions routed correctly
+# --------------------------------------------------------------------------- #
+
+def test_language_for_path_ts():
+    from merge_train.symbols import language_for_path
+    assert language_for_path("src/utils/helpers.ts") == "typescript"
+
+
+def test_language_for_path_tsx():
+    from merge_train.symbols import language_for_path
+    assert language_for_path("components/Button.tsx") == "tsx"
+
+
+def test_language_for_path_go():
+    from merge_train.symbols import language_for_path
+    assert language_for_path("cmd/server/main.go") == "go"
+
+
+def test_is_supported_path_ts_tsx_go():
+    from merge_train.symbols import is_supported_path
+    assert is_supported_path("app.ts") is True
+    assert is_supported_path("App.tsx") is True
+    assert is_supported_path("main.go") is True
+
+
+def test_extract_symbols_for_language_tsx():
+    src = "class AppComponent {\n    render() { return null; }\n}\n"
+    syms = extract_symbols_for_language(src, "tsx")
+    assert any(s.name == "AppComponent" for s in syms)
+
+
+def test_extract_symbols_for_language_ts_interface():
+    src = "interface Config {\n    host: string;\n    port: number;\n}\n"
+    syms = extract_symbols_for_language(src, "typescript")
+    assert any(s.name == "Config" for s in syms)
+
+
+def test_extract_symbols_for_language_go_func_and_type():
+    src = "type Service struct {}\nfunc NewService() *Service { return &Service{} }\n"
+    syms = extract_symbols_for_language(src, "go")
+    names = [s.name for s in syms]
+    assert "Service" in names
+    assert "NewService" in names
