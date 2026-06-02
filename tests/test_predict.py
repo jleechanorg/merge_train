@@ -291,6 +291,23 @@ def test_predict_unmapped_files_recorded(reg: Registry):
     assert plan.unmapped_files_by_pr == {1: ["some_unmapped_file.py"]}
 
 
+def test_predict_unmapped_files_conflict(reg: Registry):
+    specs = [
+        PRSpec(pr=1, branch="b1", files=("README.md",)),
+        PRSpec(pr=2, branch="b2", files=("README.md",)),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    assert len(plan.pairwise_conflicts) == 1
+    conflict = plan.pairwise_conflicts[0]
+    assert conflict.pr_a == 1
+    assert conflict.pr_b == 2
+    assert len(conflict.domain_conflicts) == 1
+    assert conflict.domain_conflicts[0].domain == "file:README.md"
+    assert conflict.domain_conflicts[0].symbols == ()
+    assert conflict.domain_conflicts[0].advisory is False
+    assert plan.parallel_batches == [[1], [2]]  # Cannot run in parallel because they conflict on the file lock
+
+
 # --------------------------------------------------------------------------- #
 # JSON output shape
 # --------------------------------------------------------------------------- #

@@ -448,7 +448,8 @@ def _reserve_locked(
     identity alone — today's PR-ownership model.
     """
     if domain not in registry.domains:
-        raise UnknownPathError(f"unknown domain: {domain}")
+        if not domain.startswith("file:"):
+            raise UnknownPathError(f"unknown domain: {domain}")
     syms = tuple(sorted(set(symbols)))
 
     active_on_domain = [e for e in log.active_all() if e.domain == domain]
@@ -636,6 +637,7 @@ def reserve_plan(
     plan: Iterable[PlanItem | dict],
     now: Optional[str] = None,
     intra_pr_exclusive: Optional[bool] = None,
+    override: str = "",
 ) -> list[LockEntry]:
     """Atomically reserve every leg of *plan* for the same PR/agent/branch.
 
@@ -669,6 +671,7 @@ def reserve_plan(
                     agent=agent, branch=branch,
                     symbols=item.symbols, now=now,
                     intra_pr_exclusive=intra_pr_exclusive,
+                    override=override,
                 )
             except (DomainHeldError, UnknownPathError):
                 # Roll back everything we wrote in this call.
@@ -790,6 +793,9 @@ def check(
     held: list[tuple[str, LockEntry]] = []
     advisory_held_list: list[tuple[str, LockEntry]] = []
     unmapped = grouped.pop("__unmapped__", [])
+    unmapped_result = list(unmapped)
+    for p in unmapped:
+        grouped[f"file:{p.lstrip('./')}"] = [p]
 
     # Aggregate touched symbols per domain. Three states per path:
     #   not in dict          → whole-domain fallback (unknown/unresolvable)
@@ -901,7 +907,7 @@ def check(
     return CheckResult(
         free=free,
         held=held,
-        unmapped=unmapped,
+        unmapped=unmapped_result,
         touched_symbols={
             d: (s if s is not None else set())
             for d, s in per_domain_symbols.items()
@@ -1029,6 +1035,30 @@ def _build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true",
         help="check for conflicts without acquiring locks; exits 0 if all "
              "legs are free, 1 if any is held, and prints WOULD-RESERVE per leg",
+    )
+
+    pr_ac = sub.add_parser(
+        "acquire",
+        help="acquire locks for a list of files atomically with automatic per-file fallback",
+    )
+    pr_ac.add_argument("--files", nargs="+", required=True,
+                       help="list of files to lock")
+    pr_ac.add_argument("--pr", type=int, default=None,
+                       help="PR number; optional when --branch is given")
+    pr_ac.add_argument("--agent", required=True)
+    pr_ac.add_argument("--branch", required=True)
+    pr_ac.add_argument(
+        "--intra-pr-exclusive", action="store_true", dest="intra_pr_exclusive",
+        help="force agent-aware mode ON for every resolved domain of this acquire",
+    )
+    pr_ac.add_argument(
+        "--dry-run", action="store_true",
+        help="check for conflicts without acquiring locks; exits 0 if all "
+             "resolved domains are free, 1 if any is held, and prints WOULD-RESERVE",
+    )
+    pr_ac.add_argument(
+        "--override", default="",
+        help=f"type '{_OVERRIDE_PHRASE}' to force-reserve despite held domains",
     )
 
     pr_rl = sub.add_parser("release", help="release a PR's or branch's reservations")
@@ -1453,6 +1483,71 @@ def _main_impl(argv: Optional[list[str]] = None) -> int:
             return 2
         for entry in entries:
             print(f"RESERVED: {_fmt_entry(entry)}")
+        return 0
+
+    if args.cmd == "acquire":
+        try:
+            registry = load_registry(args.registry)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        log = LockLog(args.log)
+
+        grouped = registry.domains_for_paths(args.files)
+        unmapped = grouped.pop("__unmapped__", [])
+        for p in unmapped:
+            grouped[f"file:{p.lstrip('./')}"] = [p]
+
+        plan_items = []
+        for domain in grouped:
+            plan_items.append(PlanItem(domain=domain, symbols=()))
+
+        if args.dry_run:
+            active = log.active_all()
+            held = False
+            for item in plan_items:
+                dom = item.domain
+                if dom not in registry.domains and not dom.startswith("file:"):
+                    print(f"error: unknown domain: {dom}", file=sys.stderr)
+                    return 2
+                holders = [e for e in active if e.domain == dom]
+                for h in holders:
+                    if h.is_whole_domain:
+                        print(f"HELD: {dom} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
+                        held = True
+                        break
+                    if h.symbols:
+                        syms_str = f"{len(h.symbols)} symbols" if len(h.symbols) > 3 else ",".join(h.symbols)
+                        print(f"HELD: {dom} symbols {syms_str} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
+                        held = True
+                        break
+                    if not h.symbols:
+                        print(f"HELD: {dom} by PR#{h.pr} ({h.agent}/{h.branch})", file=sys.stderr)
+                        held = True
+                        break
+                else:
+                    claim_label = f"PR#{args.pr}" if args.pr is not None else f"branch:{args.branch}"
+                    print(f"WOULD-RESERVE: {dom}\t{claim_label}\t{args.agent}\t{args.branch}")
+            return 1 if held else 0
+
+        try:
+            entries = reserve_plan(
+                log, registry,
+                pr=args.pr, agent=args.agent, branch=args.branch,
+                plan=plan_items,
+                intra_pr_exclusive=True if getattr(args, "intra_pr_exclusive", False) else None,
+                override=getattr(args, "override", ""),
+            )
+        except DomainHeldError as exc:
+            print(f"DENIED: {exc} (plan rolled back)", file=sys.stderr)
+            return 1
+        except UnknownPathError as exc:
+            print(f"error: {exc} (plan rolled back)", file=sys.stderr)
+            return 2
+
+        for entry in entries:
+            tag = "OVERRIDE-RESERVED" if entry.override else "RESERVED"
+            print(f"{tag}: {_fmt_entry(entry)}")
         return 0
 
     if args.cmd == "release":

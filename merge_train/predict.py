@@ -169,7 +169,9 @@ def _spec_as_lock_entries(spec: PRSpec, registry: Registry) -> list[LockEntry]:
     union of touched symbols within the domain.
     """
     grouped = registry.domains_for_paths(spec.files)
-    grouped.pop("__unmapped__", None)
+    unmapped = grouped.pop("__unmapped__", [])
+    for p in unmapped:
+        grouped[f"file:{p.lstrip('./')}"] = [p]
     entries: list[LockEntry] = []
     for domain, paths in grouped.items():
         agg: set[str] = set()
