@@ -272,7 +272,11 @@ echo "[3b/5] Antigravity (.gemini) per-repo guard..."
 mkdir -p "$GEMINI_DIR"
 
 # Copy guard from installed location (not a symlink to source repo).
-if [[ -f "$GEMINI_GUARD" ]]; then
+# GEMINI_HOOK_INSTALLED may not exist when the hooks PR lands separately —
+# skip gracefully so this branch's CI passes without the hook files.
+if [[ ! -f "$GEMINI_HOOK_INSTALLED" ]]; then
+    echo "  SKIP: $GEMINI_HOOK_INSTALLED not present in this release (hook files pending)"
+elif [[ -f "$GEMINI_GUARD" ]]; then
     # Replace if it's a stale symlink to the old source-repo path
     if [[ -L "$GEMINI_GUARD" ]]; then
         rm "$GEMINI_GUARD"
