@@ -143,10 +143,9 @@ HOOKS_INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$HOOKS_INSTALL_DIR"
 
 _HOOK_NAMES=(
-    "predict-session-start.sh"
-    "predict-session-stop.sh"
     "predict-spawn-check.sh"
-    "gemini-predict-spawn-check.sh"
+    "conflict-warn-pre-tool.sh"
+    "gemini-conflict-warn.sh"
 )
 echo "[1b/5] Installing hook scripts to $HOOKS_INSTALL_DIR..."
 for _hname in "${_HOOK_NAMES[@]}"; do
@@ -163,10 +162,9 @@ done
 echo
 
 # Canonical installed hook paths (used by all hook config sections below).
-DL_START="$HOOKS_INSTALL_DIR/predict-session-start.sh"
-DL_STOP="$HOOKS_INSTALL_DIR/predict-session-stop.sh"
-CLAUDE_PRE_TOOL="$HOOKS_INSTALL_DIR/predict-spawn-check.sh"
-GEMINI_HOOK_INSTALLED="$HOOKS_INSTALL_DIR/gemini-predict-spawn-check.sh"
+SPAWN_CHECK="$HOOKS_INSTALL_DIR/predict-spawn-check.sh"
+CLAUDE_PRE_TOOL="$HOOKS_INSTALL_DIR/conflict-warn-pre-tool.sh"
+GEMINI_HOOK_INSTALLED="$HOOKS_INSTALL_DIR/gemini-conflict-warn.sh"
 
 # ------------------------------------------------------------------------- #
 # 3. (no-op) Domain registry YAML removed — predict-conflicts needs no config
@@ -221,26 +219,14 @@ if [[ ! -f "$CODEX_HOOKS" ]]; then
     cat > "$CODEX_HOOKS" <<CODEX_EOF
 {
   "hooks": {
-    "SessionStart": [
+    "BeforeTool": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "bash $DL_START",
+            "command": "bash $SPAWN_CHECK",
             "timeoutSec": 15,
             "statusMessage": "Running predict-conflicts pre-spawn check..."
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash $DL_STOP",
-            "timeoutSec": 10,
-            "statusMessage": "Finalizing conflict check session..."
           }
         ]
       }
@@ -250,10 +236,10 @@ if [[ ! -f "$CODEX_HOOKS" ]]; then
 CODEX_EOF
     echo "  ok: created $CODEX_HOOKS"
 else
-    # Idempotent: only patch if our hooks aren't already present
-    if ! grep -q "predict-session-start" "$CODEX_HOOKS" 2>/dev/null; then
-        echo "  WARN: $CODEX_HOOKS exists but has no predict-session-start hook."
-        echo "        Manually add predict-session-start.sh to SessionStart."
+    # Idempotent: only patch if our hook isn't already present
+    if ! grep -q "predict-spawn-check" "$CODEX_HOOKS" 2>/dev/null; then
+        echo "  WARN: $CODEX_HOOKS exists but has no predict-spawn-check hook."
+        echo "        Manually add predict-spawn-check.sh to the BeforeTool hook."
     else
         echo "  ok: $CODEX_HOOKS already wired."
     fi
@@ -306,16 +292,6 @@ if [[ ! -f "$GEMINI_SETTINGS" ]]; then
           }
         ]
       }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash $DL_STOP"
-          }
-        ]
-      }
     ]
   }
 }
@@ -357,7 +333,7 @@ echo
 
 echo "[3d/5] Claude Code global ~/.claude/settings.json..."
 
-DL_START="$DL_START" DL_STOP="$DL_STOP" CLAUDE_PRE_TOOL="$CLAUDE_PRE_TOOL" \
+CLAUDE_PRE_TOOL="$CLAUDE_PRE_TOOL" \
 MERGE_TRAIN_ROOT="$MERGE_TRAIN_ROOT" "$PYTHON_BIN" -c '
 import os, sys, json
 from pathlib import Path
@@ -367,8 +343,6 @@ if not settings_path.exists():
     print("  ok: Claude settings.json not found, skipping global configuration.")
     sys.exit(0)
 
-dl_start = os.environ["DL_START"]
-dl_stop = os.environ["DL_STOP"]
 claude_pre_tool = os.environ["CLAUDE_PRE_TOOL"]
 merge_train_root = os.environ["MERGE_TRAIN_ROOT"]
 
@@ -379,69 +353,20 @@ with open(settings_path, "r") as f:
         print(f"  WARN: Error reading settings.json: {e}")
         sys.exit(0)
 
-# Ensure hooks exists
 if "hooks" not in data:
     data["hooks"] = {}
 hooks = data["hooks"]
 
 def _is_stale_source_cmd(cmd: str) -> bool:
-    """Return True if cmd points into the merge_train source repo (old style)."""
     return merge_train_root in cmd and "hooks/" in cmd
 
-def _remove_stale(hook_list: list) -> int:
-    """Remove stale source-repo entries from a hooks list. Returns count removed."""
-    removed = 0
-    for entry in hook_list:
+# Remove any stale source-repo hook entries
+for event_hooks in hooks.values():
+    for entry in event_hooks:
         orig = entry.get("hooks", [])
         entry["hooks"] = [h for h in orig if not _is_stale_source_cmd(h.get("command", ""))]
-        removed += len(orig) - len(entry["hooks"])
-    return removed
 
-# Migrate stale source-repo entries out of all hook types
-for event_hooks in hooks.values():
-    _remove_stale(event_hooks)
-
-# 1. Patch SessionStart
-session_start_hooks = hooks.setdefault("SessionStart", [])
-session_start_entry = None
-for entry in session_start_hooks:
-    if entry.get("matcher") == "":
-        session_start_entry = entry
-        break
-if not session_start_entry:
-    session_start_entry = {"matcher": "", "hooks": []}
-    session_start_hooks.append(session_start_entry)
-
-start_hook_cmd = f"bash {dl_start}"
-start_hook_exists = any(h.get("command") == start_hook_cmd for h in session_start_entry["hooks"])
-if not start_hook_exists:
-    session_start_entry["hooks"].append({
-        "type": "command",
-        "command": start_hook_cmd,
-        "timeout": 15000
-    })
-
-# 2. Patch Stop
-stop_hooks = hooks.setdefault("Stop", [])
-stop_entry = None
-for entry in stop_hooks:
-    if entry.get("matcher") == "":
-        stop_entry = entry
-        break
-if not stop_entry:
-    stop_entry = {"matcher": "", "hooks": []}
-    stop_hooks.append(stop_entry)
-
-stop_hook_cmd = f"bash {dl_stop}"
-stop_hook_exists = any(h.get("command") == stop_hook_cmd for h in stop_entry["hooks"])
-if not stop_hook_exists:
-    stop_entry["hooks"].append({
-        "type": "command",
-        "command": stop_hook_cmd,
-        "timeout": 10000
-    })
-
-# 3. Patch PreToolUse (Edit and Write)
+# Patch PreToolUse (Edit and Write) with conflict-warn-pre-tool.sh
 pre_tool_hooks = hooks.setdefault("PreToolUse", [])
 pre_tool_cmd = f"bash {claude_pre_tool}"
 
@@ -455,8 +380,7 @@ for matcher in ["Edit", "Write"]:
         matcher_entry = {"matcher": matcher, "hooks": []}
         pre_tool_hooks.append(matcher_entry)
 
-    pre_hook_exists = any(h.get("command") == pre_tool_cmd for h in matcher_entry["hooks"])
-    if not pre_hook_exists:
+    if not any(h.get("command") == pre_tool_cmd for h in matcher_entry["hooks"]):
         matcher_entry["hooks"].append({
             "type": "command",
             "command": pre_tool_cmd,
@@ -465,7 +389,7 @@ for matcher in ["Edit", "Write"]:
 
 with open(settings_path, "w") as f:
     json.dump(data, f, indent=2)
-print("  ok: successfully patched global Claude settings.json with session and pre-tool hooks.")
+print("  ok: patched ~/.claude/settings.json with conflict-warn PreToolUse hooks.")
 '
 echo
 
