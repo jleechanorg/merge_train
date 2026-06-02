@@ -93,15 +93,13 @@ jobs:
       - name: Verify install artifacts
         run: |
           set +o pipefail
-          test -f target_repo/file_domains.yaml || { echo "skeleton not created"; exit 1; }
           test -L target_repo/.git/hooks/pre-commit || { echo "hook not symlinked"; exit 1; }
-          domain_lock --help | head -5
+          predict-conflicts --help | head -5
 
       - name: Re-run install.sh (idempotency check)
         run: ./merge_train/install.sh "$(pwd)/target_repo" 2>&1 | tee rerun.log
-        # The re-run must NOT clobber the yaml or the hook.
+        # The re-run must NOT clobber the hook.
 
-      - name: Confirm idempotent — yaml + hook untouched
+      - name: Confirm idempotent — hook untouched
         run: |
-          grep -q "already exists, leaving untouched" rerun.log
           grep -q "already symlinked" rerun.log

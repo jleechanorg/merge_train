@@ -4,17 +4,15 @@
 # What this does (idempotent):
 #   1. Verify Python >= 3.10 and git are available.
 #   2. `uv tool install` the merge_train package (isolated binary install).
-#   3. In the target repo, create a `file_domains.yaml` skeleton if one
-#      doesn't already exist.
-#   4. Wire per-CLI session-start / session-stop domain-lock hooks:
+#   3. Wire per-CLI session-start / session-stop conflict-check hooks:
 #      a. .git/hooks/pre-commit  (last-resort fallback for raw git commits)
 #      b. .codex/hooks.json      (Codex SessionStart + Stop)
-#      c. .gemini/domain-lock-guard.sh + .gemini/settings.json (Antigravity)
-#      d. .opencode.json         (OpenCode custom /domain-check command stub)
+#      c. .gemini/predict-spawn-check.sh + .gemini/settings.json (Antigravity)
+#      d. .opencode.json         (OpenCode custom /conflict-check command stub)
 #      NOTE: Claude Code global ~/.claude/settings.json is wired separately
 #            (already done if this install.sh is run with merge_train >= 0.2).
-#   5. Smoke-test the install (domain_lock list --status active).
-#   6. Print next steps.
+#   4. Smoke-test the install (predict-conflicts --help).
+#   5. Print next steps.
 #
 # Usage:
 #   # From inside the target repo (default — uses $PWD):
@@ -36,7 +34,7 @@ MERGE_TRAIN_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 TARGET=""
 INSTALL_HOOK=1
 FORCE_HOOK=0
-INSTALL_YAML=1
+INSTALL_YAML=0  # domain registry (file_domains.yaml) removed; flag kept for compat
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 print_help() {
@@ -47,7 +45,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --no-hook)    INSTALL_HOOK=0; shift ;;
         --force-hook) FORCE_HOOK=1;   shift ;;
-        --no-yaml)    INSTALL_YAML=0; shift ;;
+        --no-yaml)    INSTALL_YAML=0; shift ;;  # kept for backward compat; no-op (no yaml created)
         --python)     PYTHON_BIN="$2"; shift 2 ;;
         -h|--help)    print_help; exit 0 ;;
         -*)
@@ -110,28 +108,28 @@ echo
 # 2. Install the package (uv tool install — one binary, shared across repos)
 # ------------------------------------------------------------------------- #
 
-echo "[1/5] Installing merge_train CLI (domain_lock)..."
-_DL_BIN="$(command -v domain_lock 2>/dev/null || true)"
-_DL_SHEBANG="$(head -1 "$_DL_BIN" 2>/dev/null || true)"
-if [[ -n "$_DL_BIN" && "$_DL_SHEBANG" == *"uv/tools"* ]]; then
-    echo "  skip: already installed via uv at $_DL_BIN"
+echo "[1/5] Installing merge_train CLI (predict-conflicts)..."
+_PC_BIN="$(command -v predict-conflicts 2>/dev/null || true)"
+_PC_SHEBANG="$(head -1 "$_PC_BIN" 2>/dev/null || true)"
+if [[ -n "$_PC_BIN" && "$_PC_SHEBANG" == *"uv/tools"* ]]; then
+    echo "  skip: already installed via uv at $_PC_BIN"
     echo "  note: run 'uv tool install $MERGE_TRAIN_ROOT --reinstall' to upgrade"
 else
-    if [[ -n "$_DL_BIN" ]]; then
-        echo "  found stale binary at $_DL_BIN (not uv tool env) — reinstalling"
+    if [[ -n "$_PC_BIN" ]]; then
+        echo "  found stale binary at $_PC_BIN (not uv tool env) — reinstalling"
     fi
     uv tool install "$MERGE_TRAIN_ROOT" --reinstall --quiet
-    _DL_BIN="$(command -v domain_lock 2>/dev/null || true)"
-    echo "  installed: $_DL_BIN"
+    _PC_BIN="$(command -v predict-conflicts 2>/dev/null || true)"
+    echo "  installed: $_PC_BIN"
 fi
 
 # Verify the binary is functional
-if [[ -z "$(command -v domain_lock 2>/dev/null)" ]]; then
-    echo "  WARN: domain_lock not on PATH — add ~/.local/bin to PATH, then re-run."
-elif domain_lock check --help >/dev/null 2>&1; then
-    echo "  working: $(command -v domain_lock) — one binary, shared across all repos with file_domains.yaml"
+if [[ -z "$(command -v predict-conflicts 2>/dev/null)" ]]; then
+    echo "  WARN: predict-conflicts not on PATH — add ~/.local/bin to PATH, then re-run."
+elif predict-conflicts --help >/dev/null 2>&1; then
+    echo "  working: $(command -v predict-conflicts)"
 else
-    echo "  WARN: domain_lock binary found but --help failed — try: uv tool install $MERGE_TRAIN_ROOT --reinstall"
+    echo "  WARN: predict-conflicts binary found but --help failed — try: uv tool install $MERGE_TRAIN_ROOT --reinstall"
 fi
 echo
 
@@ -145,10 +143,10 @@ HOOKS_INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$HOOKS_INSTALL_DIR"
 
 _HOOK_NAMES=(
-    "domain-lock-session-start.sh"
-    "domain-lock-session-stop.sh"
-    "domain-lock-pre-tool.sh"
-    "gemini-domain-lock-guard.sh"
+    "predict-session-start.sh"
+    "predict-session-stop.sh"
+    "predict-spawn-check.sh"
+    "gemini-predict-spawn-check.sh"
 )
 echo "[1b/5] Installing hook scripts to $HOOKS_INSTALL_DIR..."
 for _hname in "${_HOOK_NAMES[@]}"; do
@@ -165,50 +163,19 @@ done
 echo
 
 # Canonical installed hook paths (used by all hook config sections below).
-DL_START="$HOOKS_INSTALL_DIR/domain-lock-session-start.sh"
-DL_STOP="$HOOKS_INSTALL_DIR/domain-lock-session-stop.sh"
-CLAUDE_PRE_TOOL="$HOOKS_INSTALL_DIR/domain-lock-pre-tool.sh"
-GEMINI_HOOK_INSTALLED="$HOOKS_INSTALL_DIR/gemini-domain-lock-guard.sh"
+DL_START="$HOOKS_INSTALL_DIR/predict-session-start.sh"
+DL_STOP="$HOOKS_INSTALL_DIR/predict-session-stop.sh"
+CLAUDE_PRE_TOOL="$HOOKS_INSTALL_DIR/predict-spawn-check.sh"
+GEMINI_HOOK_INSTALLED="$HOOKS_INSTALL_DIR/gemini-predict-spawn-check.sh"
 
 # ------------------------------------------------------------------------- #
-# 3. file_domains.yaml skeleton
+# 3. (no-op) Domain registry YAML removed — predict-conflicts needs no config
 # ------------------------------------------------------------------------- #
 
-if [[ "$INSTALL_YAML" -eq 1 ]]; then
-    YAML_PATH="$TARGET/file_domains.yaml"
-    if [[ -f "$YAML_PATH" ]]; then
-        echo "[2/5] file_domains.yaml: already exists, leaving untouched."
-    else
-        echo "[2/5] file_domains.yaml: creating skeleton at $YAML_PATH"
-        cat > "$YAML_PATH" <<'YAML_EOF'
-# merge_train domain registry. Each domain groups one or more file
-# globs that should be considered a single locking unit. Two PRs
-# touching the same domain will collide at spawn time unless they
-# reserve disjoint symbols (see README).
-#
-# Edit this file to match your repo's hot-spot files. Run
-# `domain_lock audit` to verify the registry parses.
-
-domains:
-  # Example: a "level-up pipeline" that two agents must not edit at once.
-  # level-up-pipeline:
-  #   paths:
-  #     - mvp_site/rewards_engine.py
-  #     - mvp_site/world_logic.py
-  #   owners: [your-github-handle]
-
-  # Example: workflow files — usually only one PR at a time.
-  # ci-infra:
-  #   paths:
-  #     - .github/workflows/**
-  #   owners: [your-github-handle]
-YAML_EOF
-    fi
-    echo
-else
-    echo "[2/5] file_domains.yaml: skipped (--no-yaml)."
-    echo
-fi
+# file_domains.yaml is no longer required. Symbol-level conflict detection
+# via predict-conflicts is automatic; no registry file needs to exist.
+echo "[2/5] Domain registry: skipped (predict-conflicts requires no file_domains.yaml)."
+echo
 
 # ------------------------------------------------------------------------- #
 # 4. Pre-commit hook
@@ -261,7 +228,7 @@ if [[ ! -f "$CODEX_HOOKS" ]]; then
             "type": "command",
             "command": "bash $DL_START",
             "timeoutSec": 15,
-            "statusMessage": "Checking domain locks..."
+            "statusMessage": "Running predict-conflicts pre-spawn check..."
           }
         ]
       }
@@ -273,7 +240,7 @@ if [[ ! -f "$CODEX_HOOKS" ]]; then
             "type": "command",
             "command": "bash $DL_STOP",
             "timeoutSec": 10,
-            "statusMessage": "Releasing domain locks..."
+            "statusMessage": "Finalizing conflict check session..."
           }
         ]
       }
@@ -284,9 +251,9 @@ CODEX_EOF
     echo "  ok: created $CODEX_HOOKS"
 else
     # Idempotent: only patch if our hooks aren't already present
-    if ! grep -q "domain-lock-session-start" "$CODEX_HOOKS" 2>/dev/null; then
-        echo "  WARN: $CODEX_HOOKS exists but has no domain-lock hooks."
-        echo "        Manually add domain-lock-session-start.sh to SessionStart."
+    if ! grep -q "predict-session-start" "$CODEX_HOOKS" 2>/dev/null; then
+        echo "  WARN: $CODEX_HOOKS exists but has no predict-session-start hook."
+        echo "        Manually add predict-session-start.sh to SessionStart."
     else
         echo "  ok: $CODEX_HOOKS already wired."
     fi
@@ -298,7 +265,7 @@ echo
 # ------------------------------------------------------------------------- #
 
 GEMINI_DIR="$TARGET/.gemini"
-GEMINI_GUARD="$GEMINI_DIR/domain-lock-guard.sh"
+GEMINI_GUARD="$GEMINI_DIR/predict-spawn-check.sh"
 GEMINI_SETTINGS="$GEMINI_DIR/settings.json"
 
 echo "[3b/5] Antigravity (.gemini) per-repo guard..."
@@ -350,9 +317,9 @@ if [[ ! -f "$GEMINI_SETTINGS" ]]; then
 }
 GEMINI_EOF
     echo "  ok: created $GEMINI_SETTINGS"
-elif ! grep -q "domain-lock-guard" "$GEMINI_SETTINGS" 2>/dev/null; then
-    echo "  WARN: $GEMINI_SETTINGS exists but has no domain-lock-guard hook."
-    echo "        Manually add domain-lock-guard.sh to the BeforeTool hook."
+elif ! grep -q "predict-spawn-check" "$GEMINI_SETTINGS" 2>/dev/null; then
+    echo "  WARN: $GEMINI_SETTINGS exists but has no predict-spawn-check hook."
+    echo "        Manually add predict-spawn-check.sh to the BeforeTool hook."
 else
     echo "  ok: $GEMINI_SETTINGS already wired."
 fi
@@ -368,15 +335,15 @@ if [[ ! -f "$OPENCODE_JSON" ]]; then
     cat > "$OPENCODE_JSON" <<OC_EOF
 {
   "\$schema": "https://opencode.ai/config.json",
-  "instructions": "IMPORTANT: Before starting any coding task, run: domain_lock check --files <files-you-plan-to-edit>. If exit code is 1 (HELD), do not proceed — pick a different task. If exit code is 0, run: domain_lock reserve --domain <domain> --pr <PR_NUMBER> --agent \$(whoami) --branch \$(git branch --show-current). When done, run: domain_lock release --pr <PR_NUMBER>"
+  "instructions": "IMPORTANT: Before starting any coding task, run: predict-conflicts --from-prs <PR_NUMBER> to check for symbol-level conflicts with other open PRs. If conflicts are detected, pick a different task or coordinate with the conflicting PR's author."
 }
 OC_EOF
-    echo "  ok: created $OPENCODE_JSON (domain-lock instructions injected)"
-elif ! grep -q "domain_lock" "$OPENCODE_JSON" 2>/dev/null; then
-    echo "  WARN: $OPENCODE_JSON exists but has no domain_lock instructions."
-    echo "        Add domain_lock check/reserve/release to the instructions field."
+    echo "  ok: created $OPENCODE_JSON (predict-conflicts instructions injected)"
+elif ! grep -q "predict-conflicts" "$OPENCODE_JSON" 2>/dev/null; then
+    echo "  WARN: $OPENCODE_JSON exists but has no predict-conflicts instructions."
+    echo "        Add predict-conflicts usage to the instructions field."
 else
-    echo "  ok: $OPENCODE_JSON already has domain_lock instructions."
+    echo "  ok: $OPENCODE_JSON already has predict-conflicts instructions."
 fi
 echo
 
@@ -506,13 +473,13 @@ echo
 echo "[4/5] Smoke-testing CLI..."
 (
     cd "$TARGET"
-    if ! command -v domain_lock >/dev/null 2>&1; then
-        echo "  WARN: 'domain_lock' not on PATH. Ensure ~/.local/bin is in PATH,"
+    if ! command -v predict-conflicts >/dev/null 2>&1; then
+        echo "  WARN: 'predict-conflicts' not on PATH. Ensure ~/.local/bin is in PATH,"
         echo "        or run: uv tool install $MERGE_TRAIN_ROOT"
     else
-        domain_lock list --status active --registry "$TARGET/file_domains.yaml" 2>/dev/null \
-            && echo "  ok: domain_lock CLI reachable, registry parses." \
-            || echo "  ok: domain_lock CLI reachable (no active locks yet, expected on fresh install)."
+        predict-conflicts --help >/dev/null 2>&1 \
+            && echo "  ok: predict-conflicts CLI reachable." \
+            || echo "  WARN: predict-conflicts --help failed — try: uv tool install $MERGE_TRAIN_ROOT --reinstall"
     fi
 )
 echo
@@ -524,19 +491,14 @@ echo
 cat <<NEXT_EOF
 [5/5] Done. Next steps:
 
-  1. Edit $TARGET/file_domains.yaml — replace the example domains with
-     your repo's actual hot-spot files.
+  1. Check for symbol-level conflicts before spawning agents:
 
-  2. Try a reserve / check / release cycle:
+       predict-conflicts --from-prs <PR_NUMBER_1> <PR_NUMBER_2>
 
-       domain_lock reserve --domain <name> --pr 1 --agent me --branch test
-       domain_lock list --status active
-       domain_lock release --pr 1
+  2. Wire the pre-spawn check into your agent spawner. See
+     docs/AGENTS.md for the integration recipe.
 
-  3. Wire \`hooks/ao-spawn-domain-check.sh\` into your agent spawner. See
-     docs/AGENTS.md (Section A) for the integration recipe.
-
-  4. Run the merge_train tests to confirm the install is healthy:
+  3. Run the merge_train tests to confirm the install is healthy:
 
        (cd $MERGE_TRAIN_ROOT && python3 -m pytest tests/ -q)
 
