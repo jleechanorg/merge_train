@@ -41,14 +41,11 @@ from merge_train.symbols import (
     language_for_path,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Unified-diff splitter
 # --------------------------------------------------------------------------- #
 
-_FILE_HEADER_RE = re.compile(
-    r"^diff --git a/(?P<path>.+?) b/(?P<bpath>.+)$"
-)
+_FILE_HEADER_RE = re.compile(r"^diff --git a/(?P<path>.+?) b/(?P<bpath>.+)$")
 
 
 def _split_diff_by_file(diff_text: str) -> dict[str, str]:
@@ -91,7 +88,9 @@ def symbols_from_staged_diff(
     try:
         proc = subprocess.run(
             ["git", "diff", "--staged", "--name-only", "--diff-filter=ACMRT"],
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
             cwd=str(cwd) if cwd else None,
         )
     except FileNotFoundError:
@@ -108,7 +107,12 @@ def symbols_from_staged_diff(
             syms = touched_symbols_for_staged_file(path, cwd=cwd)
             if syms:
                 result[path] = syms
-        except (SymbolResolutionError, UnsupportedLanguageError, RuntimeError, FileNotFoundError):
+        except (
+            SymbolResolutionError,
+            UnsupportedLanguageError,
+            RuntimeError,
+            FileNotFoundError,
+        ):
             pass
     return result
 
@@ -125,7 +129,10 @@ def _gh_pr_diff(pr_number: int, repo: Optional[str] = None) -> str:
         cmd = ["gh", "pr", "diff", str(pr_number), "--repo", repo, "--patch"]
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, check=False,
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
         )
     except FileNotFoundError:
         return ""
@@ -136,11 +143,29 @@ def _gh_pr_diff(pr_number: int, repo: Optional[str] = None) -> str:
 
 def _gh_pr_head_ref(pr_number: int, repo: Optional[str] = None) -> str:
     """Return the head branch name for a PR."""
-    cmd = ["gh", "pr", "view", str(pr_number),
-           "--json", "headRefName", "--jq", ".headRefName"]
+    cmd = [
+        "gh",
+        "pr",
+        "view",
+        str(pr_number),
+        "--json",
+        "headRefName",
+        "--jq",
+        ".headRefName",
+    ]
     if repo:
-        cmd = ["gh", "pr", "view", str(pr_number), "--repo", repo,
-               "--json", "headRefName", "--jq", ".headRefName"]
+        cmd = [
+            "gh",
+            "pr",
+            "view",
+            str(pr_number),
+            "--repo",
+            repo,
+            "--json",
+            "headRefName",
+            "--jq",
+            ".headRefName",
+        ]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
         return proc.stdout.strip()
@@ -163,10 +188,16 @@ def _gh_file_content_at_ref(
     # Primary path: raw Accept header, no size limit (up to repo blob size).
     try:
         proc = subprocess.run(
-            ["gh", "api",
-             "-H", "Accept: application/vnd.github.raw",
-             f"repos/{repo}/contents/{path}?ref={ref}"],
-            capture_output=True, text=True, check=False,
+            [
+                "gh",
+                "api",
+                "-H",
+                "Accept: application/vnd.github.raw",
+                f"repos/{repo}/contents/{path}?ref={ref}",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if proc.returncode == 0 and proc.stdout:
             return proc.stdout
@@ -177,13 +208,21 @@ def _gh_file_content_at_ref(
     try:
         proc = subprocess.run(
             ["gh", "api", f"repos/{repo}/contents/{path}?ref={ref}"],
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if proc.returncode != 0:
-            _log.debug("gh contents API rc=%s for %s@%s: %s",
-                       proc.returncode, path, ref, proc.stderr.strip())
+            _log.debug(
+                "gh contents API rc=%s for %s@%s: %s",
+                proc.returncode,
+                path,
+                ref,
+                proc.stderr.strip(),
+            )
             return ""
         import json as _json
+
         try:
             body = _json.loads(proc.stdout)
         except _json.JSONDecodeError:
@@ -195,7 +234,10 @@ def _gh_file_content_at_ref(
             _log.warning(
                 "gh contents API returned no inline content for %s@%s "
                 "(encoding=%r, size=%s) — symbol enrichment skipped",
-                path, ref, encoding, body.get("size"),
+                path,
+                ref,
+                encoding,
+                body.get("size"),
             )
             return ""
         return base64.b64decode(raw_content).decode("utf-8", errors="replace")
@@ -213,7 +255,9 @@ def _detect_repo_from_git_remote(cwd: Optional[Path] = None) -> Optional[str]:
     try:
         proc = subprocess.run(
             ["git", "remote", "get-url", "origin"],
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
             cwd=str(cwd) if cwd else None,
         )
     except (FileNotFoundError, subprocess.SubprocessError):
@@ -254,7 +298,11 @@ def symbols_from_pr_diff(
         if not is_supported_path(path):
             continue
         if is_markdown_path(path):
-            from merge_train.symbols import extract_markdown_symbols, _touched_markdown_symbols
+            from merge_train.symbols import (
+                extract_markdown_symbols,
+                _touched_markdown_symbols,
+            )
+
             hunks = parse_hunks(file_diff)
             if not hunks:
                 continue
@@ -264,7 +312,9 @@ def symbols_from_pr_diff(
             if not content:
                 continue
             try:
-                syms = _touched_markdown_symbols(new_source=content, diff_text=file_diff, file_stem=_Path(path).stem)
+                syms = _touched_markdown_symbols(
+                    new_source=content, diff_text=file_diff, file_stem=_Path(path).stem
+                )
                 if syms:
                     result[path] = syms
             except (SymbolResolutionError, Exception):
@@ -286,11 +336,14 @@ def symbols_from_pr_diff(
             except SyntaxError as exc:
                 _log.debug("ast parse failed for %s in PR#%s: %s", path, pr_number, exc)
             except Exception as exc:
-                _log.debug("touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc)
+                _log.debug(
+                    "touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc
+                )
             continue
 
         # Multi-language: use lang_extractors for all other supported types
         from merge_train.lang_extractors import extract_symbols_for_language
+
         lang = language_for_path(path)
         if lang is None:
             continue  # already checked is_supported_path above, but guard anyway
@@ -313,7 +366,9 @@ def symbols_from_pr_diff(
             if touched:
                 result[path] = touched
         except Exception as exc:
-            _log.debug("lang_extractors failed for %s in PR#%s: %s", path, pr_number, exc)
+            _log.debug(
+                "lang_extractors failed for %s in PR#%s: %s", path, pr_number, exc
+            )
     return result
 
 
@@ -342,6 +397,7 @@ def symbols_from_files_in_pr(
             continue
         if is_markdown_path(path):
             from merge_train.symbols import _touched_markdown_symbols
+
             hunks = parse_hunks(file_diff)
             if not hunks:
                 continue
@@ -351,7 +407,9 @@ def symbols_from_files_in_pr(
             if not content:
                 continue
             try:
-                syms = _touched_markdown_symbols(new_source=content, diff_text=file_diff, file_stem=_Path(path).stem)
+                syms = _touched_markdown_symbols(
+                    new_source=content, diff_text=file_diff, file_stem=_Path(path).stem
+                )
                 if syms:
                     result[path] = syms
             except (SymbolResolutionError, Exception):
@@ -373,11 +431,14 @@ def symbols_from_files_in_pr(
             except SyntaxError as exc:
                 _log.debug("ast parse failed for %s in PR#%s: %s", path, pr_number, exc)
             except Exception as exc:
-                _log.debug("touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc)
+                _log.debug(
+                    "touched_symbols failed for %s in PR#%s: %s", path, pr_number, exc
+                )
             continue
 
         # Multi-language: use lang_extractors for all other supported types
         from merge_train.lang_extractors import extract_symbols_for_language
+
         lang = language_for_path(path)
         if lang is None:
             continue
@@ -400,5 +461,7 @@ def symbols_from_files_in_pr(
             if touched:
                 result[path] = touched
         except Exception as exc:
-            _log.debug("lang_extractors failed for %s in PR#%s: %s", path, pr_number, exc)
+            _log.debug(
+                "lang_extractors failed for %s in PR#%s: %s", path, pr_number, exc
+            )
     return result

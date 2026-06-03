@@ -41,13 +41,15 @@ _greedy_max_independent_set = _greedy_maximal_independent_set
 
 @pytest.fixture
 def reg() -> Registry:
-    return Registry.from_dict({
-        "domains": {
-            "world": {"paths": ["mvp_site/world_logic.py"]},
-            "rewards": {"paths": ["mvp_site/rewards_engine.py"]},
-            "agents": {"paths": ["mvp_site/agents.py"]},
+    return Registry.from_dict(
+        {
+            "domains": {
+                "world": {"paths": ["mvp_site/world_logic.py"]},
+                "rewards": {"paths": ["mvp_site/rewards_engine.py"]},
+                "agents": {"paths": ["mvp_site/agents.py"]},
+            }
         }
-    })
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -56,11 +58,14 @@ def reg() -> Registry:
 
 
 def test_prspec_from_dict_full():
-    spec = PRSpec.from_dict({
-        "pr": 123, "branch": "feat/x",
-        "files": ["a.py"],
-        "symbols": {"a.py": ["foo", "bar"]},
-    })
+    spec = PRSpec.from_dict(
+        {
+            "pr": 123,
+            "branch": "feat/x",
+            "files": ["a.py"],
+            "symbols": {"a.py": ["foo", "bar"]},
+        }
+    )
     assert spec.pr == 123
     assert spec.branch == "feat/x"
     assert spec.files == ("a.py",)
@@ -79,12 +84,16 @@ def test_prspec_missing_symbols_means_whole_file():
 
 def test_load_plan_yaml(tmp_path: Path):
     p = tmp_path / "plan.yaml"
-    p.write_text(yaml.safe_dump({
-        "prs": [
-            {"pr": 1, "branch": "b1", "files": ["a.py"]},
-            {"pr": 2, "branch": "b2", "files": ["b.py"]},
-        ]
-    }))
+    p.write_text(
+        yaml.safe_dump(
+            {
+                "prs": [
+                    {"pr": 1, "branch": "b1", "files": ["a.py"]},
+                    {"pr": 2, "branch": "b2", "files": ["b.py"]},
+                ]
+            }
+        )
+    )
     specs = load_plan(p)
     assert [s.pr for s in specs] == [1, 2]
 
@@ -92,9 +101,9 @@ def test_load_plan_yaml(tmp_path: Path):
 def test_load_plan_accepts_legacy_plan_key(tmp_path: Path):
     """Backward compat with the `reserve-plan` schema's top-level key."""
     p = tmp_path / "plan.yaml"
-    p.write_text(yaml.safe_dump({
-        "plan": [{"pr": 1, "branch": "b", "files": ["a.py"]}]
-    }))
+    p.write_text(
+        yaml.safe_dump({"plan": [{"pr": 1, "branch": "b", "files": ["a.py"]}]})
+    )
     assert len(load_plan(p)) == 1
 
 
@@ -112,7 +121,8 @@ def test_load_plan_rejects_non_list(tmp_path: Path):
 
 def test_spec_as_lock_entries_whole_file(reg: Registry):
     spec = PRSpec(
-        pr=1, branch="b1",
+        pr=1,
+        branch="b1",
         files=("mvp_site/world_logic.py",),
         symbols_by_file={},
     )
@@ -124,7 +134,8 @@ def test_spec_as_lock_entries_whole_file(reg: Registry):
 
 def test_spec_as_lock_entries_symbol_level(reg: Registry):
     spec = PRSpec(
-        pr=1, branch="b1",
+        pr=1,
+        branch="b1",
         files=("mvp_site/world_logic.py",),
         symbols_by_file={"mvp_site/world_logic.py": frozenset({"level_up"})},
     )
@@ -136,7 +147,8 @@ def test_spec_as_lock_entries_partial_symbols_falls_back_to_whole(reg: Registry)
     """If any file in the domain is missing from symbols_by_file, the
     domain locks whole — same fail-closed semantics as --diff-mode."""
     spec = PRSpec(
-        pr=1, branch="b1",
+        pr=1,
+        branch="b1",
         files=("mvp_site/world_logic.py", "mvp_site/rewards_engine.py"),
         # only one of two has symbol info
         symbols_by_file={"mvp_site/world_logic.py": frozenset({"x"})},
@@ -177,26 +189,46 @@ def test_pair_whole_domain_conflict(reg: Registry):
 
 
 def test_pair_disjoint_symbols_no_conflict(reg: Registry):
-    a = _spec_as_lock_entries(PRSpec(
-        pr=1, branch="b1", files=("mvp_site/world_logic.py",),
-        symbols_by_file={"mvp_site/world_logic.py": frozenset({"foo"})},
-    ), reg)
-    b = _spec_as_lock_entries(PRSpec(
-        pr=2, branch="b2", files=("mvp_site/world_logic.py",),
-        symbols_by_file={"mvp_site/world_logic.py": frozenset({"bar"})},
-    ), reg)
+    a = _spec_as_lock_entries(
+        PRSpec(
+            pr=1,
+            branch="b1",
+            files=("mvp_site/world_logic.py",),
+            symbols_by_file={"mvp_site/world_logic.py": frozenset({"foo"})},
+        ),
+        reg,
+    )
+    b = _spec_as_lock_entries(
+        PRSpec(
+            pr=2,
+            branch="b2",
+            files=("mvp_site/world_logic.py",),
+            symbols_by_file={"mvp_site/world_logic.py": frozenset({"bar"})},
+        ),
+        reg,
+    )
     assert _pair_domain_conflicts(a, b) == []
 
 
 def test_pair_overlapping_symbols_reports_intersection(reg: Registry):
-    a = _spec_as_lock_entries(PRSpec(
-        pr=1, branch="b1", files=("mvp_site/world_logic.py",),
-        symbols_by_file={"mvp_site/world_logic.py": frozenset({"foo", "shared"})},
-    ), reg)
-    b = _spec_as_lock_entries(PRSpec(
-        pr=2, branch="b2", files=("mvp_site/world_logic.py",),
-        symbols_by_file={"mvp_site/world_logic.py": frozenset({"bar", "shared"})},
-    ), reg)
+    a = _spec_as_lock_entries(
+        PRSpec(
+            pr=1,
+            branch="b1",
+            files=("mvp_site/world_logic.py",),
+            symbols_by_file={"mvp_site/world_logic.py": frozenset({"foo", "shared"})},
+        ),
+        reg,
+    )
+    b = _spec_as_lock_entries(
+        PRSpec(
+            pr=2,
+            branch="b2",
+            files=("mvp_site/world_logic.py",),
+            symbols_by_file={"mvp_site/world_logic.py": frozenset({"bar", "shared"})},
+        ),
+        reg,
+    )
     out = _pair_domain_conflicts(a, b)
     assert out == [DomainConflict(domain="world", symbols=("shared",))]
 
@@ -268,12 +300,14 @@ def test_predict_two_conflict_one_clear(reg: Registry):
 def test_predict_symbol_level_co_tenancy(reg: Registry):
     specs = [
         PRSpec(
-            pr=1, branch="b1",
+            pr=1,
+            branch="b1",
             files=("mvp_site/world_logic.py",),
             symbols_by_file={"mvp_site/world_logic.py": frozenset({"foo"})},
         ),
         PRSpec(
-            pr=2, branch="b2",
+            pr=2,
+            branch="b2",
             files=("mvp_site/world_logic.py",),
             symbols_by_file={"mvp_site/world_logic.py": frozenset({"bar"})},
         ),
@@ -304,8 +338,13 @@ def test_plan_to_json_dict_shape(reg: Registry):
     plan = predict_conflicts(specs, reg, include_textual=False)
     j = plan.to_json_dict()
     assert set(j) == {
-        "input_prs", "pairwise_conflicts", "advisory_conflicts",
-        "parallel_batches", "recommended_order", "unmapped_files_by_pr", "disclaimer",
+        "input_prs",
+        "pairwise_conflicts",
+        "advisory_conflicts",
+        "parallel_batches",
+        "recommended_order",
+        "unmapped_files_by_pr",
+        "disclaimer",
     }
     assert j["disclaimer"] == DISCLAIMER
     assert j["pairwise_conflicts"][0]["prs"] == [1, 2]
@@ -319,30 +358,47 @@ def test_plan_to_json_dict_shape(reg: Registry):
 
 def _write_plan_and_reg(tmp_path: Path) -> tuple[Path, Path]:
     reg = tmp_path / "reg.yaml"
-    reg.write_text(yaml.safe_dump({
-        "domains": {
-            "world": {"paths": ["mvp_site/world_logic.py"]},
-            "agents": {"paths": ["mvp_site/agents.py"]},
-        }
-    }))
+    reg.write_text(
+        yaml.safe_dump(
+            {
+                "domains": {
+                    "world": {"paths": ["mvp_site/world_logic.py"]},
+                    "agents": {"paths": ["mvp_site/agents.py"]},
+                }
+            }
+        )
+    )
     plan = tmp_path / "plan.yaml"
-    plan.write_text(yaml.safe_dump({
-        "prs": [
-            {"pr": 1, "branch": "b1", "files": ["mvp_site/world_logic.py"]},
-            {"pr": 2, "branch": "b2", "files": ["mvp_site/world_logic.py"]},
-            {"pr": 3, "branch": "b3", "files": ["mvp_site/agents.py"]},
-        ]
-    }))
+    plan.write_text(
+        yaml.safe_dump(
+            {
+                "prs": [
+                    {"pr": 1, "branch": "b1", "files": ["mvp_site/world_logic.py"]},
+                    {"pr": 2, "branch": "b2", "files": ["mvp_site/world_logic.py"]},
+                    {"pr": 3, "branch": "b3", "files": ["mvp_site/agents.py"]},
+                ]
+            }
+        )
+    )
     return reg, plan
 
 
 def test_cli_predict_conflicts_human(tmp_path: Path):
     reg, plan = _write_plan_and_reg(tmp_path)
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--plan", str(plan), "--no-textual",
-    ], capture_output=True, text=True)
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--plan",
+            str(plan),
+            "--no-textual",
+        ],
+        capture_output=True,
+        text=True,
+    )
     # PR 1 vs 2 conflict on world domain -> exit 1
     assert r.returncode == 1, r.stderr
     assert "PR#1 <-> PR#2" in r.stdout
@@ -352,11 +408,21 @@ def test_cli_predict_conflicts_human(tmp_path: Path):
 
 def test_cli_predict_conflicts_json(tmp_path: Path):
     reg, plan = _write_plan_and_reg(tmp_path)
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--plan", str(plan), "--no-textual", "--json",
-    ], capture_output=True, text=True)
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--plan",
+            str(plan),
+            "--no-textual",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+    )
     assert r.returncode == 1, r.stderr
     payload = json.loads(r.stdout)
     assert payload["input_prs"] == [1, 2, 3]
@@ -368,24 +434,42 @@ def test_cli_predict_conflicts_json(tmp_path: Path):
 
 def test_cli_predict_conflicts_all_disjoint_exit0(tmp_path: Path):
     reg = tmp_path / "reg.yaml"
-    reg.write_text(yaml.safe_dump({
-        "domains": {
-            "world": {"paths": ["mvp_site/world_logic.py"]},
-            "agents": {"paths": ["mvp_site/agents.py"]},
-        }
-    }))
+    reg.write_text(
+        yaml.safe_dump(
+            {
+                "domains": {
+                    "world": {"paths": ["mvp_site/world_logic.py"]},
+                    "agents": {"paths": ["mvp_site/agents.py"]},
+                }
+            }
+        )
+    )
     plan = tmp_path / "plan.yaml"
-    plan.write_text(yaml.safe_dump({
-        "prs": [
-            {"pr": 1, "branch": "b1", "files": ["mvp_site/world_logic.py"]},
-            {"pr": 2, "branch": "b2", "files": ["mvp_site/agents.py"]},
-        ]
-    }))
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--plan", str(plan), "--no-textual", "--json",
-    ], capture_output=True, text=True)
+    plan.write_text(
+        yaml.safe_dump(
+            {
+                "prs": [
+                    {"pr": 1, "branch": "b1", "files": ["mvp_site/world_logic.py"]},
+                    {"pr": 2, "branch": "b2", "files": ["mvp_site/agents.py"]},
+                ]
+            }
+        )
+    )
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--plan",
+            str(plan),
+            "--no-textual",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+    )
     assert r.returncode == 0, r.stderr
     payload = json.loads(r.stdout)
     assert payload["pairwise_conflicts"] == []
@@ -395,23 +479,40 @@ def test_cli_predict_conflicts_all_disjoint_exit0(tmp_path: Path):
 def test_cli_predict_conflicts_missing_plan_exit2(tmp_path: Path):
     reg = tmp_path / "reg.yaml"
     reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--plan", str(tmp_path / "missing.yaml"),
-        "--no-textual",
-    ], capture_output=True, text=True)
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--plan",
+            str(tmp_path / "missing.yaml"),
+            "--no-textual",
+        ],
+        capture_output=True,
+        text=True,
+    )
     assert r.returncode == 2
 
 
 def test_cli_predict_conflicts_accepts_flags_in_any_order(tmp_path: Path):
     """Flags can appear in any order; argparse must not reject."""
     reg, plan = _write_plan_and_reg(tmp_path)
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--plan", str(plan), "--no-textual",
-        "--registry", str(reg),
-    ], capture_output=True, text=True)
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--plan",
+            str(plan),
+            "--no-textual",
+            "--registry",
+            str(reg),
+        ],
+        capture_output=True,
+        text=True,
+    )
     assert r.returncode in (0, 1), r.stderr  # parser must not reject
 
 
@@ -480,7 +581,9 @@ def test_parse_merge_tree_z_rejects_log_message_lines():
     'Auto-merging f.txt' and 'CONFLICT (content): Merge conflict in f.txt'
     leaked into the conflict list. The -z parser uses NUL boundaries
     and must NOT include log-message lines."""
-    stdout = "abc\0f.txt\0\0Auto-merging f.txt\nCONFLICT (content): Merge conflict in f.txt"
+    stdout = (
+        "abc\0f.txt\0\0Auto-merging f.txt\nCONFLICT (content): Merge conflict in f.txt"
+    )
     out = _parse_merge_tree_z(stdout)
     assert [c.file for c in out] == ["f.txt"]
     assert "Auto-merging f.txt" not in [c.file for c in out]
@@ -501,8 +604,7 @@ def test_parse_merge_tree_z_no_double_nul_block():
 
 
 def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=repo, check=True,
-                   capture_output=True, text=True)
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
 
 
 def _make_conflicting_repo(tmp_path: Path) -> Path:
@@ -532,7 +634,10 @@ def test_git_merge_tree_real_subprocess_detects_conflict(tmp_path: Path):
     git — whichever the test host runs."""
     repo = _make_conflicting_repo(tmp_path)
     conflicts = _git_merge_tree_conflicts(
-        "br_a", "br_b", base="main", cwd=repo,
+        "br_a",
+        "br_b",
+        base="main",
+        cwd=repo,
     )
     assert len(conflicts) == 1, f"expected 1 conflict, got {conflicts}"
     assert conflicts[0].file == "conflict.txt"
@@ -632,9 +737,9 @@ def test_load_plan_rejects_missing_prs(tmp_path: Path):
 
 def test_load_plan_rejects_missing_pr_field(tmp_path: Path):
     p = tmp_path / "plan.yaml"
-    p.write_text(yaml.safe_dump({
-        "prs": [{"branch": "no-pr-number", "files": ["a.py"]}]
-    }))
+    p.write_text(
+        yaml.safe_dump({"prs": [{"branch": "no-pr-number", "files": ["a.py"]}]})
+    )
     with pytest.raises(ValueError, match="missing required 'pr' field"):
         load_plan(p)
 
@@ -666,11 +771,20 @@ def test_cli_predict_conflicts_malformed_yaml_exit2(tmp_path: Path):
     reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
     plan = tmp_path / "plan.yaml"
     plan.write_text("prs: [\nbroken yaml: : :\n")  # bogus
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--plan", str(plan), "--no-textual",
-    ], capture_output=True, text=True)
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--plan",
+            str(plan),
+            "--no-textual",
+        ],
+        capture_output=True,
+        text=True,
+    )
     assert r.returncode == 2
     assert "malformed plan" in r.stderr
 
@@ -678,47 +792,85 @@ def test_cli_predict_conflicts_malformed_yaml_exit2(tmp_path: Path):
 def test_cli_predict_conflicts_exit_codes_pin_contract(tmp_path: Path):
     """Pin the documented exit-code table: 0 no conflict, 1 conflict, 2 plan error."""
     reg = tmp_path / "reg.yaml"
-    reg.write_text(yaml.safe_dump({
-        "domains": {
-            "d1": {"paths": ["a.py"]},
-            "d2": {"paths": ["b.py"]},
-        }
-    }))
+    reg.write_text(
+        yaml.safe_dump(
+            {
+                "domains": {
+                    "d1": {"paths": ["a.py"]},
+                    "d2": {"paths": ["b.py"]},
+                }
+            }
+        )
+    )
     # 0: all disjoint
     plan0 = tmp_path / "p0.yaml"
-    plan0.write_text(yaml.safe_dump({
-        "prs": [
-            {"pr": 1, "branch": "b", "files": ["a.py"]},
-            {"pr": 2, "branch": "b", "files": ["b.py"]},
-        ]
-    }))
-    r0 = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--plan", str(plan0), "--no-textual",
-    ], capture_output=True, text=True)
+    plan0.write_text(
+        yaml.safe_dump(
+            {
+                "prs": [
+                    {"pr": 1, "branch": "b", "files": ["a.py"]},
+                    {"pr": 2, "branch": "b", "files": ["b.py"]},
+                ]
+            }
+        )
+    )
+    r0 = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--plan",
+            str(plan0),
+            "--no-textual",
+        ],
+        capture_output=True,
+        text=True,
+    )
     assert r0.returncode == 0, r0.stderr
     # 1: conflict
     plan1 = tmp_path / "p1.yaml"
-    plan1.write_text(yaml.safe_dump({
-        "prs": [
-            {"pr": 1, "branch": "b", "files": ["a.py"]},
-            {"pr": 2, "branch": "b", "files": ["a.py"]},
-        ]
-    }))
-    r1 = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--plan", str(plan1), "--no-textual",
-    ], capture_output=True, text=True)
+    plan1.write_text(
+        yaml.safe_dump(
+            {
+                "prs": [
+                    {"pr": 1, "branch": "b", "files": ["a.py"]},
+                    {"pr": 2, "branch": "b", "files": ["a.py"]},
+                ]
+            }
+        )
+    )
+    r1 = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--plan",
+            str(plan1),
+            "--no-textual",
+        ],
+        capture_output=True,
+        text=True,
+    )
     assert r1.returncode == 1, r1.stderr
     # 2: missing plan
-    r2 = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--plan", str(tmp_path / "nope.yaml"),
-        "--no-textual",
-    ], capture_output=True, text=True)
+    r2 = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--plan",
+            str(tmp_path / "nope.yaml"),
+            "--no-textual",
+        ],
+        capture_output=True,
+        text=True,
+    )
     assert r2.returncode == 2
 
 
@@ -729,12 +881,14 @@ def test_cli_predict_conflicts_exit_codes_pin_contract(tmp_path: Path):
 
 def _make_registry_with_flags(**domain_extras) -> Registry:
     """Build a Registry where 'docs' domain has the given extra flags."""
-    return Registry.from_dict({
-        "domains": {
-            "world": {"paths": ["mvp_site/world_logic.py"]},
-            "docs": {"paths": ["docs/design/pr-designs/*.md"], **domain_extras},
+    return Registry.from_dict(
+        {
+            "domains": {
+                "world": {"paths": ["mvp_site/world_logic.py"]},
+                "docs": {"paths": ["docs/design/pr-designs/*.md"], **domain_extras},
+            }
         }
-    })
+    )
 
 
 def test_per_pr_unique_domain_not_flagged_as_conflict():
@@ -762,17 +916,28 @@ def test_per_pr_unique_domain_not_in_pair_conflicts():
 
 def test_per_pr_unique_domain_does_not_affect_unrelated_conflict():
     """per_pr_unique only suppresses the per-pr-unique domain, not others."""
-    reg = Registry.from_dict({
-        "domains": {
-            "world": {"paths": ["mvp_site/world_logic.py"]},
-            "docs": {"paths": ["docs/design/pr-designs/*.md"], "per_pr_unique": True},
+    reg = Registry.from_dict(
+        {
+            "domains": {
+                "world": {"paths": ["mvp_site/world_logic.py"]},
+                "docs": {
+                    "paths": ["docs/design/pr-designs/*.md"],
+                    "per_pr_unique": True,
+                },
+            }
         }
-    })
+    )
     specs = [
-        PRSpec(pr=1, branch="b1",
-               files=("mvp_site/world_logic.py", "docs/design/pr-designs/pr-1.md")),
-        PRSpec(pr=2, branch="b2",
-               files=("mvp_site/world_logic.py", "docs/design/pr-designs/pr-2.md")),
+        PRSpec(
+            pr=1,
+            branch="b1",
+            files=("mvp_site/world_logic.py", "docs/design/pr-designs/pr-1.md"),
+        ),
+        PRSpec(
+            pr=2,
+            branch="b2",
+            files=("mvp_site/world_logic.py", "docs/design/pr-designs/pr-2.md"),
+        ),
     ]
     plan = predict_conflicts(specs, reg, include_textual=False)
     blocking = [pc for pc in plan.pairwise_conflicts if pc.is_conflict]
@@ -822,6 +987,7 @@ def test_advisory_domain_does_not_affect_batch_scheduling():
 def test_per_pr_unique_domain_parsed_from_yaml(tmp_path):
     """Registry.from_dict correctly parses per_pr_unique: true from YAML."""
     import yaml
+
     data = yaml.safe_load("""
 domains:
   docs:
@@ -840,6 +1006,7 @@ domains:
 def test_advisory_domain_parsed_from_yaml(tmp_path):
     """Registry.from_dict correctly parses advisory: true from YAML."""
     import yaml
+
     data = yaml.safe_load("""
 domains:
   beads:
@@ -856,13 +1023,16 @@ def test_pair_domain_conflicts_skips_per_pr_unique():
     reg = _make_registry_with_flags(per_pr_unique=True)
     # Build fake entries for the 'docs' domain
     from merge_train.predict import LockEntry
+
     a_entries = [
-        LockEntry(domain="docs", pr=1, agent="a", branch="b1",
-                  opened_at="t", status="active")
+        LockEntry(
+            domain="docs", pr=1, agent="a", branch="b1", opened_at="t", status="active"
+        )
     ]
     b_entries = [
-        LockEntry(domain="docs", pr=2, agent="b", branch="b2",
-                  opened_at="t", status="active")
+        LockEntry(
+            domain="docs", pr=2, agent="b", branch="b2", opened_at="t", status="active"
+        )
     ]
     result = _pair_domain_conflicts(a_entries, b_entries, registry=reg)
     assert result == []
@@ -872,13 +1042,16 @@ def test_pair_domain_conflicts_marks_advisory():
     """_pair_domain_conflicts marks advisory flag correctly."""
     reg = _make_registry_with_flags(advisory=True)
     from merge_train.predict import LockEntry
+
     a_entries = [
-        LockEntry(domain="docs", pr=1, agent="a", branch="b1",
-                  opened_at="t", status="active")
+        LockEntry(
+            domain="docs", pr=1, agent="a", branch="b1", opened_at="t", status="active"
+        )
     ]
     b_entries = [
-        LockEntry(domain="docs", pr=2, agent="b", branch="b2",
-                  opened_at="t", status="active")
+        LockEntry(
+            domain="docs", pr=2, agent="b", branch="b2", opened_at="t", status="active"
+        )
     ]
     result = _pair_domain_conflicts(a_entries, b_entries, registry=reg)
     assert len(result) == 1
@@ -893,6 +1066,7 @@ def test_pair_domain_conflicts_marks_advisory():
 def test_split_diff_by_file_basic():
     """_split_diff_by_file correctly splits a two-file diff."""
     from merge_train.symbol_discovery import _split_diff_by_file
+
     diff = (
         "diff --git a/foo.py b/foo.py\n"
         "--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-x\n+y\n"
@@ -907,17 +1081,21 @@ def test_split_diff_by_file_basic():
 def test_split_diff_by_file_empty():
     """_split_diff_by_file returns empty dict on empty input."""
     from merge_train.symbol_discovery import _split_diff_by_file
+
     assert _split_diff_by_file("") == {}
 
 
 def test_symbols_from_staged_diff_no_git(tmp_path, monkeypatch):
     """symbols_from_staged_diff returns {} when git is not available."""
     import subprocess as _sp
+
     monkeypatch.setattr(
-        _sp, "run",
+        _sp,
+        "run",
         lambda *a, **kw: type("P", (), {"returncode": 1, "stdout": "", "stderr": ""})(),
     )
     from merge_train import symbol_discovery
+
     result = symbol_discovery.symbols_from_staged_diff(cwd=tmp_path)
     assert result == {}
 
@@ -941,6 +1119,7 @@ def test_symbols_from_staged_diff_parse_failure_is_omitted(tmp_path):
     _git(repo, "add", "bad.py")
 
     from merge_train.symbol_discovery import symbols_from_staged_diff
+
     assert symbols_from_staged_diff(cwd=repo) == {}
 
 
@@ -954,14 +1133,19 @@ def test_detect_repo_from_git_remote_ssh(monkeypatch):
     import subprocess as _sp
 
     def fake_run(*args, **kw):
-        return type("P", (), {
-            "returncode": 0,
-            "stdout": "git@github.com:jleechanorg/merge_train.git\n",
-            "stderr": "",
-        })()
+        return type(
+            "P",
+            (),
+            {
+                "returncode": 0,
+                "stdout": "git@github.com:jleechanorg/merge_train.git\n",
+                "stderr": "",
+            },
+        )()
 
     monkeypatch.setattr(_sp, "run", fake_run)
     from merge_train.symbol_discovery import _detect_repo_from_git_remote
+
     assert _detect_repo_from_git_remote() == "jleechanorg/merge_train"
 
 
@@ -970,14 +1154,19 @@ def test_detect_repo_from_git_remote_https(monkeypatch):
     import subprocess as _sp
 
     def fake_run(*args, **kw):
-        return type("P", (), {
-            "returncode": 0,
-            "stdout": "https://github.com/jleechanorg/merge_train\n",
-            "stderr": "",
-        })()
+        return type(
+            "P",
+            (),
+            {
+                "returncode": 0,
+                "stdout": "https://github.com/jleechanorg/merge_train\n",
+                "stderr": "",
+            },
+        )()
 
     monkeypatch.setattr(_sp, "run", fake_run)
     from merge_train.symbol_discovery import _detect_repo_from_git_remote
+
     assert _detect_repo_from_git_remote() == "jleechanorg/merge_train"
 
 
@@ -986,14 +1175,19 @@ def test_detect_repo_from_git_remote_no_match(monkeypatch):
     import subprocess as _sp
 
     def fake_run(*args, **kw):
-        return type("P", (), {
-            "returncode": 0,
-            "stdout": "https://gitlab.com/foo/bar.git\n",
-            "stderr": "",
-        })()
+        return type(
+            "P",
+            (),
+            {
+                "returncode": 0,
+                "stdout": "https://gitlab.com/foo/bar.git\n",
+                "stderr": "",
+            },
+        )()
 
     monkeypatch.setattr(_sp, "run", fake_run)
     from merge_train.symbol_discovery import _detect_repo_from_git_remote
+
     assert _detect_repo_from_git_remote() is None
 
 
@@ -1006,6 +1200,7 @@ def test_detect_repo_from_git_remote_no_git(monkeypatch):
 
     monkeypatch.setattr(_sp, "run", fake_run)
     from merge_train.symbol_discovery import _detect_repo_from_git_remote
+
     assert _detect_repo_from_git_remote() is None
 
 
@@ -1015,28 +1210,45 @@ def test_enrich_symbols_errors_without_repo_or_remote(tmp_path, monkeypatch):
     import sys as _sys
 
     reg = tmp_path / "reg.yaml"
-    reg.write_text(yaml.safe_dump({
-        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
-    }))
+    reg.write_text(
+        yaml.safe_dump({"domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}})
+    )
     plan = tmp_path / "plan.yaml"
-    plan.write_text(yaml.safe_dump({
-        "prs": [{"pr": 1, "branch": "b1", "files": ["mvp_site/world_logic.py"]}]
-    }))
+    plan.write_text(
+        yaml.safe_dump(
+            {"prs": [{"pr": 1, "branch": "b1", "files": ["mvp_site/world_logic.py"]}]}
+        )
+    )
 
     # Stub git remote get-url origin → rc=1 (no remote)
     real_run = _sp.run
+
     def fake_run(cmd, *a, **kw):
         if isinstance(cmd, list) and cmd[:3] == ["git", "remote", "get-url"]:
-            return type("P", (), {"returncode": 1, "stdout": "", "stderr": "no remote"})()
+            return type(
+                "P", (), {"returncode": 1, "stdout": "", "stderr": "no remote"}
+            )()
         return real_run(cmd, *a, **kw)
+
     monkeypatch.setattr(_sp, "run", fake_run)
 
-    r = subprocess.run([
-        _sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--plan", str(plan), "--no-textual",
-        "--enrich-symbols", "--git-cwd", str(tmp_path),
-    ], capture_output=True, text=True)
+    r = subprocess.run(
+        [
+            _sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--plan",
+            str(plan),
+            "--no-textual",
+            "--enrich-symbols",
+            "--git-cwd",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
     assert r.returncode == 2, r.stderr
     assert "--enrich-symbols requires --repo" in r.stderr
 
@@ -1048,9 +1260,9 @@ def test_from_prs_without_repo_fails_when_enrichment_is_on(tmp_path):
     requires a repo, the CLI must reject the invocation and print a clear error.
     """
     reg = tmp_path / "reg.yaml"
-    reg.write_text(yaml.safe_dump({
-        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
-    }))
+    reg.write_text(
+        yaml.safe_dump({"domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}})
+    )
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     gh = fake_bin / "gh"
@@ -1068,27 +1280,42 @@ exit 1
     gh.chmod(0o755)
 
     import os
+
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
 
     # No --repo → enrichment cannot proceed → exit 2
     # Use --git-cwd pointing to tmp_path (not a git repo) so auto-detection also fails.
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--from-prs", "1,2",
-        "--no-textual", "--json", "--git-cwd", str(tmp_path),
-    ], capture_output=True, text=True, env=env)
-    assert r.returncode == 2, f"Expected exit 2, got {r.returncode}. stderr={r.stderr!r}"
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--from-prs",
+            "1,2",
+            "--no-textual",
+            "--json",
+            "--git-cwd",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert (
+        r.returncode == 2
+    ), f"Expected exit 2, got {r.returncode}. stderr={r.stderr!r}"
     assert "--enrich-symbols requires --repo" in r.stderr
 
 
 def test_from_prs_no_enrich_symbols_skips_enrichment(tmp_path):
     """--from-prs --no-enrich-symbols must skip symbol enrichment and succeed without --repo."""
     reg = tmp_path / "reg.yaml"
-    reg.write_text(yaml.safe_dump({
-        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
-    }))
+    reg.write_text(
+        yaml.safe_dump({"domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}})
+    )
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     gh = fake_bin / "gh"
@@ -1106,29 +1333,43 @@ exit 1
     gh.chmod(0o755)
 
     import os
+
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
 
     # --no-enrich-symbols → file-level only → no --repo needed → succeeds
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--from-prs", "1,2",
-        "--no-enrich-symbols", "--no-textual", "--json",
-    ], capture_output=True, text=True, env=env)
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--from-prs",
+            "1,2",
+            "--no-enrich-symbols",
+            "--no-textual",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
     # Exit 0 (no domain conflicts) or 1 (domain conflict) — NOT 2 (error)
-    assert r.returncode in (0, 1), f"Expected 0 or 1, got {r.returncode}. stderr={r.stderr!r}"
+    assert r.returncode in (
+        0,
+        1,
+    ), f"Expected 0 or 1, got {r.returncode}. stderr={r.stderr!r}"
     payload = json.loads(r.stdout)
     assert "input_prs" in payload
-
 
 
 def test_from_prs_fails_closed_when_any_requested_pr_cannot_load(tmp_path):
     """`--from-prs` must not silently analyze a partial requested PR set."""
     reg = tmp_path / "reg.yaml"
-    reg.write_text(yaml.safe_dump({
-        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
-    }))
+    reg.write_text(
+        yaml.safe_dump({"domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}})
+    )
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     gh = fake_bin / "gh"
@@ -1150,15 +1391,28 @@ exit 1
     gh.chmod(0o755)
 
     import os
+
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
 
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--from-prs", "1,2", "--repo", "owner/repo",
-        "--no-textual", "--json",
-    ], capture_output=True, text=True, env=env)
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--from-prs",
+            "1,2",
+            "--repo",
+            "owner/repo",
+            "--no-textual",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
     assert r.returncode == 2
     assert "could not load requested PRs: 2" in r.stderr
 
@@ -1166,18 +1420,24 @@ exit 1
 def test_gh_file_content_at_ref_uses_raw_accept_header(monkeypatch):
     """_gh_file_content_at_ref calls gh api with Accept: application/vnd.github.raw."""
     import subprocess as _sp
+
     captured = {}
 
     def fake_run(cmd, *a, **kw):
         captured["cmd"] = cmd
-        return type("P", (), {
-            "returncode": 0,
-            "stdout": "def foo():\n    pass\n",
-            "stderr": "",
-        })()
+        return type(
+            "P",
+            (),
+            {
+                "returncode": 0,
+                "stdout": "def foo():\n    pass\n",
+                "stderr": "",
+            },
+        )()
 
     monkeypatch.setattr(_sp, "run", fake_run)
     from merge_train.symbol_discovery import _gh_file_content_at_ref
+
     result = _gh_file_content_at_ref("foo.py", "abc123", "owner/repo")
     assert result == "def foo():\n    pass\n"
     assert "Accept: application/vnd.github.raw" in captured["cmd"]
@@ -1188,19 +1448,26 @@ def test_gh_file_content_at_ref_handles_encoding_none(monkeypatch, caplog):
     import subprocess as _sp
 
     call_count = {"n": 0}
+
     def fake_run(cmd, *a, **kw):
         call_count["n"] += 1
         if call_count["n"] == 1:
             # First call: raw Accept — pretend it fails
-            return type("P", (), {"returncode": 1, "stdout": "", "stderr": "raw nope"})()
+            return type(
+                "P", (), {"returncode": 1, "stdout": "", "stderr": "raw nope"}
+            )()
         # Second call: contents API → returns encoding=none (large file)
         import json as _j
+
         body = {"content": "", "encoding": "none", "size": 5_000_000}
-        return type("P", (), {"returncode": 0, "stdout": _j.dumps(body), "stderr": ""})()
+        return type(
+            "P", (), {"returncode": 0, "stdout": _j.dumps(body), "stderr": ""}
+        )()
 
     monkeypatch.setattr(_sp, "run", fake_run)
     from merge_train.symbol_discovery import _gh_file_content_at_ref
     import logging as _logging
+
     with caplog.at_level(_logging.WARNING, logger="merge_train.symbol_discovery"):
         result = _gh_file_content_at_ref("big.py", "abc", "owner/repo")
     assert result == ""
@@ -1235,16 +1502,23 @@ def test_enrich_specs_with_symbols_includes_md_files(monkeypatch):
         predict_mod._enrich_specs_with_symbols,  # keep real impl; patch inner dep
     )
     import merge_train.symbol_discovery as _sd
+
     monkeypatch.setattr(_sd, "symbols_from_files_in_pr", fake_symbols_from_files_in_pr)
 
     specs = [
-        PRSpec(pr=42, branch="docs-patch",
-               files=("docs/design/overview.md", "docs/design/usage.md")),
+        PRSpec(
+            pr=42,
+            branch="docs-patch",
+            files=("docs/design/overview.md", "docs/design/usage.md"),
+        ),
     ]
     enriched = predict_mod._enrich_specs_with_symbols(specs, repo="owner/repo")
 
     # Both .md files must appear in the enrichable set forwarded to symbols_from_files_in_pr
-    assert sorted(captured["files"]) == ["docs/design/overview.md", "docs/design/usage.md"]
+    assert sorted(captured["files"]) == [
+        "docs/design/overview.md",
+        "docs/design/usage.md",
+    ]
     # The returned spec must have symbols_by_file populated
     assert len(enriched) == 1
     assert "docs/design/overview.md" in enriched[0].symbols_by_file
@@ -1259,9 +1533,9 @@ def test_from_prs_no_enrich_symbols_produces_whole_domain_conflicts(tmp_path):
     symbol-level entries.
     """
     reg = tmp_path / "reg.yaml"
-    reg.write_text(yaml.safe_dump({
-        "domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}
-    }))
+    reg.write_text(
+        yaml.safe_dump({"domains": {"world": {"paths": ["mvp_site/world_logic.py"]}}})
+    )
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     gh = fake_bin / "gh"
@@ -1279,18 +1553,33 @@ exit 1
     gh.chmod(0o755)
 
     import os
+
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
 
-    r = subprocess.run([
-        sys.executable, "-m", "merge_train.predict",
-        "--registry", str(reg),
-        "--from-prs", "1,2",
-        "--no-enrich-symbols", "--no-textual", "--json",
-    ], capture_output=True, text=True, env=env)
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "merge_train.predict",
+            "--registry",
+            str(reg),
+            "--from-prs",
+            "1,2",
+            "--no-enrich-symbols",
+            "--no-textual",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
 
     # Must not error (exit 2) — only 0 (no conflict) or 1 (conflict)
-    assert r.returncode in (0, 1), f"Unexpected exit {r.returncode}. stderr={r.stderr!r}"
+    assert r.returncode in (
+        0,
+        1,
+    ), f"Unexpected exit {r.returncode}. stderr={r.stderr!r}"
     payload = json.loads(r.stdout)
 
     # Both PRs touch the same domain → should produce a pairwise conflict
@@ -1318,7 +1607,9 @@ def test_e2e_pairwise_no_enrich_symbols_skips_enrichment(tmp_path, monkeypatch):
     from pathlib import Path
 
     # Dynamically import the script (not a package)
-    script_path = Path(__file__).parent.parent / "scripts" / "e2e_pairwise_merge_tree.py"
+    script_path = (
+        Path(__file__).parent.parent / "scripts" / "e2e_pairwise_merge_tree.py"
+    )
     spec = importlib.util.spec_from_file_location("e2e_pairwise", script_path)
     mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -1333,18 +1624,26 @@ def test_e2e_pairwise_no_enrich_symbols_skips_enrichment(tmp_path, monkeypatch):
     def fake_run(cmd, *a, **kw):
         if isinstance(cmd, list) and "merge-tree" in cmd:
             # No conflict markers in output
-            return type("P", (), {
-                "returncode": 0,
-                "stdout": b"",
-                "stderr": b"",
-            })()
+            return type(
+                "P",
+                (),
+                {
+                    "returncode": 0,
+                    "stdout": b"",
+                    "stderr": b"",
+                },
+            )()
         if isinstance(cmd, list) and "diff" in cmd and "--name-only" in cmd:
             # Both branches touch the same file
-            return type("P", (), {
-                "returncode": 0,
-                "stdout": "mvp_site/world_logic.py\n",
-                "stderr": "",
-            })()
+            return type(
+                "P",
+                (),
+                {
+                    "returncode": 0,
+                    "stdout": "mvp_site/world_logic.py\n",
+                    "stderr": "",
+                },
+            )()
         return type("P", (), {"returncode": 0, "stdout": b"", "stderr": b""})()
 
     monkeypatch.setattr(_sp, "run", fake_run)

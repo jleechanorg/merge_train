@@ -1,5 +1,5 @@
 {
-  "subject": "merge_train v0.2 — registry expressivity flags + symbol discovery",
+  "subject": "merge_train v0.2 \u2014 registry expressivity flags + symbol discovery",
   "bundle_version": "v0.2",
   "bundle_timestamp": "2026-05-18T16:30:00-07:00",
   "git_head": "7b0c154ab6da8aa21902bdd74e15b4a240eb064d",
@@ -10,11 +10,11 @@
   "git_version": "2.39.5 (Apple Git-154)",
   "python_test_result": "200 passed (193 + 7 codex-review follow-ups)",
   "artifacts": {
-    "file_domains_v1.yaml": "v1 worldarchitect.ai registry — 23 domains, no expressivity flags",
-    "file_domains_v2.yaml": "v2 worldarchitect.ai registry — 27 domains, per_pr_unique + advisory flags + 4 new domains",
+    "file_domains_v1.yaml": "v1 worldarchitect.ai registry \u2014 23 domains, no expressivity flags",
+    "file_domains_v2.yaml": "v2 worldarchitect.ai registry \u2014 27 domains, per_pr_unique + advisory flags + 4 new domains",
     "prs.yaml": "30 open PRs from worldarchitect.ai snapshot on 2026-05-18, file lists from gh pr diff --name-only",
-    "result_v1.json": "predict-conflicts JSON output using v1 registry — 371 blocking conflicts (85% of pairs)",
-    "result_v2.json": "predict-conflicts JSON output using v2 registry — 217 blocking + 46 advisory conflicts (50% / 11%)"
+    "result_v1.json": "predict-conflicts JSON output using v1 registry \u2014 371 blocking conflicts (85% of pairs)",
+    "result_v2.json": "predict-conflicts JSON output using v2 registry \u2014 217 blocking + 46 advisory conflicts (50% / 11%)"
   },
   "headline_metrics": {
     "blocking_conflicts_v1": 371,
@@ -30,6 +30,10 @@
   },
   "review_results": {
     "evidence_reviewer": "PASS (minor NEEDS-WORK on bundle shape, addressed in this revision)",
-    "codex_consultant": "PASS post-fix (initial: 0 BLOCKER, 2 MAJOR, 2 MINOR — all 4 addressed)"
+    "codex_consultant": "PASS post-fix (initial: 0 BLOCKER, 2 MAJOR, 2 MINOR \u2014 all 4 addressed)"
+  },
+  "merge_train_sha": "b176a29476f75b30e0b13013baac8c369bab81c6",
+  "provenance": {
+    "merge_train_sha": "b176a29476f75b30e0b13013baac8c369bab81c6"
   }
 }

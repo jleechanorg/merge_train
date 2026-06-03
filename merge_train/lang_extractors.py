@@ -19,6 +19,7 @@ from merge_train.symbols import Symbol, UnsupportedLanguageError
 _TS_AVAILABLE = False
 try:
     import tree_sitter_languages
+
     _TS_AVAILABLE = True
 except ImportError:
     pass
@@ -53,7 +54,10 @@ def _parse_ts(language: str, source: bytes) -> Optional[object]:
 # TypeScript / JavaScript
 # --------------------------------------------------------------------------- #
 
-def extract_typescript_symbols(source: str, *, language: str = "typescript") -> list[Symbol]:
+
+def extract_typescript_symbols(
+    source: str, *, language: str = "typescript"
+) -> list[Symbol]:
     """Extract symbols from TypeScript/JavaScript using tree-sitter or regex fallback."""
     if _TS_AVAILABLE:
         try:
@@ -63,7 +67,9 @@ def extract_typescript_symbols(source: str, *, language: str = "typescript") -> 
     return _extract_ts_regex(source)
 
 
-def _extract_ts_tree_sitter(source: str, *, language: str = "typescript") -> list[Symbol]:
+def _extract_ts_tree_sitter(
+    source: str, *, language: str = "typescript"
+) -> list[Symbol]:
     """Extract TS/JS symbols via tree-sitter TypeScript/TSX grammar."""
     tree = _parse_ts(language, source.encode("utf-8"))
     if tree is None:
@@ -120,9 +126,13 @@ def _get_child(node: object, child_type: str) -> Optional[object]:
     return None
 
 
-_TS_FUNC_RE = re.compile(r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(", re.MULTILINE)
+_TS_FUNC_RE = re.compile(
+    r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(", re.MULTILINE
+)
 _TS_CLASS_RE = re.compile(r"^(?:export\s+)?class\s+(\w+)", re.MULTILINE)
-_TS_ARROW_RE = re.compile(r"^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(", re.MULTILINE)
+_TS_ARROW_RE = re.compile(
+    r"^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(", re.MULTILINE
+)
 _TS_INTERFACE_RE = re.compile(r"^interface\s+(\w+)", re.MULTILINE)
 _TS_TYPE_RE = re.compile(r"^type\s+(\w+)\s*=", re.MULTILINE)
 
@@ -163,6 +173,7 @@ def _extract_ts_regex(source: str) -> list[Symbol]:
 # --------------------------------------------------------------------------- #
 # Go
 # --------------------------------------------------------------------------- #
+
 
 def extract_go_symbols(source: str) -> list[Symbol]:
     """Extract symbols from Go using tree-sitter or regex fallback."""
@@ -231,7 +242,9 @@ def _capture_go_nodes(node: object, out: list[Symbol]) -> None:
         # Type name is in type_spec > type_identifier
         type_spec = _get_child(node, "type_spec")
         if type_spec is not None:
-            name_node = _get_child(type_spec, "type_identifier") or _get_child(type_spec, "identifier")
+            name_node = _get_child(type_spec, "type_identifier") or _get_child(
+                type_spec, "identifier"
+            )
             if name_node is not None:
                 start = name_node.start_point[0] + 1  # type: ignore[attr-defined]
                 end = node.end_point[0] + 1  # type: ignore[attr-defined]
@@ -293,6 +306,7 @@ def _extract_go_regex(source: str) -> list[Symbol]:
 # Rust
 # --------------------------------------------------------------------------- #
 
+
 def extract_rust_symbols(source: str) -> list[Symbol]:
     """Extract symbols from Rust using tree-sitter or regex fallback."""
     if _TS_AVAILABLE:
@@ -314,7 +328,9 @@ def _extract_rust_tree_sitter(source: str) -> list[Symbol]:
     return out
 
 
-def _capture_rust_nodes(node: object, out: list[Symbol], impl_trait: Optional[str]) -> None:
+def _capture_rust_nodes(
+    node: object, out: list[Symbol], impl_trait: Optional[str]
+) -> None:
     """Recursively walk Rust tree-sitter nodes, tracking impl trait for method names."""
     node_type = node.type  # type: ignore[attr-defined]
 
@@ -339,7 +355,9 @@ def _capture_rust_nodes(node: object, out: list[Symbol], impl_trait: Optional[st
         type_field = _get_child(node, "type")
         trait_name = None
         if type_field is not None:
-            name_node = _get_child(type_field, "type_identifier") or _get_child(type_field, "identifier")
+            name_node = _get_child(type_field, "type_identifier") or _get_child(
+                type_field, "identifier"
+            )
             if name_node is not None:
                 trait_name = name_node.text.decode("utf-8")  # type: ignore[attr-defined]
         for child in node.children:  # type: ignore[attr-defined]
@@ -393,6 +411,7 @@ def _extract_rust_regex(source: str) -> list[Symbol]:
 # Java
 # --------------------------------------------------------------------------- #
 
+
 def extract_java_symbols(source: str) -> list[Symbol]:
     """Extract symbols from Java using tree-sitter or regex fallback."""
     if _TS_AVAILABLE:
@@ -414,7 +433,9 @@ def _extract_java_tree_sitter(source: str) -> list[Symbol]:
     return out
 
 
-def _capture_java_nodes(node: object, out: list[Symbol], class_name: Optional[str]) -> None:
+def _capture_java_nodes(
+    node: object, out: list[Symbol], class_name: Optional[str]
+) -> None:
     """Recursively walk Java tree-sitter nodes, tracking class context for methods."""
     node_type = node.type  # type: ignore[attr-defined]
 
@@ -442,7 +463,9 @@ def _capture_java_nodes(node: object, out: list[Symbol], class_name: Optional[st
 _JAVA_METHOD_RE = re.compile(
     r"^(?:public|private|protected|static|final|native|synchronized|abstract|default)?\s*(?:\w+\s+)*(\w+)\s*\(",
 )
-_JAVA_CLASS_RE = re.compile(r"^(?:(?:public|protected|private|static|final|abstract)\s+)*class\s+(\w+)")
+_JAVA_CLASS_RE = re.compile(
+    r"^(?:(?:public|protected|private|static|final|abstract)\s+)*class\s+(\w+)"
+)
 
 
 def _extract_java_regex(source: str) -> list[Symbol]:
@@ -451,7 +474,17 @@ def _extract_java_regex(source: str) -> list[Symbol]:
     lines = source.splitlines()
     class_stack: list[tuple[str, int]] = []
     brace_level = 0
-    java_ignored_keywords = {"if", "for", "while", "switch", "catch", "synchronized", "super", "this", "new"}
+    java_ignored_keywords = {
+        "if",
+        "for",
+        "while",
+        "switch",
+        "catch",
+        "synchronized",
+        "super",
+        "this",
+        "new",
+    }
 
     for i, line in enumerate(lines, start=1):
         stripped = line.strip()
@@ -468,7 +501,11 @@ def _extract_java_regex(source: str) -> list[Symbol]:
             if m and class_stack:
                 method_name = m.group(1)
                 if method_name not in java_ignored_keywords:
-                    out.append(Symbol(name=f"{class_stack[-1][0]}.{method_name}", start=i, end=i))
+                    out.append(
+                        Symbol(
+                            name=f"{class_stack[-1][0]}.{method_name}", start=i, end=i
+                        )
+                    )
 
         # Update brace level for the line
         brace_level += line.count("{") - line.count("}")
@@ -484,6 +521,7 @@ def _extract_java_regex(source: str) -> list[Symbol]:
 # --------------------------------------------------------------------------- #
 # C/C++
 # --------------------------------------------------------------------------- #
+
 
 def extract_cpp_symbols(source: str) -> list[Symbol]:
     """Extract symbols from C/C++ using tree-sitter or regex fallback."""
@@ -506,12 +544,16 @@ def _extract_cpp_tree_sitter(source: str) -> list[Symbol]:
     return out
 
 
-def _capture_cpp_nodes(node: object, out: list[Symbol], class_name: Optional[str]) -> None:
+def _capture_cpp_nodes(
+    node: object, out: list[Symbol], class_name: Optional[str]
+) -> None:
     """Recursively walk C++ tree-sitter nodes."""
     node_type = node.type  # type: ignore[attr-defined]
 
     if node_type in ("class_specifier", "struct_specifier"):
-        name_node = _get_child(node, "type_identifier") or _get_child(node, "identifier")
+        name_node = _get_child(node, "type_identifier") or _get_child(
+            node, "identifier"
+        )
         if name_node is not None:
             start = name_node.start_point[0] + 1  # type: ignore[attr-defined]
             end = node.end_point[0] + 1  # type: ignore[attr-defined]
@@ -540,7 +582,10 @@ def _capture_cpp_nodes(node: object, out: list[Symbol], class_name: Optional[str
         _capture_cpp_nodes(child, out, class_name)
 
 
-_CPP_FUNC_RE = re.compile(r"^(?:inline\s+)?(?:void|int|char|float|double|bool|auto|\w+)\s+(\w+)\s*\([^)]*\)", re.MULTILINE)
+_CPP_FUNC_RE = re.compile(
+    r"^(?:inline\s+)?(?:void|int|char|float|double|bool|auto|\w+)\s+(\w+)\s*\([^)]*\)",
+    re.MULTILINE,
+)
 _CPP_CLASS_RE = re.compile(r"^(?:class|struct)\s+(\w+)", re.MULTILINE)
 
 
@@ -579,6 +624,7 @@ def _extract_cpp_regex(source: str) -> list[Symbol]:
 # C#
 # --------------------------------------------------------------------------- #
 
+
 def extract_csharp_symbols(source: str) -> list[Symbol]:
     """Extract symbols from C# using tree-sitter or regex fallback."""
     if _TS_AVAILABLE:
@@ -600,7 +646,9 @@ def _extract_csharp_tree_sitter(source: str) -> list[Symbol]:
     return out
 
 
-def _capture_csharp_nodes(node: object, out: list[Symbol], class_name: Optional[str]) -> None:
+def _capture_csharp_nodes(
+    node: object, out: list[Symbol], class_name: Optional[str]
+) -> None:
     """Recursively walk C# tree-sitter nodes."""
     node_type = node.type  # type: ignore[attr-defined]
 
@@ -625,7 +673,9 @@ def _capture_csharp_nodes(node: object, out: list[Symbol], class_name: Optional[
         _capture_csharp_nodes(child, out, class_name)
 
 
-_CSHARP_CLASS_RE = re.compile(r"^(?:(?:public|protected|private|static|internal|sealed|abstract|partial)\s+)*class\s+(\w+)")
+_CSHARP_CLASS_RE = re.compile(
+    r"^(?:(?:public|protected|private|static|internal|sealed|abstract|partial)\s+)*class\s+(\w+)"
+)
 _CSHARP_METHOD_RE = re.compile(
     r"^(?:public|private|protected|internal|static|virtual|override|abstract|sealed|partial|async)?\s*(?:\w+\s+)*(\w+)\s*\(",
 )
@@ -637,7 +687,17 @@ def _extract_csharp_regex(source: str) -> list[Symbol]:
     lines = source.splitlines()
     class_stack: list[tuple[str, int]] = []
     brace_level = 0
-    csharp_ignored_keywords = {"if", "for", "foreach", "while", "switch", "catch", "lock", "using", "new"}
+    csharp_ignored_keywords = {
+        "if",
+        "for",
+        "foreach",
+        "while",
+        "switch",
+        "catch",
+        "lock",
+        "using",
+        "new",
+    }
 
     for i, line in enumerate(lines, start=1):
         stripped = line.strip()
@@ -654,7 +714,11 @@ def _extract_csharp_regex(source: str) -> list[Symbol]:
             if m and class_stack:
                 method_name = m.group(1)
                 if method_name not in csharp_ignored_keywords:
-                    out.append(Symbol(name=f"{class_stack[-1][0]}.{method_name}", start=i, end=i))
+                    out.append(
+                        Symbol(
+                            name=f"{class_stack[-1][0]}.{method_name}", start=i, end=i
+                        )
+                    )
 
         # Update brace level for the line
         brace_level += line.count("{") - line.count("}")

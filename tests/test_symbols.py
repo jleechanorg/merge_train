@@ -23,7 +23,6 @@ from merge_train.symbols import (
     _touched_markdown_symbols,
 )
 
-
 # --------------------------------------------------------------------------- #
 # extract_symbols
 # --------------------------------------------------------------------------- #
@@ -57,21 +56,14 @@ def test_extract_symbols_class_and_methods():
 
 def test_extract_symbols_nested_def_not_emitted_separately():
     src = (
-        "def outer():\n"
-        "    def inner():\n"
-        "        return 1\n"
-        "    return inner\n"
+        "def outer():\n" "    def inner():\n" "        return 1\n" "    return inner\n"
     )
     syms = extract_symbols(src)
     assert [s.name for s in syms] == ["outer"]
 
 
 def test_extract_symbols_decorator_extends_range_upward():
-    src = (
-        "@decorator\n"
-        "def foo():\n"
-        "    return 1\n"
-    )
+    src = "@decorator\n" "def foo():\n" "    return 1\n"
     syms = extract_symbols(src)
     assert syms[0].name == "foo"
     assert syms[0].start == 1  # includes decorator line
@@ -150,10 +142,7 @@ def test_parse_hunks_pure_deletion_widens():
 
 
 def test_parse_hunks_multiple_hunks():
-    diff = (
-        "@@ -1,0 +1,1 @@\n+a\n"
-        "@@ -10,0 +20,2 @@\n+b\n+c\n"
-    )
+    diff = "@@ -1,0 +1,1 @@\n+a\n" "@@ -10,0 +20,2 @@\n+b\n+c\n"
     hunks = parse_hunks(diff)
     assert hunks == [
         HunkRange(start=1, end=1),
@@ -184,10 +173,10 @@ def test_parse_hunks_empty_diff():
 
 def _src_two_funcs() -> str:
     return (
-        "def alpha():\n"      # line 1-2
+        "def alpha():\n"  # line 1-2
         "    return 1\n"
-        "\n"                  # line 3
-        "def beta():\n"       # line 4-5
+        "\n"  # line 3
+        "def beta():\n"  # line 4-5
         "    return 2\n"
     )
 
@@ -254,10 +243,10 @@ def test_resolve_touched_symbols_parse_failure_goes_to_fallback(git_repo: Path):
 
 def test_touched_symbols_class_method_only():
     src = (
-        "class A:\n"          # 1
-        "    def m1(self):\n" # 2-3
+        "class A:\n"  # 1
+        "    def m1(self):\n"  # 2-3
         "        return 1\n"
-        "    def m2(self):\n" # 4-5
+        "    def m2(self):\n"  # 4-5
         "        return 2\n"
     )
     # Touch line 5 (inside m2)
@@ -288,8 +277,7 @@ def test_is_python_path():
 
 
 def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=repo, check=True,
-                   capture_output=True, text=True)
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
 
 
 @pytest.fixture
@@ -303,13 +291,7 @@ def git_repo(tmp_path: Path) -> Path:
 
 
 def test_touched_symbols_for_staged_file_detects_changed_function(git_repo: Path):
-    src_orig = (
-        "def alpha():\n"
-        "    return 1\n"
-        "\n"
-        "def beta():\n"
-        "    return 2\n"
-    )
+    src_orig = "def alpha():\n" "    return 1\n" "\n" "def beta():\n" "    return 2\n"
     (git_repo / "m.py").write_text(src_orig)
     _git(git_repo, "add", "m.py")
     _git(git_repo, "commit", "-q", "-m", "init")
@@ -424,33 +406,32 @@ def test_touched_markdown_symbols_no_overlap():
     assert len(syms) == 0
 
 
-def test_resolve_touched_symbols_general_exception_goes_to_fallback(git_repo: Path, monkeypatch):
+def test_resolve_touched_symbols_general_exception_goes_to_fallback(
+    git_repo: Path, monkeypatch
+):
     import merge_train.symbols
+
     def mock_raise(*args, **kwargs):
         raise ValueError("unexpected parse error")
-    
-    monkeypatch.setattr(merge_train.symbols, "touched_symbols_for_staged_file", mock_raise)
-    
+
+    monkeypatch.setattr(
+        merge_train.symbols, "touched_symbols_for_staged_file", mock_raise
+    )
+
     per_file, fallback = resolve_touched_symbols(["any_file.py"], cwd=git_repo)
     assert "any_file.py" not in per_file
     assert "any_file.py" in fallback
 
 
 def test_touched_symbols_committed_changes(git_repo: Path):
-    src_orig = (
-        "def alpha():\n"
-        "    return 1\n"
-        "\n"
-        "def beta():\n"
-        "    return 2\n"
-    )
+    src_orig = "def alpha():\n" "    return 1\n" "\n" "def beta():\n" "    return 2\n"
     (git_repo / "m.py").write_text(src_orig)
     _git(git_repo, "add", "m.py")
     _git(git_repo, "commit", "-q", "-m", "init")
 
     # Create a feature branch and make committed changes compared to main
     _git(git_repo, "checkout", "-b", "feature")
-    
+
     src_new = src_orig.replace("    return 2\n", "    return 22\n")
     (git_repo / "m.py").write_text(src_new)
     _git(git_repo, "add", "m.py")
@@ -463,13 +444,7 @@ def test_touched_symbols_committed_changes(git_repo: Path):
 
 
 def test_touched_symbols_unstaged_changes(git_repo: Path):
-    src_orig = (
-        "def alpha():\n"
-        "    return 1\n"
-        "\n"
-        "def beta():\n"
-        "    return 2\n"
-    )
+    src_orig = "def alpha():\n" "    return 1\n" "\n" "def beta():\n" "    return 2\n"
     (git_repo / "m.py").write_text(src_orig)
     _git(git_repo, "add", "m.py")
     _git(git_repo, "commit", "-q", "-m", "init")
@@ -484,13 +459,7 @@ def test_touched_symbols_unstaged_changes(git_repo: Path):
 
 
 def test_touched_symbols_staged_and_unstaged_combined(git_repo: Path):
-    src_orig = (
-        "def alpha():\n"
-        "    return 1\n"
-        "\n"
-        "def beta():\n"
-        "    return 2\n"
-    )
+    src_orig = "def alpha():\n" "    return 1\n" "\n" "def beta():\n" "    return 2\n"
     (git_repo / "m.py").write_text(src_orig)
     _git(git_repo, "add", "m.py")
     _git(git_repo, "commit", "-q", "-m", "init")
@@ -531,4 +500,3 @@ def test_touched_markdown_symbols_committed_and_unstaged(git_repo: Path):
     # The diff against main compares main vs working tree, so it sees changes in BOTH slot-01 and slot-02!
     touched = touched_symbols_for_staged_file("plan.md", cwd=git_repo)
     assert touched == {"md:plan.slot_01", "md:plan.slot_02"}
-

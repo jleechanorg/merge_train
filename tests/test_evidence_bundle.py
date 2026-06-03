@@ -5,7 +5,6 @@ import json
 import subprocess
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_V03 = REPO_ROOT / "evidence" / "v0.3"
 EVIDENCE_V04 = REPO_ROOT / "evidence" / "v0.4"
@@ -41,7 +40,9 @@ def test_v03_required_runbook_artifact_paths_exist() -> None:
 
 def test_v03_checksums_cover_all_required_artifact_files() -> None:
     checksum_lines = (EVIDENCE_V03 / "checksums.txt").read_text().splitlines()
-    checksum_paths = {line.split(maxsplit=1)[1] for line in checksum_lines if line.strip()}
+    checksum_paths = {
+        line.split(maxsplit=1)[1] for line in checksum_lines if line.strip()
+    }
     required_artifacts = [
         path
         for path in EVIDENCE_V03.rglob("*")
@@ -77,10 +78,12 @@ def test_v03_checksums_cover_all_required_artifact_files() -> None:
 
 # ── v0.4 bundle tests ────────────────────────────────────────────────────────
 
+
 def _bundle_sha256_checks(evidence_dir: Path) -> None:
     """Shared sha256 integrity check for any evidence bundle dir."""
     required_artifacts = [
-        path for path in evidence_dir.rglob("*")
+        path
+        for path in evidence_dir.rglob("*")
         if path.is_file() and not path.name.endswith(".sha256")
     ]
     missing_sidecars = [
@@ -103,10 +106,12 @@ def _bundle_sha256_checks(evidence_dir: Path) -> None:
 
 def test_v04_bundle_exists() -> None:
     """v0.4 evidence bundle must exist (proves E2E rerun at HEAD debeaf9a)."""
-    assert EVIDENCE_V04.is_dir(), (
-        "evidence/v0.4/ missing — rerun scripts/e2e_md_area_lock_runner.py at current HEAD"
-    )
-    assert (EVIDENCE_V04 / "metadata.json").is_file(), "evidence/v0.4/metadata.json missing"
+    assert (
+        EVIDENCE_V04.is_dir()
+    ), "evidence/v0.4/ missing — rerun scripts/e2e_md_area_lock_runner.py at current HEAD"
+    assert (
+        EVIDENCE_V04 / "metadata.json"
+    ).is_file(), "evidence/v0.4/metadata.json missing"
 
 
 def test_v04_metadata_sha_matches_head() -> None:
@@ -119,13 +124,16 @@ def test_v04_metadata_sha_matches_head() -> None:
     # Verify SHA exists
     result = subprocess.run(
         ["git", "cat-file", "-e", f"{bundle_sha}^{{commit}}"],
-        cwd=REPO_ROOT, capture_output=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
     )
     assert result.returncode == 0, f"bundle SHA {bundle_sha} not found in git history"
     # Check staleness (≤5 commits)
     ahead = subprocess.run(
         ["git", "rev-list", "--count", f"{bundle_sha}..HEAD"],
-        cwd=REPO_ROOT, capture_output=True, text=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
     )
     commits_ahead = int(ahead.stdout.strip() or "999")
     assert commits_ahead <= 10, (
@@ -155,8 +163,12 @@ def test_v04_hook_behavior_scenarios_present() -> None:
         return
     data = json.loads(run_json.read_text())
     names = {s["name"] for s in data.get("scenarios", [])}
-    assert "lock_pre_reservation_path" in names, "missing lock_pre_reservation_path scenario"
-    assert "worktree_fallback_chain" in names, "missing worktree_fallback_chain scenario"
+    assert (
+        "lock_pre_reservation_path" in names
+    ), "missing lock_pre_reservation_path scenario"
+    assert (
+        "worktree_fallback_chain" in names
+    ), "missing worktree_fallback_chain scenario"
 
 
 def test_v04_checksums_valid() -> None:
@@ -185,9 +197,9 @@ def test_v04_agent_transcripts_present() -> None:
 
 def test_v04_ao_bundle_exists() -> None:
     """AO orchestration evidence bundle must exist (proves ao spawn drives area-lock)."""
-    assert EVIDENCE_V04_AO.is_dir(), (
-        "evidence/v0.4-ao/ missing — run scripts/e2e_ao_orchestrated_runner.py"
-    )
+    assert (
+        EVIDENCE_V04_AO.is_dir()
+    ), "evidence/v0.4-ao/ missing — run scripts/e2e_ao_orchestrated_runner.py"
     assert (EVIDENCE_V04_AO / "run.json").is_file(), "evidence/v0.4-ao/run.json missing"
 
 
@@ -286,12 +298,15 @@ def test_v06_ao_metadata_sha_is_recent_ancestor() -> None:
     assert bundle_sha, "metadata.json missing merge_train_sha"
     result = subprocess.run(
         ["git", "cat-file", "-e", f"{bundle_sha}^{{commit}}"],
-        cwd=REPO_ROOT, capture_output=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
     )
     assert result.returncode == 0, f"bundle SHA {bundle_sha} not found in git history"
     ahead = subprocess.run(
         ["git", "rev-list", "--count", f"{bundle_sha}..HEAD"],
-        cwd=REPO_ROOT, capture_output=True, text=True,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
     )
     commits_ahead = int(ahead.stdout.strip() or "999")
     assert commits_ahead <= 10, (

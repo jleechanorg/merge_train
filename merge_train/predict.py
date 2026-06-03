@@ -40,7 +40,6 @@ from typing import Iterable, Optional
 
 import yaml
 
-
 # --------------------------------------------------------------------------- #
 # Domain registry — minimal in-memory model (no lock log, no YAML registry)
 # --------------------------------------------------------------------------- #
@@ -54,7 +53,7 @@ class Domain:
     paths: tuple[str, ...]
     owners: tuple[str, ...] = ()
     per_pr_unique: bool = False  # files are per-PR unique; never block each other
-    advisory: bool = False       # conflict is informational only (won't block)
+    advisory: bool = False  # conflict is informational only (won't block)
 
 
 @dataclass
@@ -72,8 +71,11 @@ class Registry:
             per_pr_unique = bool(body.get("per_pr_unique", False))
             advisory = bool(body.get("advisory", False))
             domains[name] = Domain(
-                name=name, paths=paths, owners=owners,
-                per_pr_unique=per_pr_unique, advisory=advisory,
+                name=name,
+                paths=paths,
+                owners=owners,
+                per_pr_unique=per_pr_unique,
+                advisory=advisory,
             )
         return cls(domains=domains)
 
@@ -185,7 +187,9 @@ def load_plan(path: str | Path) -> list[PRSpec]:
     with open(path, "r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
     if not isinstance(data, dict):
-        raise ValueError(f"{path}: top-level must be a mapping, got {type(data).__name__}")
+        raise ValueError(
+            f"{path}: top-level must be a mapping, got {type(data).__name__}"
+        )
     raw_items = data.get("prs", data.get("plan"))
     if raw_items is None:
         raise ValueError(f"{path}: missing required key 'prs' (or legacy 'plan')")
@@ -216,8 +220,10 @@ def load_plan(path: str | Path) -> list[PRSpec]:
 @dataclass(frozen=True)
 class DomainConflict:
     domain: str
-    symbols: tuple[str, ...]  # symbols *both* PRs touched in the domain (empty = whole-domain)
-    advisory: bool = False    # True when domain has advisory: true — informational only
+    symbols: tuple[
+        str, ...
+    ]  # symbols *both* PRs touched in the domain (empty = whole-domain)
+    advisory: bool = False  # True when domain has advisory: true — informational only
 
 
 @dataclass(frozen=True)
@@ -304,7 +310,11 @@ def _pair_domain_conflicts(
             continue
         overlap = sorted(set(a.symbols) & set(b.symbols))
         if overlap:
-            out.append(DomainConflict(domain=a.domain, symbols=tuple(overlap), advisory=advisory))
+            out.append(
+                DomainConflict(
+                    domain=a.domain, symbols=tuple(overlap), advisory=advisory
+                )
+            )
     return out
 
 
@@ -339,10 +349,20 @@ def _git_merge_tree_conflicts(
     # ----- Modern form -----
     try:
         r = subprocess.run(
-            ["git", "merge-tree", "--write-tree", "--name-only", "-z",
-             "--merge-base=" + base, a_branch, b_branch],
+            [
+                "git",
+                "merge-tree",
+                "--write-tree",
+                "--name-only",
+                "-z",
+                "--merge-base=" + base,
+                a_branch,
+                b_branch,
+            ],
             cwd=str(cwd) if cwd else None,
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
         )
     except FileNotFoundError:
         return []
@@ -415,7 +435,9 @@ def _git_merge_tree_legacy(
         r = subprocess.run(
             ["git", "merge-tree", base, a_branch, b_branch],
             cwd=str(cwd) if cwd else None,
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
         )
     except (FileNotFoundError, subprocess.SubprocessError):
         return []
@@ -461,9 +483,9 @@ class Plan:
     def to_json_dict(self) -> dict:
         blocking = [pc for pc in self.pairwise_conflicts if pc.is_conflict]
         advisory_only = [
-            pc for pc in self.pairwise_conflicts
-            if not pc.is_conflict
-            and any(dc.advisory for dc in pc.domain_conflicts)
+            pc
+            for pc in self.pairwise_conflicts
+            if not pc.is_conflict and any(dc.advisory for dc in pc.domain_conflicts)
         ]
         return {
             "input_prs": self.input_prs,
@@ -489,7 +511,8 @@ class Plan:
                     "prs": [pc.pr_a, pc.pr_b],
                     "domain_conflicts": [
                         {"domain": dc.domain, "symbols": list(dc.symbols)}
-                        for dc in pc.domain_conflicts if dc.advisory
+                        for dc in pc.domain_conflicts
+                        if dc.advisory
                     ],
                 }
                 for pc in advisory_only
@@ -538,7 +561,7 @@ def _greedy_maximal_independent_set(
             key=lambda n: (len(adj[n] & remaining), n),
         )
         chosen.append(cand)
-        remaining -= ({cand} | adj[cand])
+        remaining -= {cand} | adj[cand]
     return sorted(chosen)
 
 
@@ -546,11 +569,7 @@ def _build_conflict_edges(
     specs: list[PRSpec],
     pair_conflicts: list[PairConflict],
 ) -> set[frozenset[int]]:
-    return {
-        frozenset((pc.pr_a, pc.pr_b))
-        for pc in pair_conflicts
-        if pc.is_conflict
-    }
+    return {frozenset((pc.pr_a, pc.pr_b)) for pc in pair_conflicts if pc.is_conflict}
 
 
 def predict_conflicts(
@@ -582,18 +601,20 @@ def predict_conflicts(
     ids = [s.pr for s in specs]
     spec_by_pr = {s.pr: s for s in specs}
     for i, a_pr in enumerate(ids):
-        for b_pr in ids[i + 1:]:
+        for b_pr in ids[i + 1 :]:
             doms = _pair_domain_conflicts(pr_entries[a_pr], pr_entries[b_pr], registry)
             tex: list[TextualConflict] = []
             if include_textual:
                 tex = _git_merge_tree_conflicts(
                     spec_by_pr[a_pr].branch,
                     spec_by_pr[b_pr].branch,
-                    base=git_base, cwd=git_cwd,
+                    base=git_base,
+                    cwd=git_cwd,
                 )
             pair_conflicts.append(
                 PairConflict(
-                    pr_a=a_pr, pr_b=b_pr,
+                    pr_a=a_pr,
+                    pr_b=b_pr,
                     domain_conflicts=tuple(doms),
                     textual_conflicts=tuple(tex),
                 )
@@ -636,6 +657,7 @@ def _load_specs_from_github(
 ) -> tuple[list["PRSpec"], list[int]]:
     """Fetch file lists for each PR from GitHub via ``gh pr diff --name-only``."""
     import subprocess as _sp
+
     specs: list[PRSpec] = []
     failed: list[int] = []
     for pr in pr_numbers:
@@ -645,19 +667,43 @@ def _load_specs_from_github(
         try:
             proc = _sp.run(cmd, capture_output=True, text=True, check=False)
         except FileNotFoundError:
-            print(f"warning: gh CLI not found; skipping PR#{pr}", file=__import__("sys").stderr)
+            print(
+                f"warning: gh CLI not found; skipping PR#{pr}",
+                file=__import__("sys").stderr,
+            )
             failed.append(pr)
             continue
         if proc.returncode != 0:
-            print(f"warning: gh pr diff failed for PR#{pr}: {proc.stderr.strip()}",
-                  file=__import__("sys").stderr)
+            print(
+                f"warning: gh pr diff failed for PR#{pr}: {proc.stderr.strip()}",
+                file=__import__("sys").stderr,
+            )
             failed.append(pr)
             continue
         files = tuple(f.strip() for f in proc.stdout.splitlines() if f.strip())
-        branch_cmd = ["gh", "pr", "view", str(pr), "--json", "headRefName", "--jq", ".headRefName"]
+        branch_cmd = [
+            "gh",
+            "pr",
+            "view",
+            str(pr),
+            "--json",
+            "headRefName",
+            "--jq",
+            ".headRefName",
+        ]
         if repo:
-            branch_cmd = ["gh", "pr", "view", str(pr), "--repo", repo,
-                          "--json", "headRefName", "--jq", ".headRefName"]
+            branch_cmd = [
+                "gh",
+                "pr",
+                "view",
+                str(pr),
+                "--repo",
+                repo,
+                "--json",
+                "headRefName",
+                "--jq",
+                ".headRefName",
+            ]
         try:
             br = _sp.run(branch_cmd, capture_output=True, text=True, check=False)
             branch = br.stdout.strip() or f"pr-{pr}"
@@ -729,14 +775,15 @@ def cli_predict_conflicts(
         try:
             pr_numbers = [int(x.strip()) for x in from_prs.split(",") if x.strip()]
         except ValueError as exc:
-            print(f"error: --from-prs must be comma-separated integers: {exc}",
-                  file=_sys.stderr)
+            print(
+                f"error: --from-prs must be comma-separated integers: {exc}",
+                file=_sys.stderr,
+            )
             return 2
         specs, failed_prs = _load_specs_from_github(pr_numbers, repo)
         if failed_prs:
             failed_s = ",".join(str(pr) for pr in failed_prs)
-            print(f"error: could not load requested PRs: {failed_s}",
-                  file=_sys.stderr)
+            print(f"error: could not load requested PRs: {failed_s}", file=_sys.stderr)
             return 2
         if not specs:
             print("error: no PRs could be loaded from GitHub", file=_sys.stderr)
@@ -757,6 +804,7 @@ def cli_predict_conflicts(
     if enrich_symbols:
         if not repo:
             from merge_train.symbol_discovery import _detect_repo_from_git_remote
+
             repo = _detect_repo_from_git_remote(git_cwd)
         if not repo:
             print(
@@ -768,9 +816,11 @@ def cli_predict_conflicts(
         specs = _enrich_specs_with_symbols(specs, repo)
 
     plan = predict_conflicts(
-        specs, registry,
+        specs,
+        registry,
         include_textual=include_textual,
-        git_base=git_base, git_cwd=git_cwd,
+        git_base=git_base,
+        git_cwd=git_cwd,
     )
 
     if json_output:
@@ -789,7 +839,8 @@ def _print_human(plan: Plan) -> None:
             print(f"  WARN: PR#{pr} touches unmapped files: {', '.join(files)}")
     conflicts = [pc for pc in plan.pairwise_conflicts if pc.is_conflict]
     advisory = [
-        pc for pc in plan.pairwise_conflicts
+        pc
+        for pc in plan.pairwise_conflicts
         if not pc.is_conflict and any(dc.advisory for dc in pc.domain_conflicts)
     ]
     if not conflicts:
@@ -807,12 +858,18 @@ def _print_human(plan: Plan) -> None:
             for tc in pc.textual_conflicts:
                 print(f"    textual conflict: {tc.file}")
     if advisory:
-        print(f"\n{len(advisory)} advisory conflict(s) (informational — won't block spawning):")
+        print(
+            f"\n{len(advisory)} advisory conflict(s) (informational — won't block spawning):"
+        )
         for pc in advisory:
             print(f"  PR#{pc.pr_a} <-> PR#{pc.pr_b}:")
             for dc in pc.domain_conflicts:
                 if dc.advisory:
-                    label = f"symbols={','.join(dc.symbols)}" if dc.symbols else "(whole-domain)"
+                    label = (
+                        f"symbols={','.join(dc.symbols)}"
+                        if dc.symbols
+                        else "(whole-domain)"
+                    )
                     print(f"    domain={dc.domain} {label} [advisory]")
     print(f"\nParallel batches: {plan.parallel_batches}")
     print(f"Recommended order: {plan.recommended_order}")
@@ -835,44 +892,58 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     source = parser.add_mutually_exclusive_group()
     source.add_argument(
-        "--plan", metavar="FILE",
+        "--plan",
+        metavar="FILE",
         help="YAML/JSON file declaring the set of PRs to analyze.",
     )
     source.add_argument(
-        "--from-prs", metavar="N,N,...",
+        "--from-prs",
+        metavar="N,N,...",
         help="Comma-separated PR numbers to fetch from GitHub.",
     )
     parser.add_argument(
-        "--registry", metavar="FILE", default=None,
+        "--registry",
+        metavar="FILE",
+        default=None,
         help="Optional YAML domain registry (file -> domain mapping). "
-             "Omit to use file-level conflict detection only.",
+        "Omit to use file-level conflict detection only.",
     )
     parser.add_argument(
-        "--repo", metavar="OWNER/REPO", default=None,
+        "--repo",
+        metavar="OWNER/REPO",
+        default=None,
         help="GitHub repo for --from-prs and symbol enrichment.",
     )
     parser.add_argument(
-        "--no-textual", action="store_true",
+        "--no-textual",
+        action="store_true",
         help="Skip git merge-tree textual conflict detection.",
     )
     parser.add_argument(
-        "--git-base", default="origin/main",
+        "--git-base",
+        default="origin/main",
         help="Merge base ref for git merge-tree (default: origin/main).",
     )
     parser.add_argument(
-        "--git-cwd", metavar="DIR", default=None,
+        "--git-cwd",
+        metavar="DIR",
+        default=None,
         help="Working directory for git commands.",
     )
     parser.add_argument(
-        "--json", action="store_true", dest="json_output",
+        "--json",
+        action="store_true",
+        dest="json_output",
         help="Emit JSON output instead of human-readable text.",
     )
     parser.add_argument(
-        "--enrich-symbols", action="store_true",
+        "--enrich-symbols",
+        action="store_true",
         help="Enrich plan-file specs with symbols from GitHub (default for --from-prs).",
     )
     parser.add_argument(
-        "--no-enrich-symbols", action="store_true",
+        "--no-enrich-symbols",
+        action="store_true",
         help="Disable symbol enrichment even for --from-prs.",
     )
 
@@ -916,4 +987,5 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

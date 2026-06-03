@@ -17,7 +17,6 @@ from merge_train.lang_extractors import (
 )
 from merge_train.symbols import Symbol
 
-
 # --------------------------------------------------------------------------- #
 # Fixtures
 # --------------------------------------------------------------------------- #
@@ -32,6 +31,7 @@ def read_fixture(name: str) -> str:
 # --------------------------------------------------------------------------- #
 # TypeScript / JavaScript
 # --------------------------------------------------------------------------- #
+
 
 def test_extract_typescript_symbols_function():
     src = "function foo() {\n    return 1;\n}\n"
@@ -77,6 +77,7 @@ def test_extract_typescript_arrow_function():
 # Go
 # --------------------------------------------------------------------------- #
 
+
 def test_extract_go_symbols_function():
     src = "func Add(a int, b int) int {\n    return a + b\n}\n"
     syms = extract_go_symbols(src)
@@ -118,6 +119,7 @@ def test_extract_go_ranges():
 # --------------------------------------------------------------------------- #
 # Rust
 # --------------------------------------------------------------------------- #
+
 
 def test_extract_rust_symbols_function():
     src = "fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n"
@@ -163,6 +165,7 @@ def test_extract_rust_ranges():
 # Java
 # --------------------------------------------------------------------------- #
 
+
 def test_extract_java_symbols_class():
     src = "public class Calculator {\n    public void add(int amount) {}\n}\n"
     syms = extract_java_symbols(src)
@@ -200,6 +203,7 @@ def test_extract_java_ranges():
 # C/C++
 # --------------------------------------------------------------------------- #
 
+
 def test_extract_cpp_symbols_function():
     src = "int add(int a, int b) {\n    return a + b;\n}\n"
     syms = extract_cpp_symbols(src)
@@ -235,6 +239,7 @@ def test_extract_cpp_ranges():
 # C#
 # --------------------------------------------------------------------------- #
 
+
 def test_extract_csharp_symbols_class():
     src = "public class Calculator {\n    public void Add(int amount) {}\n}\n"
     syms = extract_csharp_symbols(src)
@@ -263,6 +268,7 @@ def test_extract_csharp_ranges():
 # --------------------------------------------------------------------------- #
 # Dispatcher
 # --------------------------------------------------------------------------- #
+
 
 def test_extract_symbols_for_language_typescript():
     src = "function foo() {}"
@@ -315,6 +321,7 @@ def test_extract_symbols_for_language_unknown_raises():
 
 def test_extract_java_regex_indentation_and_class_pop():
     from merge_train.lang_extractors import _extract_java_regex
+
     src = (
         "  public class Foo {\n"
         "      public void bar() {\n"
@@ -338,6 +345,7 @@ def test_extract_java_regex_indentation_and_class_pop():
 
 def test_extract_csharp_regex_indentation_and_class_pop():
     from merge_train.lang_extractors import _extract_csharp_regex
+
     src = (
         "  public class Foo\n"
         "  {\n"
@@ -367,6 +375,7 @@ def test_extract_csharp_regex_indentation_and_class_pop():
 # TypeScript -- additional coverage: interface, type alias, export, async arrow
 # --------------------------------------------------------------------------- #
 
+
 def test_extract_typescript_interface():
     src = "interface UserService {\n    getUser(id: string): User;\n}\n"
     syms = extract_typescript_symbols(src)
@@ -383,13 +392,17 @@ def test_extract_typescript_type_alias():
 
 
 def test_extract_typescript_exported_function():
-    src = "export function processRequest(req: Request): Response {\n    return {};\n}\n"
+    src = (
+        "export function processRequest(req: Request): Response {\n    return {};\n}\n"
+    )
     syms = extract_typescript_symbols(src)
     assert any(s.name == "processRequest" for s in syms)
 
 
 def test_extract_typescript_async_arrow_function():
-    src = "const fetchData = async (url: string) => {\n    return await fetch(url);\n};\n"
+    src = (
+        "const fetchData = async (url: string) => {\n    return await fetch(url);\n};\n"
+    )
     syms = extract_typescript_symbols(src)
     assert any(s.name == "fetchData" for s in syms)
 
@@ -413,6 +426,7 @@ def test_extract_typescript_class_and_interface_together():
 # Go -- additional coverage: plain func, pointer receiver, interface type
 # --------------------------------------------------------------------------- #
 
+
 def test_extract_go_plain_function_no_receiver():
     src = "func Compute(x int, y int) int {\n    return x + y\n}\n"
     syms = extract_go_symbols(src)
@@ -420,7 +434,9 @@ def test_extract_go_plain_function_no_receiver():
 
 
 def test_extract_go_method_pointer_receiver():
-    src = "func (s *Server) HandleRequest(w http.ResponseWriter, r *http.Request) {\n}\n"
+    src = (
+        "func (s *Server) HandleRequest(w http.ResponseWriter, r *http.Request) {\n}\n"
+    )
     syms = extract_go_symbols(src)
     assert any(s.name == "Server.HandleRequest" for s in syms)
 
@@ -450,23 +466,28 @@ def test_extract_go_struct_and_interface_together():
 # Routing -- .ts / .tsx / .go file extensions routed correctly
 # --------------------------------------------------------------------------- #
 
+
 def test_language_for_path_ts():
     from merge_train.symbols import language_for_path
+
     assert language_for_path("src/utils/helpers.ts") == "typescript"
 
 
 def test_language_for_path_tsx():
     from merge_train.symbols import language_for_path
+
     assert language_for_path("components/Button.tsx") == "tsx"
 
 
 def test_language_for_path_go():
     from merge_train.symbols import language_for_path
+
     assert language_for_path("cmd/server/main.go") == "go"
 
 
 def test_is_supported_path_ts_tsx_go():
     from merge_train.symbols import is_supported_path
+
     assert is_supported_path("app.ts") is True
     assert is_supported_path("App.tsx") is True
     assert is_supported_path("main.go") is True

@@ -38,7 +38,7 @@ class Symbol:
 
     name: str
     start: int  # inclusive, 1-based (matches ast.lineno)
-    end: int    # inclusive
+    end: int  # inclusive
 
     def contains_line(self, line: int) -> bool:
         return self.start <= line <= self.end
@@ -108,6 +108,7 @@ def is_supported_path(path: str) -> bool:
 # Python symbol extraction (AST-based)
 # --------------------------------------------------------------------------- #
 
+
 def extract_symbols(source: str) -> list[Symbol]:
     """Extract top-level symbols and methods from Python source.
 
@@ -145,10 +146,13 @@ def _extract_python(source: str) -> list[Symbol]:
                     continue
                 c_start, c_end = child_rng
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    out.append(Symbol(
-                        name=f"{node.name}.{child.name}",
-                        start=c_start, end=c_end,
-                    ))
+                    out.append(
+                        Symbol(
+                            name=f"{node.name}.{child.name}",
+                            start=c_start,
+                            end=c_end,
+                        )
+                    )
 
     return out
 
@@ -166,6 +170,7 @@ _HUNK_RE = re.compile(
 @dataclass(frozen=True)
 class HunkRange:
     """An inclusive line range in the *new* file touched by a diff hunk."""
+
     start: int
     end: int
 
@@ -217,9 +222,7 @@ def touched_symbols(
     try:
         symbols = extract_symbols(new_source)
     except SyntaxError as exc:
-        raise SymbolResolutionError(
-            f"cannot parse source: {exc}"
-        ) from exc
+        raise SymbolResolutionError(f"cannot parse source: {exc}") from exc
     if new_source.strip() and not symbols:
         raise SymbolResolutionError(
             "non-empty source yielded no symbols — falling back to file-level"
@@ -395,7 +398,9 @@ def touched_symbols_for_staged_file(
             return set()
         file_stem = Path(path).stem
         try:
-            return _touched_markdown_symbols(new_source=new_source, diff_text=diff, file_stem=file_stem)
+            return _touched_markdown_symbols(
+                new_source=new_source, diff_text=diff, file_stem=file_stem
+            )
         except SymbolResolutionError as exc:
             raise UnsupportedLanguageError(
                 f"markdown symbol resolution failed for {path}: {exc}"
@@ -403,7 +408,9 @@ def touched_symbols_for_staged_file(
 
     lang = language_for_path(path)
     if lang is None:
-        raise UnsupportedLanguageError(f"symbol extraction supports known types only: {path}")
+        raise UnsupportedLanguageError(
+            f"symbol extraction supports known types only: {path}"
+        )
 
     try:
         diff, new_source = _diff_and_source_for_file(path, cwd=cwd)
@@ -416,6 +423,7 @@ def touched_symbols_for_staged_file(
         else:
             # Multi-language: use lang_extractors
             from merge_train.lang_extractors import extract_symbols_for_language
+
             symbols = extract_symbols_for_language(new_source, lang)
             # Fail-closed: non-empty source with no extractable symbols
             if new_source.strip() and not symbols:
