@@ -65,3 +65,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["merge_train*"]
+
+[tool.setuptools.package-data]
+merge_train = ["hooks/*.sh"]
+

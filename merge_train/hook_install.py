@@ -28,6 +28,7 @@ installer wired up.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -87,36 +88,65 @@ CODEX_HOOKS_PATH = codex_hooks_path
 # --------------------------------------------------------------------------- #
 
 
+def _find_hooks_dir(base_dir: Optional[Path] = None) -> Path:
+    """Locate the hooks source directory containing the hook scripts.
+
+    Checks:
+    1. A ``hooks`` directory inside the ``merge_train`` package (installed layout).
+    2. A ``hooks`` directory beside the ``merge_train`` package (editable/source layout).
+    """
+    if base_dir is None:
+        base_dir = Path(__file__).resolve().parent
+
+    # Installed package layout
+    pkg_hooks = base_dir / "hooks"
+    if pkg_hooks.is_dir():
+        return pkg_hooks
+
+    # Source repo layout
+    repo_hooks = base_dir.parent / "hooks"
+    if repo_hooks.is_dir():
+        return repo_hooks
+
+    raise FileNotFoundError("merge_train hooks directory not found")
+
+
 def _repo_root() -> Path:
     """Locate the merge_train source repo root.
 
     We walk up from this file's parent (``merge_train/``) to the
-    directory that contains ``hooks/``. Works for both editable and
-    installed layouts.
+    directory that contains ``hooks/`` (or check for pyproject.toml as root marker).
     """
     here = Path(__file__).resolve().parent
+    # If in dev/editable source repo layout, pyproject.toml is in the root
+    if (here.parent / "pyproject.toml").is_file():
+        return here.parent
+    # Check old hooks structure beside merge_train folder
     candidate = here.parent / "hooks"
     if candidate.is_dir():
         return candidate.parent
-    raise FileNotFoundError("merge_train source repo not found (no hooks/ dir)")
+    raise FileNotFoundError("merge_train source repo not found")
 
 
 def _install_hook_scripts() -> list[Path]:
-    """Copy hook shell scripts from <repo>/hooks to ~/.local/bin.
+    """Copy hook shell scripts to ~/.local/bin.
 
     Idempotent — overwrites if present. Returns the list of installed
     script paths.
     """
-    src_dir = _repo_root() / "hooks"
+    src_dir = _find_hooks_dir()
     HOOKS_INSTALL_DIR().mkdir(parents=True, exist_ok=True)
     installed: list[Path] = []
+
+    # Fail fast if any required script in ALL_HOOK_SCRIPTS is missing
+    for name in ALL_HOOK_SCRIPTS:
+        src = src_dir / name
+        if not src.is_file():
+            raise FileNotFoundError(f"hook source file missing: {src}")
+
     for name in ALL_HOOK_SCRIPTS:
         src = src_dir / name
         dst = HOOKS_INSTALL_DIR() / name
-        if not src.is_file():
-            # Don't fail the whole install on a missing optional script.
-            print(f"merge_train: WARN — hook source missing: {src}", file=sys.stderr)
-            continue
         shutil.copy2(src, dst)
         os.chmod(dst, 0o755)
         installed.append(dst)
@@ -137,7 +167,8 @@ def _strip_stale_source_entries(hooks: dict, src_root: str) -> None:
         for entry in event_hooks:
             orig = entry.get("hooks", [])
             entry["hooks"] = [
-                h for h in orig
+                h
+                for h in orig
                 if not _is_stale_source_cmd(h.get("command", ""), src_root)
             ]
 
@@ -153,48 +184,60 @@ def _install_claude(target: Path) -> dict:
     Hook: ``bash ~/.local/bin/conflict-warn-pre-tool.sh`` (warn-only).
     Idempotent: re-running does not append a duplicate entry.
     """
-    _install_hook_scripts()
-    src_root = str(_repo_root())
-    cmd = f"bash {HOOKS_INSTALL_DIR() / 'conflict-warn-pre-tool.sh'}"
-
-    settings_path = CLAUDE_SETTINGS_PATH()
-    if settings_path.exists():
+    try:
+        _install_hook_scripts()
         try:
-            data = json.loads(settings_path.read_text())
-        except json.JSONDecodeError:
+            src_root = str(_repo_root())
+        except FileNotFoundError:
+            src_root = ""
+        cmd = f"bash {HOOKS_INSTALL_DIR() / 'conflict-warn-pre-tool.sh'}"
+
+        settings_path = CLAUDE_SETTINGS_PATH()
+        if settings_path.exists():
+            try:
+                data = json.loads(settings_path.read_text())
+            except json.JSONDecodeError:
+                data = {}
+        else:
             data = {}
-    else:
-        data = {}
 
-    data.setdefault("hooks", {})
-    pre_tool = data["hooks"].setdefault("PreToolUse", [])
+        data.setdefault("hooks", {})
+        pre_tool = data["hooks"].setdefault("PreToolUse", [])
 
-    # Remove any stale entries that still reference the old source-repo path.
-    _strip_stale_source_entries({"PreToolUse": pre_tool}, src_root)
-    pre_tool = data["hooks"]["PreToolUse"]
+        # Remove any stale entries that still reference the old source-repo path.
+        _strip_stale_source_entries({"PreToolUse": pre_tool}, src_root)
+        pre_tool = data["hooks"]["PreToolUse"]
 
-    for matcher in ("Edit", "Write"):
-        match_entry = next(
-            (m for m in pre_tool if m.get("matcher") == matcher), None
-        )
-        if match_entry is None:
-            match_entry = {"matcher": matcher, "hooks": []}
-            pre_tool.append(match_entry)
-        if not any(h.get("command") == cmd for h in match_entry.get("hooks", [])):
-            match_entry.setdefault("hooks", []).append({
-                "type": "command",
-                "command": cmd,
-                "timeout": 15000,
-            })
+        for matcher in ("Edit", "Write"):
+            match_entry = next(
+                (m for m in pre_tool if m.get("matcher") == matcher), None
+            )
+            if match_entry is None:
+                match_entry = {"matcher": matcher, "hooks": []}
+                pre_tool.append(match_entry)
+            if not any(h.get("command") == cmd for h in match_entry.get("hooks", [])):
+                match_entry.setdefault("hooks", []).append(
+                    {
+                        "type": "command",
+                        "command": cmd,
+                        "timeout": 15000,
+                    }
+                )
 
-    settings_path.parent.mkdir(parents=True, exist_ok=True)
-    settings_path.write_text(json.dumps(data, indent=2))
-    return {
-        "agent": "claude",
-        "installed": True,
-        "settings_path": str(settings_path),
-        "command": cmd,
-    }
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(json.dumps(data, indent=2))
+        return {
+            "agent": "claude",
+            "installed": True,
+            "settings_path": str(settings_path),
+            "command": cmd,
+        }
+    except Exception as exc:
+        return {
+            "agent": "claude",
+            "installed": False,
+            "error": str(exc),
+        }
 
 
 def _install_codex(target: Path) -> dict:
@@ -202,43 +245,58 @@ def _install_codex(target: Path) -> dict:
 
     Hook: ``bash ~/.local/bin/predict-spawn-check.sh`` (warn-only).
     """
-    _install_hook_scripts()
-    cmd = f"bash {HOOKS_INSTALL_DIR() / 'predict-spawn-check.sh'}"
-
-    hooks_path = CODEX_HOOKS_PATH()
-    if hooks_path.exists():
+    try:
+        _install_hook_scripts()
         try:
-            data = json.loads(hooks_path.read_text())
-        except json.JSONDecodeError:
+            src_root = str(_repo_root())
+        except FileNotFoundError:
+            src_root = ""
+        cmd = f"bash {HOOKS_INSTALL_DIR() / 'predict-spawn-check.sh'}"
+
+        hooks_path = CODEX_HOOKS_PATH()
+        if hooks_path.exists():
+            try:
+                data = json.loads(hooks_path.read_text())
+            except json.JSONDecodeError:
+                data = {}
+        else:
             data = {}
-    else:
-        data = {}
 
-    data.setdefault("hooks", {})
-    pre_tool = data["hooks"].setdefault("PreToolUse", [])
+        data.setdefault("hooks", {})
+        pre_tool = data["hooks"].setdefault("PreToolUse", [])
 
-    edit_entry = next(
-        (m for m in pre_tool if m.get("matcher") == "Edit"), None
-    )
-    if edit_entry is None:
-        edit_entry = {"matcher": "Edit", "hooks": []}
-        pre_tool.append(edit_entry)
-    if not any(h.get("command") == cmd for h in edit_entry.get("hooks", [])):
-        edit_entry.setdefault("hooks", []).append({
-            "type": "command",
+        # Remove any stale entries that still reference the old source-repo path.
+        _strip_stale_source_entries({"PreToolUse": pre_tool}, src_root)
+        pre_tool = data["hooks"]["PreToolUse"]
+
+        edit_entry = next((m for m in pre_tool if m.get("matcher") == "Edit"), None)
+        if edit_entry is None:
+            edit_entry = {"matcher": "Edit", "hooks": []}
+            pre_tool.append(edit_entry)
+        if not any(h.get("command") == cmd for h in edit_entry.get("hooks", [])):
+            edit_entry.setdefault("hooks", []).append(
+                {
+                    "type": "command",
+                    "command": cmd,
+                    "timeoutSec": 15,
+                    "statusMessage": "Running predict-conflicts pre-spawn check...",
+                }
+            )
+
+        hooks_path.parent.mkdir(parents=True, exist_ok=True)
+        hooks_path.write_text(json.dumps(data, indent=2))
+        return {
+            "agent": "codex",
+            "installed": True,
+            "hooks_path": str(hooks_path),
             "command": cmd,
-            "timeoutSec": 15,
-            "statusMessage": "Running predict-conflicts pre-spawn check...",
-        })
-
-    hooks_path.parent.mkdir(parents=True, exist_ok=True)
-    hooks_path.write_text(json.dumps(data, indent=2))
-    return {
-        "agent": "codex",
-        "installed": True,
-        "hooks_path": str(hooks_path),
-        "command": cmd,
-    }
+        }
+    except Exception as exc:
+        return {
+            "agent": "codex",
+            "installed": False,
+            "error": str(exc),
+        }
 
 
 def _install_opencode(target: Path) -> dict:
@@ -249,36 +307,43 @@ def _install_opencode(target: Path) -> dict:
     ``.opencode.json`` telling agents to run ``predict-conflicts`` before
     editing. Mirrors what ``install.sh`` step 3c does.
     """
-    _install_hook_scripts()
-    cfg_path = target / ".opencode.json"
-    if cfg_path.exists():
-        try:
-            data = json.loads(cfg_path.read_text())
-        except json.JSONDecodeError:
+    try:
+        _install_hook_scripts()
+        cfg_path = target / ".opencode.json"
+        if cfg_path.exists():
+            try:
+                data = json.loads(cfg_path.read_text())
+            except json.JSONDecodeError:
+                data = {}
+        else:
             data = {}
-    else:
-        data = {}
 
-    data.setdefault("$schema", "https://opencode.ai/config.json")
-    existing = data.get("instructions") or ""
-    if "predict-conflicts" not in existing:
-        block = (
-            "IMPORTANT: Before starting any coding task, run: "
-            "predict-conflicts --from-prs <PR_NUMBER> to check for "
-            "symbol-level conflicts with other open PRs. If conflicts "
-            "are detected, pick a different task or coordinate with the "
-            "conflicting PR's author."
-        )
-        if existing and not existing.endswith("\n"):
-            existing = existing + "\n\n"
-        data["instructions"] = (existing + block) if existing else block
+        data.setdefault("$schema", "https://opencode.ai/config.json")
+        existing = data.get("instructions") or ""
+        if "predict-conflicts" not in existing:
+            block = (
+                "IMPORTANT: Before starting any coding task, run: "
+                "predict-conflicts --from-prs <PR_NUMBER> to check for "
+                "symbol-level conflicts with other open PRs. If conflicts "
+                "are detected, pick a different task or coordinate with the "
+                "conflicting PR's author."
+            )
+            if existing and not existing.endswith("\n"):
+                existing = existing + "\n\n"
+            data["instructions"] = (existing + block) if existing else block
 
-    cfg_path.write_text(json.dumps(data, indent=2))
-    return {
-        "agent": "opencode",
-        "installed": True,
-        "config_path": str(cfg_path),
-    }
+        cfg_path.write_text(json.dumps(data, indent=2))
+        return {
+            "agent": "opencode",
+            "installed": True,
+            "config_path": str(cfg_path),
+        }
+    except Exception as exc:
+        return {
+            "agent": "opencode",
+            "installed": False,
+            "error": str(exc),
+        }
 
 
 # --------------------------------------------------------------------------- #
@@ -371,7 +436,8 @@ def _test_claude(target: Path) -> dict:
     edit_matchers = [m for m in pre_tool if m.get("matcher") == "Edit"]
     if not edit_matchers or not any(
         "conflict-warn-pre-tool" in h.get("command", "")
-        for m in edit_matchers for h in m.get("hooks", [])
+        for m in edit_matchers
+        for h in m.get("hooks", [])
     ):
         return {
             "agent": "claude",
@@ -428,7 +494,8 @@ def _test_codex(target: Path) -> dict:
     edit_matchers = [m for m in pre_tool if m.get("matcher") == "Edit"]
     if not edit_matchers or not any(
         "predict-spawn-check" in h.get("command", "")
-        for m in edit_matchers for h in m.get("hooks", [])
+        for m in edit_matchers
+        for h in m.get("hooks", [])
     ):
         return {
             "agent": "codex",
@@ -532,8 +599,6 @@ test_hooks_for_agent.__test__ = False  # type: ignore[attr-defined]
 
 
 def _build_argparser() -> "argparse.ArgumentParser":
-    import argparse
-
     parser = argparse.ArgumentParser(
         prog="merge_train",
         description=(
@@ -548,11 +613,14 @@ def _build_argparser() -> "argparse.ArgumentParser":
         help="Install conflict-warn hooks for one or more agents.",
     )
     p_install.add_argument(
-        "--agent", required=True, choices=list(AGENT_CHOICES),
+        "--agent",
+        required=True,
+        choices=list(AGENT_CHOICES),
         help="Which agent to install hooks for.",
     )
     p_install.add_argument(
-        "--target", default=None,
+        "--target",
+        default=None,
         help="Target repo root (default: cwd). Used by opencode for .opencode.json.",
     )
 
@@ -561,11 +629,14 @@ def _build_argparser() -> "argparse.ArgumentParser":
         help="Run synthetic-Edit test against installed hooks.",
     )
     p_test.add_argument(
-        "--agent", required=True, choices=list(AGENT_CHOICES),
+        "--agent",
+        required=True,
+        choices=list(AGENT_CHOICES),
         help="Which agent to test hooks for.",
     )
     p_test.add_argument(
-        "--target", default=None,
+        "--target",
+        default=None,
         help="Target repo root (default: cwd). Used by opencode.",
     )
 
@@ -604,6 +675,7 @@ def main_test_hooks(argv: Optional[list[str]] = None) -> int:
 if __name__ == "__main__":
     # Allow `python -m merge_train.hook_install install-hooks --agent claude`
     import sys as _sys
+
     cmd = _sys.argv[1] if len(_sys.argv) > 1 else ""
     if cmd == "install-hooks":
         _sys.exit(main_install_hooks(_sys.argv[1:]))

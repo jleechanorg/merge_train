@@ -36,7 +36,6 @@ from merge_train.hook_install import (
     test_hooks_for_agent,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Fixtures
 # --------------------------------------------------------------------------- #
@@ -94,7 +93,9 @@ def test_all_hook_scripts_exist_in_repo() -> None:
     """ALL_HOOK_SCRIPTS names map to files in this repo's hooks/ dir."""
     repo_root = Path(__file__).resolve().parents[1]
     for name in ALL_HOOK_SCRIPTS:
-        assert (repo_root / "hooks" / name).is_file(), f"missing hook: {name}"
+        assert (
+            repo_root / "merge_train" / "hooks" / name
+        ).is_file(), f"missing hook: {name}"
 
 
 def test_hooks_install_dir_is_under_home_local_bin() -> None:
@@ -127,7 +128,9 @@ def test_install_hooks_claude_patches_settings_json(
     assert write_matchers, "Write matcher must be added"
 
     # The new entry references the installed conflict-warn-pre-tool.sh
-    edit_cmd = " ".join(h.get("command", "") for m in edit_matchers for h in m.get("hooks", []))
+    edit_cmd = " ".join(
+        h.get("command", "") for m in edit_matchers for h in m.get("hooks", [])
+    )
     assert "conflict-warn-pre-tool.sh" in edit_cmd
 
 
@@ -167,28 +170,36 @@ def test_install_hooks_claude_removes_stale_source_repo_entries(
 ) -> None:
     """If ~/.claude/settings.json references old source-repo paths, strip them."""
     from merge_train.hook_install import _repo_root
+
     stale_repo = str(_repo_root())
     settings = fake_home / ".claude" / "settings.json"
     settings.parent.mkdir(parents=True, exist_ok=True)
-    settings.write_text(json.dumps({
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": "Edit",
-                    "hooks": [
-                        {"type": "command",
-                         "command": f"bash {stale_repo}/hooks/conflict-warn-pre-tool.sh"},
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Edit",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": f"bash {stale_repo}/hooks/conflict-warn-pre-tool.sh",
+                                },
+                            ],
+                        },
                     ],
                 },
-            ],
-        },
-    }))
+            }
+        )
+    )
     install_hooks_for_agent("claude", target=fake_repo)
     data = json.loads(settings.read_text())
     edit = next(m for m in data["hooks"]["PreToolUse"] if m["matcher"] == "Edit")
     for h in edit["hooks"]:
-        assert "merge_train/hooks/" not in h["command"], \
-            "stale source-repo path not stripped"
+        assert (
+            "merge_train/hooks/" not in h["command"]
+        ), "stale source-repo path not stripped"
 
 
 def test_install_hooks_claude_only_adds_warn_only_config(
@@ -221,7 +232,9 @@ def test_install_hooks_codex_patches_hooks_json(
     pre = data.get("hooks", {}).get("PreToolUse", [])
     edit_matchers = [m for m in pre if m.get("matcher") == "Edit"]
     assert edit_matchers, "Edit matcher must be added"
-    cmds = " ".join(h.get("command", "") for m in edit_matchers for h in m.get("hooks", []))
+    cmds = " ".join(
+        h.get("command", "") for m in edit_matchers for h in m.get("hooks", [])
+    )
     assert "predict-spawn-check" in cmds
 
 
@@ -290,10 +303,14 @@ def test_install_hooks_opencode_preserves_existing_fields(
 ) -> None:
     """If .opencode.json exists with $schema, preserve it."""
     p = fake_repo / ".opencode.json"
-    p.write_text(json.dumps({
-        "$schema": "https://opencode.ai/config.json",
-        "instructions": "unrelated: do not lose me",
-    }))
+    p.write_text(
+        json.dumps(
+            {
+                "$schema": "https://opencode.ai/config.json",
+                "instructions": "unrelated: do not lose me",
+            }
+        )
+    )
     install_hooks_for_agent("opencode", target=fake_repo)
     data = json.loads(p.read_text())
     assert data["$schema"] == "https://opencode.ai/config.json"
@@ -307,9 +324,13 @@ def test_install_hooks_opencode_only_appends_predict_conflicts_block(
 ) -> None:
     """If existing instructions already mention predict-conflicts, do not duplicate."""
     p = fake_repo / ".opencode.json"
-    p.write_text(json.dumps({
-        "instructions": "Use predict-conflicts before editing.",
-    }))
+    p.write_text(
+        json.dumps(
+            {
+                "instructions": "Use predict-conflicts before editing.",
+            }
+        )
+    )
     install_hooks_for_agent("opencode", target=fake_repo)
     data = json.loads(p.read_text())
     count = data["instructions"].count("predict-conflicts")
@@ -422,8 +443,10 @@ def test_test_hooks_claude_fails_when_hook_missing(
     # No install step — hook entry must be absent.
     result = test_hooks_for_agent("claude", target=fake_repo)
     assert result["ok"] is False
-    assert "missing" in (result.get("reason") or "").lower() or \
-           "not installed" in (result.get("reason") or "").lower()
+    assert (
+        "missing" in (result.get("reason") or "").lower()
+        or "not installed" in (result.get("reason") or "").lower()
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -438,3 +461,91 @@ def test_test_hooks_dispatch_table_has_all_agents() -> None:
     assert "opencode" in TEST_HOOKS
     for agent, fn in TEST_HOOKS.items():
         assert callable(fn), f"{agent} test_hooks entry is not callable"
+
+
+def test_install_hooks_codex_removes_stale_source_repo_entries(
+    fake_home: Path,
+    fake_repo: Path,
+) -> None:
+    """If ~/.codex/hooks.json references old source-repo paths, strip them."""
+    from merge_train.hook_install import _repo_root
+
+    stale_repo = str(_repo_root())
+    hooks_file = fake_home / ".codex" / "hooks.json"
+    hooks_file.parent.mkdir(parents=True, exist_ok=True)
+    hooks_file.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Edit",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": f"bash {stale_repo}/hooks/predict-spawn-check.sh",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }
+        )
+    )
+    install_hooks_for_agent("codex", target=fake_repo)
+    data = json.loads(hooks_file.read_text())
+    edit = next(m for m in data["hooks"]["PreToolUse"] if m["matcher"] == "Edit")
+    for h in edit["hooks"]:
+        assert (
+            "merge_train/hooks/" not in h["command"]
+        ), "stale source-repo path not stripped"
+
+
+def test_install_hooks_fails_when_hook_scripts_missing(
+    fake_home: Path,
+    fake_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If hook scripts are missing, installer must return installed: False."""
+    from merge_train import hook_install
+
+    # Mock _repo_root to raise FileNotFoundError, and mock _find_hooks_dir to raise FileNotFoundError
+    # so that hook installation fails because no hooks directory can be found
+    def mock_find_hooks_dir(*args, **kwargs):
+        raise FileNotFoundError("Mocked missing hooks directory")
+
+    monkeypatch.setattr(
+        hook_install, "_find_hooks_dir", mock_find_hooks_dir, raising=False
+    )
+
+    result = install_hooks_for_agent("claude", target=fake_repo)
+    assert result["installed"] is False
+    assert "error" in result
+
+
+def test_find_hooks_dir_installed_vs_source(tmp_path: Path) -> None:
+    from merge_train.hook_install import _find_hooks_dir
+
+    # Case 1: Package layout (hooks inside the package folder)
+    pkg_dir = tmp_path / "merge_train"
+    pkg_hooks = pkg_dir / "hooks"
+    pkg_hooks.mkdir(parents=True)
+
+    resolved = _find_hooks_dir(base_dir=pkg_dir)
+    assert resolved == pkg_hooks
+
+    # Case 2: Source layout (hooks beside the package folder)
+    src_dir = tmp_path / "src"
+    src_pkg = src_dir / "merge_train"
+    src_hooks = src_dir / "hooks"
+    src_pkg.mkdir(parents=True)
+    src_hooks.mkdir()
+
+    resolved = _find_hooks_dir(base_dir=src_pkg)
+    assert resolved == src_hooks
+
+    # Case 3: Missing
+    missing_dir = tmp_path / "missing"
+    missing_dir.mkdir()
+    with pytest.raises(FileNotFoundError):
+        _find_hooks_dir(base_dir=missing_dir)

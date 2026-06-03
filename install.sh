@@ -149,7 +149,7 @@ _HOOK_NAMES=(
 )
 echo "[1b/5] Installing hook scripts to $HOOKS_INSTALL_DIR..."
 for _hname in "${_HOOK_NAMES[@]}"; do
-    _src="$MERGE_TRAIN_ROOT/hooks/$_hname"
+    _src="$MERGE_TRAIN_ROOT/merge_train/hooks/$_hname"
     _dst="$HOOKS_INSTALL_DIR/$_hname"
     if [[ -f "$_src" ]]; then
         cp "$_src" "$_dst"
@@ -180,7 +180,7 @@ echo
 # ------------------------------------------------------------------------- #
 
 if [[ "$INSTALL_HOOK" -eq 1 ]]; then
-    HOOK_SRC="$MERGE_TRAIN_ROOT/hooks/pre-commit.sh"
+    HOOK_SRC="$MERGE_TRAIN_ROOT/merge_train/hooks/pre-commit.sh"
     HOOK_DST="$TARGET/.git/hooks/pre-commit"
     if [[ ! -f "$HOOK_SRC" ]]; then
         echo "[3/5] WARN: $HOOK_SRC missing, skipping pre-commit hook."

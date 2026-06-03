@@ -44,11 +44,14 @@ __all__ = (
 def __getattr__(name):
     if name in _PREDICT_EXPORTS:
         from merge_train import predict
+
         return getattr(predict, name)
     if name in _SYMBOL_DISCOVERY_EXPORTS:
         from merge_train import symbol_discovery
+
         return getattr(symbol_discovery, name)
     if name in _HOOK_INSTALL_EXPORTS:
         from merge_train import hook_install
+
         return getattr(hook_install, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

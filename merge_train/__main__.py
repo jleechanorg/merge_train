@@ -36,12 +36,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Install conflict-warn hooks for one or more agents (idempotent).",
     )
     p_install.add_argument(
-        "--agent", required=True,
+        "--agent",
+        required=True,
         choices=["claude", "opencode", "codex", "all"],
         help="Which agent to install hooks for.",
     )
     p_install.add_argument(
-        "--target", default=None,
+        "--target",
+        default=None,
         help="Target repo root (default: cwd). Used by opencode for .opencode.json.",
     )
 
@@ -51,12 +53,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run synthetic-Edit test against installed hooks.",
     )
     p_test.add_argument(
-        "--agent", required=True,
+        "--agent",
+        required=True,
         choices=["claude", "opencode", "codex", "all"],
         help="Which agent to test hooks for.",
     )
     p_test.add_argument(
-        "--target", default=None,
+        "--target",
+        default=None,
         help="Target repo root (default: cwd). Used by opencode.",
     )
 
@@ -71,9 +75,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.cmd == "install-hooks":
         from merge_train.hook_install import install_hooks_for_agent
         from pathlib import Path
+
         target = Path(args.target) if args.target else None
         result = install_hooks_for_agent(args.agent, target=target)
         import json
+
         print(json.dumps(result, indent=2))
         if isinstance(result, list):
             return 0 if all(r.get("installed") for r in result) else 1
@@ -82,9 +88,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.cmd == "test-hooks":
         from merge_train.hook_install import test_hooks_for_agent
         from pathlib import Path
+
         target = Path(args.target) if args.target else None
         result = test_hooks_for_agent(args.agent, target=target)
         import json
+
         print(json.dumps(result, indent=2))
         if isinstance(result, list):
             return 0 if all(r.get("ok") for r in result) else 1

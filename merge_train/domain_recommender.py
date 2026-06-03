@@ -17,7 +17,9 @@ class DomainSuggestion:
 
 
 def _run_git(repo: Path, args: list[str]) -> str:
-    proc = subprocess.run(["git", *args], cwd=str(repo), check=False, capture_output=True, text=True)
+    proc = subprocess.run(
+        ["git", *args], cwd=str(repo), check=False, capture_output=True, text=True
+    )
     return proc.stdout
 
 
@@ -33,8 +35,13 @@ def _python_symbols(path: Path) -> set[str]:
     return out
 
 
-def recommend_domains(repo: Path, since_days: int = 30, top_n: int = 8) -> list[DomainSuggestion]:
-    raw = _run_git(repo, ["log", f"--since={since_days}.days", "--name-only", "--pretty=format:__C__"])
+def recommend_domains(
+    repo: Path, since_days: int = 30, top_n: int = 8
+) -> list[DomainSuggestion]:
+    raw = _run_git(
+        repo,
+        ["log", f"--since={since_days}.days", "--name-only", "--pretty=format:__C__"],
+    )
     commits = [c for c in raw.split("__C__") if c.strip()]
     file_freq: Counter[str] = Counter()
     cochange: dict[tuple[str, str], int] = defaultdict(int)
@@ -44,7 +51,7 @@ def recommend_domains(repo: Path, since_days: int = 30, top_n: int = 8) -> list[
         for f in py_files:
             file_freq[f] += 1
         for i, a in enumerate(py_files):
-            for b in py_files[i + 1:]:
+            for b in py_files[i + 1 :]:
                 cochange[(a, b)] += 1
 
     hot = [f for f, _ in file_freq.most_common(top_n)]
@@ -64,7 +71,14 @@ def recommend_domains(repo: Path, since_days: int = 30, top_n: int = 8) -> list[
             sym_union.update(_python_symbols(repo / rel))
         top_symbols = tuple(sorted(sym_union)[:20])
         name = f"hotspot_{Path(f).stem}"
-        suggestions.append(DomainSuggestion(name=name, files=uniq_files, symbols=top_symbols, reason="recent co-change hotspot"))
+        suggestions.append(
+            DomainSuggestion(
+                name=name,
+                files=uniq_files,
+                symbols=top_symbols,
+                reason="recent co-change hotspot",
+            )
+        )
     return suggestions
 
 
@@ -73,5 +87,8 @@ def to_yaml_dict(suggestions: Iterable[DomainSuggestion]) -> dict:
     symbol_groups: dict[str, dict] = {}
     for s in suggestions:
         domains[s.name] = {"paths": list(s.files), "owners": [], "reason": s.reason}
-        symbol_groups[s.name] = {"symbols": list(s.symbols), "reason": "recommended symbol lock group"}
+        symbol_groups[s.name] = {
+            "symbols": list(s.symbols),
+            "reason": "recommended symbol lock group",
+        }
     return {"domains": domains, "symbol_groups": symbol_groups}
