@@ -1,20 +1,20 @@
 {
-    "run_id": "20260520T131616Z",
-    "bundle_version": "1.2.0",
-    "bundle_timestamp": "2026-05-20T13:16:16Z",
-    "merge_train_sha": "046276b86040c917291d1c20afed58e67d8249bc",
-    "merge_train_branch": "main",
-    "slots": 20,
-    "orchestration_mode": "ao_spawn",
-    "agent": "claude-code",
-    "kill_session_after_pr": true,
-    "keep_sessions": false,
-    "session_wait_timeout": 300.0,
-    "parallel": 1,
-    "parallel_batch_size": 1,
-    "test_type": "e2e_area_lock_ao_orchestrated",
-    "provenance": {
-        "merge_train_sha": "046276b86040c917291d1c20afed58e67d8249bc",
-        "ci_run_url": ""
-    }
+  "run_id": "20260520T131616Z",
+  "bundle_version": "1.2.0",
+  "bundle_timestamp": "2026-05-20T13:16:16Z",
+  "merge_train_sha": "a0fedc20309da2bb5e26224f1d02b5d8e7032858",
+  "merge_train_branch": "main",
+  "slots": 20,
+  "orchestration_mode": "ao_spawn",
+  "agent": "claude-code",
+  "kill_session_after_pr": true,
+  "keep_sessions": false,
+  "session_wait_timeout": 300.0,
+  "parallel": 1,
+  "parallel_batch_size": 1,
+  "test_type": "e2e_area_lock_ao_orchestrated",
+  "provenance": {
+    "merge_train_sha": "a0fedc20309da2bb5e26224f1d02b5d8e7032858",
+    "ci_run_url": ""
+  }
 }
