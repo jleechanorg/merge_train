@@ -166,6 +166,8 @@ def test_install_hooks_claude_removes_stale_source_repo_entries(
     fake_repo: Path,
 ) -> None:
     """If ~/.claude/settings.json references old source-repo paths, strip them."""
+    from merge_train.hook_install import _repo_root
+    stale_repo = str(_repo_root())
     settings = fake_home / ".claude" / "settings.json"
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps({
@@ -175,7 +177,7 @@ def test_install_hooks_claude_removes_stale_source_repo_entries(
                     "matcher": "Edit",
                     "hooks": [
                         {"type": "command",
-                         "command": f"bash /Users/jleechan/projects/merge_train/hooks/conflict-warn-pre-tool.sh"},
+                         "command": f"bash {stale_repo}/hooks/conflict-warn-pre-tool.sh"},
                     ],
                 },
             ],
