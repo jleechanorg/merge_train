@@ -18,3 +18,12 @@ htmlcov/
 .codex/
 .gemini/
 .opencode.json
+# Claude Code machine-local state (worktrees, settings.local.json, memory cache)
+.claude/
+# Agent sealed-holdout test results (machine-local)
+results/
+# uv lockfile — package is a library, lockfile would lock transitive deps
+uv.lock
+# Session-local scratch research (sweep reports, throwaway analysis).
+# Promote useful helpers to scripts/ instead.
+scratch/
