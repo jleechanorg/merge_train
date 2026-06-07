@@ -9,7 +9,7 @@ Recipes for AI agents working with this repo. Two audiences below — pick one.
 You're an agent (Aider / OpenHands / Devin / Claude / Codex / AO worker) about to modify someone else's code. Before you spawn a task or commit a change, gate your work through `merge_train` so two of you don't trample the same file/symbol scope.
 
 The upstream `merge_train` package installs two CLI scripts:
-1. `acquire` — check-and-reserve tool (spawn-time hook)
+1. `acquire` — atomic file-list check tool (spawn-time hook)
 2. `predict-conflicts` — read-only pairwise analysis tool (pre-commit / CI gate)
 
 ### Minimum integration (spawn time)
@@ -17,7 +17,7 @@ The upstream `merge_train` package installs two CLI scripts:
 At spawn time, run `acquire` against the in-flight plan:
 
 ```bash
-# 1. PRE-SPAWN check-and-reserve:
+# 1. PRE-SPAWN check:
 acquire --plan pr_domain_locks.yaml \
         --registry file_domains.yaml \
         --branch feat/dice-fix \
@@ -27,7 +27,7 @@ acquire --plan pr_domain_locks.yaml \
 test $? -eq 0 || { echo "REFUSE: file/domain held or conflicts with another PR"; exit 1; }
 ```
 
-If successful, `acquire` writes the branch's reservation to the plan file (`pr_domain_locks.yaml`).
+Since `acquire` is a stateless decision check, it does not modify the plan file. To persist a reservation, the orchestrator or agent must append the branch's files and symbols to the plan file (`pr_domain_locks.yaml`).
 
 ### Symbol-level check (commit time / pre-commit hook)
 

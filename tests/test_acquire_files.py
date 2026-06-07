@@ -27,7 +27,6 @@ from typing import Optional
 import pytest
 import yaml
 
-
 # --------------------------------------------------------------------------- #
 # CLI path
 # --------------------------------------------------------------------------- #
@@ -112,9 +111,7 @@ def test_resolve_file_unmapped_uses_file_level_fallback(monkeypatch):
         "merge_train.acquire.touched_symbols_for_staged_file", fake_resolve
     )
 
-    resolved, fallback = acquire_mod.resolve_files_to_symbols(
-        ["some/random.bin"]
-    )
+    resolved, fallback = acquire_mod.resolve_files_to_symbols(["some/random.bin"])
     assert fallback == ["some/random.bin"]
     assert resolved["some/random.bin"] == {"file:some/random.bin"}
 
@@ -199,8 +196,11 @@ def test_decide_symbol_conflict_deny(monkeypatch):
     )
 
     pair = PairConflict(
-        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR, pr_b=1,
-        domain_conflicts=(DomainConflict(domain="world", symbols=("func",), advisory=False),),
+        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR,
+        pr_b=1,
+        domain_conflicts=(
+            DomainConflict(domain="world", symbols=("func",), advisory=False),
+        ),
         textual_conflicts=(),
     )
     fake_plan = Plan(
@@ -238,7 +238,8 @@ def test_decide_textual_conflict_deny(monkeypatch):
     )
 
     pair = PairConflict(
-        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR, pr_b=2,
+        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR,
+        pr_b=2,
         domain_conflicts=(),
         textual_conflicts=(TextualConflict(file="pyproject.toml"),),
     )
@@ -276,8 +277,11 @@ def test_decide_advisory_only_allow(monkeypatch):
     )
 
     pair = PairConflict(
-        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR, pr_b=3,
-        domain_conflicts=(DomainConflict(domain="world", symbols=("func",), advisory=True),),
+        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR,
+        pr_b=3,
+        domain_conflicts=(
+            DomainConflict(domain="world", symbols=("func",), advisory=True),
+        ),
         textual_conflicts=(),
     )
     fake_plan = Plan(
@@ -317,8 +321,11 @@ def test_atomic_partial_conflict_denies_all(monkeypatch):
     )
 
     pair = PairConflict(
-        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR, pr_b=7,
-        domain_conflicts=(DomainConflict(domain="d", symbols=("sym",), advisory=False),),
+        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR,
+        pr_b=7,
+        domain_conflicts=(
+            DomainConflict(domain="d", symbols=("sym",), advisory=False),
+        ),
         textual_conflicts=(),
     )
     fake_plan = Plan(
@@ -335,9 +342,7 @@ def test_atomic_partial_conflict_denies_all(monkeypatch):
         return ({f: {"sym"} for f in files}, [])
 
     monkeypatch.setattr(acquire_mod, "predict_conflicts", lambda *a, **kw: fake_plan)
-    monkeypatch.setattr(
-        "merge_train.acquire.resolve_files_to_symbols", fake_resolve
-    )
+    monkeypatch.setattr("merge_train.acquire.resolve_files_to_symbols", fake_resolve)
 
     result = acquire_mod.decide(
         files=[f"f{i}.py" for i in range(5)],
@@ -359,12 +364,19 @@ def test_atomic_partial_conflict_denies_all(monkeypatch):
 # --------------------------------------------------------------------------- #
 
 
-def _build_cli_env(plan: Path, reg: Path, lock_path: Path, files: list[str], **extra) -> list[str]:
+def _build_cli_env(
+    plan: Path, reg: Path, lock_path: Path, files: list[str], **extra
+) -> list[str]:
     cmd = [
-        sys.executable, "-m", CLI_MODULE,
-        "--plan", str(plan),
-        "--registry", str(reg),
-        "--lock-path", str(lock_path),
+        sys.executable,
+        "-m",
+        CLI_MODULE,
+        "--plan",
+        str(plan),
+        "--registry",
+        str(reg),
+        "--lock-path",
+        str(lock_path),
         "--no-flock",  # tests must not take a real flock by default
     ]
     # Map the test-friendly kwarg names to the actual argparse flag names.
@@ -415,9 +427,7 @@ def _run_cli(
     return rc, stdout.getvalue(), stderr.getvalue()
 
 
-def test_cli_mapped_no_conflict_exit0(
-    tmp_path: Path, reg_file: Path, monkeypatch
-):
+def test_cli_mapped_no_conflict_exit0(tmp_path: Path, reg_file: Path, monkeypatch):
     from merge_train import acquire as acquire_mod
 
     monkeypatch.setattr(
@@ -425,9 +435,12 @@ def test_cli_mapped_no_conflict_exit0(
         lambda files, **kw: ({f: {"sym"} for f in files}, []),
     )
 
-    plan = _write_plan(tmp_path, [
-        {"pr": 1, "branch": "b1", "files": ["other.py"]},
-    ])
+    plan = _write_plan(
+        tmp_path,
+        [
+            {"pr": 1, "branch": "b1", "files": ["other.py"]},
+        ],
+    )
     lock = tmp_path / "acquire.lock"
     cmd = _build_cli_env(plan, reg_file, lock, ["a.py"])
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -435,9 +448,7 @@ def test_cli_mapped_no_conflict_exit0(
     assert "Decision: allow" in r.stdout
 
 
-def test_cli_mapped_with_conflict_exit1(
-    tmp_path: Path, reg_file: Path, monkeypatch
-):
+def test_cli_mapped_with_conflict_exit1(tmp_path: Path, reg_file: Path, monkeypatch):
     from merge_train import acquire as acquire_mod
     from merge_train.predict import (
         DomainConflict,
@@ -446,24 +457,34 @@ def test_cli_mapped_with_conflict_exit1(
     )
 
     pair = PairConflict(
-        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR, pr_b=1,
-        domain_conflicts=(DomainConflict(domain="d", symbols=("sym",), advisory=False),),
+        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR,
+        pr_b=1,
+        domain_conflicts=(
+            DomainConflict(domain="d", symbols=("sym",), advisory=False),
+        ),
         textual_conflicts=(),
     )
-    monkeypatch.setattr(acquire_mod, "predict_conflicts", lambda *a, **kw: Plan(
-        input_prs=[1],
-        pairwise_conflicts=[pair],
-        parallel_batches=[],
-        recommended_order=[],
-    ))
+    monkeypatch.setattr(
+        acquire_mod,
+        "predict_conflicts",
+        lambda *a, **kw: Plan(
+            input_prs=[1],
+            pairwise_conflicts=[pair],
+            parallel_batches=[],
+            recommended_order=[],
+        ),
+    )
     monkeypatch.setattr(
         "merge_train.acquire.resolve_files_to_symbols",
         lambda files, **kw: ({f: {"sym"} for f in files}, []),
     )
 
-    plan = _write_plan(tmp_path, [
-        {"pr": 1, "branch": "b1", "files": ["a.py"]},
-    ])
+    plan = _write_plan(
+        tmp_path,
+        [
+            {"pr": 1, "branch": "b1", "files": ["a.py"]},
+        ],
+    )
     lock = tmp_path / "acquire.lock"
     rc, stdout, stderr = _run_cli(plan, reg_file, lock, ["a.py"])
     assert rc == 1, stderr
@@ -471,9 +492,7 @@ def test_cli_mapped_with_conflict_exit1(
     assert "PR#1" in stdout
 
 
-def test_cli_unmapped_uses_fallback(
-    tmp_path: Path, reg_file: Path, monkeypatch
-):
+def test_cli_unmapped_uses_fallback(tmp_path: Path, reg_file: Path, monkeypatch):
     from merge_train import acquire as acquire_mod
 
     def fake_resolve(files, **kw):
@@ -483,9 +502,12 @@ def test_cli_unmapped_uses_fallback(
 
     monkeypatch.setattr("merge_train.acquire.resolve_files_to_symbols", fake_resolve)
 
-    plan = _write_plan(tmp_path, [
-        {"pr": 1, "branch": "b1", "files": ["other.py"]},
-    ])
+    plan = _write_plan(
+        tmp_path,
+        [
+            {"pr": 1, "branch": "b1", "files": ["other.py"]},
+        ],
+    )
     lock = tmp_path / "acquire.lock"
     cmd = _build_cli_env(plan, reg_file, lock, ["data/blob.bin"])
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -493,9 +515,7 @@ def test_cli_unmapped_uses_fallback(
     assert "fallback" in r.stdout
 
 
-def test_cli_mixed_mapped_and_unmapped(
-    tmp_path: Path, reg_file: Path, monkeypatch
-):
+def test_cli_mixed_mapped_and_unmapped(tmp_path: Path, reg_file: Path, monkeypatch):
     from merge_train import acquire as acquire_mod
 
     def fake_resolve(files, **kw):
@@ -505,9 +525,12 @@ def test_cli_mixed_mapped_and_unmapped(
 
     monkeypatch.setattr("merge_train.acquire.resolve_files_to_symbols", fake_resolve)
 
-    plan = _write_plan(tmp_path, [
-        {"pr": 1, "branch": "b1", "files": ["other.py"]},
-    ])
+    plan = _write_plan(
+        tmp_path,
+        [
+            {"pr": 1, "branch": "b1", "files": ["other.py"]},
+        ],
+    )
     lock = tmp_path / "acquire.lock"
     cmd = _build_cli_env(plan, reg_file, lock, ["src/foo.py", "data/blob.bin"])
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -527,24 +550,34 @@ def test_cli_atomic_partial_conflict_denies_all(
     )
 
     pair = PairConflict(
-        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR, pr_b=1,
-        domain_conflicts=(DomainConflict(domain="d", symbols=("sym",), advisory=False),),
+        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR,
+        pr_b=1,
+        domain_conflicts=(
+            DomainConflict(domain="d", symbols=("sym",), advisory=False),
+        ),
         textual_conflicts=(),
     )
-    monkeypatch.setattr(acquire_mod, "predict_conflicts", lambda *a, **kw: Plan(
-        input_prs=[1],
-        pairwise_conflicts=[pair],
-        parallel_batches=[],
-        recommended_order=[],
-    ))
+    monkeypatch.setattr(
+        acquire_mod,
+        "predict_conflicts",
+        lambda *a, **kw: Plan(
+            input_prs=[1],
+            pairwise_conflicts=[pair],
+            parallel_batches=[],
+            recommended_order=[],
+        ),
+    )
     monkeypatch.setattr(
         "merge_train.acquire.resolve_files_to_symbols",
         lambda files, **kw: ({f: {"sym"} for f in files}, []),
     )
 
-    plan = _write_plan(tmp_path, [
-        {"pr": 1, "branch": "b1", "files": ["f2.py"]},
-    ])
+    plan = _write_plan(
+        tmp_path,
+        [
+            {"pr": 1, "branch": "b1", "files": ["f2.py"]},
+        ],
+    )
     lock = tmp_path / "acquire.lock"
     rc, stdout, stderr = _run_cli(plan, reg_file, lock, [f"f{i}.py" for i in range(5)])
     assert rc == 1, stderr
@@ -553,9 +586,7 @@ def test_cli_atomic_partial_conflict_denies_all(
         assert f"f{i}.py" in stdout
 
 
-def test_cli_json_output_shape(
-    tmp_path: Path, reg_file: Path, monkeypatch
-):
+def test_cli_json_output_shape(tmp_path: Path, reg_file: Path, monkeypatch):
     from merge_train import acquire as acquire_mod
 
     monkeypatch.setattr(
@@ -563,9 +594,12 @@ def test_cli_json_output_shape(
         lambda files, **kw: ({f: {"sym"} for f in files}, []),
     )
 
-    plan = _write_plan(tmp_path, [
-        {"pr": 1, "branch": "b1", "files": ["other.py"]},
-    ])
+    plan = _write_plan(
+        tmp_path,
+        [
+            {"pr": 1, "branch": "b1", "files": ["other.py"]},
+        ],
+    )
     lock = tmp_path / "acquire.lock"
     rc, stdout, stderr = _run_cli(plan, reg_file, lock, ["a.py"], json=True)
     assert rc == 0, stderr
@@ -580,9 +614,7 @@ def test_cli_json_output_shape(
     assert "flock_path" in payload
 
 
-def test_cli_json_deny_includes_conflicts(
-    tmp_path: Path, reg_file: Path, monkeypatch
-):
+def test_cli_json_deny_includes_conflicts(tmp_path: Path, reg_file: Path, monkeypatch):
     from merge_train import acquire as acquire_mod
     from merge_train.predict import (
         DomainConflict,
@@ -591,24 +623,34 @@ def test_cli_json_deny_includes_conflicts(
     )
 
     pair = PairConflict(
-        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR, pr_b=42,
-        domain_conflicts=(DomainConflict(domain="d", symbols=("sym",), advisory=False),),
+        pr_a=acquire_mod._SYNTHETIC_CANDIDATE_PR,
+        pr_b=42,
+        domain_conflicts=(
+            DomainConflict(domain="d", symbols=("sym",), advisory=False),
+        ),
         textual_conflicts=(),
     )
-    monkeypatch.setattr(acquire_mod, "predict_conflicts", lambda *a, **kw: Plan(
-        input_prs=[42],
-        pairwise_conflicts=[pair],
-        parallel_batches=[],
-        recommended_order=[],
-    ))
+    monkeypatch.setattr(
+        acquire_mod,
+        "predict_conflicts",
+        lambda *a, **kw: Plan(
+            input_prs=[42],
+            pairwise_conflicts=[pair],
+            parallel_batches=[],
+            recommended_order=[],
+        ),
+    )
     monkeypatch.setattr(
         "merge_train.acquire.resolve_files_to_symbols",
         lambda files, **kw: ({f: {"sym"} for f in files}, []),
     )
 
-    plan = _write_plan(tmp_path, [
-        {"pr": 42, "branch": "b42", "files": ["a.py"]},
-    ])
+    plan = _write_plan(
+        tmp_path,
+        [
+            {"pr": 42, "branch": "b42", "files": ["a.py"]},
+        ],
+    )
     lock = tmp_path / "acquire.lock"
     rc, stdout, stderr = _run_cli(plan, reg_file, lock, ["a.py"], json=True)
     assert rc == 1, stderr
@@ -644,9 +686,7 @@ def test_cli_no_files_exit2(tmp_path: Path, reg_file: Path):
     assert r.returncode == 2
 
 
-def test_cli_branch_and_agent_propagate(
-    tmp_path: Path, reg_file: Path, monkeypatch
-):
+def test_cli_branch_and_agent_propagate(tmp_path: Path, reg_file: Path, monkeypatch):
     from merge_train import acquire as acquire_mod
 
     monkeypatch.setattr(
@@ -657,8 +697,12 @@ def test_cli_branch_and_agent_propagate(
     plan = _write_plan(tmp_path, [{"pr": 1, "branch": "b1", "files": ["other.py"]}])
     lock = tmp_path / "acquire.lock"
     cmd = _build_cli_env(
-        plan, reg_file, lock, ["a.py"],
-        branch="feat/x", agent="claude-code",
+        plan,
+        reg_file,
+        lock,
+        ["a.py"],
+        branch="feat/x",
+        agent="claude-code",
     )
     r = subprocess.run(cmd, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
@@ -682,17 +726,24 @@ def test_flock_serializes_concurrent_invocations(tmp_path: Path, monkeypatch):
     fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
     try:
         import fcntl
+
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         # Spawn a CLI subprocess that must wait for the lock
         plan = _write_plan(tmp_path, [])
         reg = tmp_path / "reg.yaml"
         reg.write_text(yaml.safe_dump({"domains": {}}))
         cmd = [
-            sys.executable, "-m", CLI_MODULE,
-            "--plan", str(plan),
-            "--registry", str(reg),
-            "--lock-path", str(lock_path),
-            "--lock-timeout", "2",  # 2 second timeout for the test
+            sys.executable,
+            "-m",
+            CLI_MODULE,
+            "--plan",
+            str(plan),
+            "--registry",
+            str(reg),
+            "--lock-path",
+            str(lock_path),
+            "--lock-timeout",
+            "2",  # 2 second timeout for the test
             "a.py",
         ]
         start = time.monotonic()
@@ -712,6 +763,7 @@ def test_flock_serializes_concurrent_invocations(tmp_path: Path, monkeypatch):
             assert r.returncode in (1, 2), f"unexpected rc={r.returncode}: {r.stderr}"
     finally:
         import fcntl
+
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)
 
@@ -731,16 +783,23 @@ def test_no_flock_skips_lock_file(tmp_path: Path, monkeypatch):
     nonexistent_lock = tmp_path / "should_not_appear.lock"
 
     cmd = [
-        sys.executable, "-m", CLI_MODULE,
-        "--plan", str(plan),
-        "--registry", str(reg),
-        "--lock-path", str(nonexistent_lock),
+        sys.executable,
+        "-m",
+        CLI_MODULE,
+        "--plan",
+        str(plan),
+        "--registry",
+        str(reg),
+        "--lock-path",
+        str(nonexistent_lock),
         "--no-flock",
         "a.py",
     ]
     r = subprocess.run(cmd, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
-    assert not nonexistent_lock.exists(), "lock file should not be created with --no-flock"
+    assert (
+        not nonexistent_lock.exists()
+    ), "lock file should not be created with --no-flock"
 
 
 # --------------------------------------------------------------------------- #
@@ -754,9 +813,16 @@ def test_decide_empty_files_is_allow(monkeypatch):
     from merge_train import acquire as acquire_mod
     from merge_train.predict import Plan
 
-    monkeypatch.setattr(acquire_mod, "predict_conflicts", lambda *a, **kw: Plan(
-        input_prs=[], pairwise_conflicts=[], parallel_batches=[], recommended_order=[]
-    ))
+    monkeypatch.setattr(
+        acquire_mod,
+        "predict_conflicts",
+        lambda *a, **kw: Plan(
+            input_prs=[],
+            pairwise_conflicts=[],
+            parallel_batches=[],
+            recommended_order=[],
+        ),
+    )
     monkeypatch.setattr(
         "merge_train.acquire.resolve_files_to_symbols",
         lambda files, **kw: ({}, []),

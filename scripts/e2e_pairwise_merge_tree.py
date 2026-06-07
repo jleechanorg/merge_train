@@ -65,7 +65,9 @@ def _merge_tree_result(
     try:
         subprocess.run(
             ["git", "merge-tree", base, f"origin/{branch_a}", f"origin/{branch_b}"],
-            capture_output=True, check=False, cwd=cwd,
+            capture_output=True,
+            check=False,
+            cwd=cwd,
         )
     except FileNotFoundError:
         pass
@@ -73,7 +75,9 @@ def _merge_tree_result(
     try:
         result = subprocess.run(
             ["git", "merge-tree", base, f"origin/{branch_a}", f"origin/{branch_b}"],
-            capture_output=True, check=False, cwd=cwd,
+            capture_output=True,
+            check=False,
+            cwd=cwd,
         )
         raw = result.stdout.decode("utf-8", errors="replace")
         has_conflict_markers = "<<<<<<< " in raw or "<<<<<<<" in raw
@@ -116,10 +120,14 @@ def _merge_tree_result(
     symbol_overlaps: dict[str, list[str]] = {}
 
     if cwd:
+
         def _branch_files(branch: str) -> set[str]:
             r = subprocess.run(
                 ["git", "diff", "--name-only", base, f"origin/{branch}"],
-                capture_output=True, text=True, check=False, cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=cwd,
             )
             return set(r.stdout.strip().splitlines())
 
@@ -128,7 +136,8 @@ def _merge_tree_result(
         overlap = a_files & b_files
         # Filter to product code only (exclude evidence/docs artefacts)
         overlapping_files = sorted(
-            f for f in overlap
+            f
+            for f in overlap
             if not f.startswith(("evidence/", "docs/evidence", ".beads/"))
         )
 
@@ -136,6 +145,7 @@ def _merge_tree_result(
     if enrich_symbols and repo and pr_a is not None and pr_b is not None:
         try:
             from merge_train.symbol_discovery import symbols_from_pr_diff
+
             syms_a = symbols_from_pr_diff(pr_a, repo)
             syms_b = symbols_from_pr_diff(pr_b, repo)
             for fpath in overlapping_files:
@@ -163,17 +173,32 @@ def _merge_tree_result(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Pairwise merge-tree simulation with symbol enrichment")
+    parser = argparse.ArgumentParser(
+        description="Pairwise merge-tree simulation with symbol enrichment"
+    )
     parser.add_argument("--base", required=True, help="base ref (e.g. origin/main)")
-    parser.add_argument("--branches-file", required=True, help="file with one branch name per line")
+    parser.add_argument(
+        "--branches-file", required=True, help="file with one branch name per line"
+    )
     parser.add_argument("--output", required=True, help="output JSON path")
     parser.add_argument("--git-cwd", default=None, help="git working directory")
-    parser.add_argument("--repo", metavar="OWNER/REPO", default=None,
-                        help="GitHub repo for symbol enrichment (e.g. jleechanorg/worldarchitect.ai)")
-    parser.add_argument("--prs", metavar="N,M,...", default=None,
-                        help="comma-separated PR numbers in same order as branches-file (enables symbol enrichment)")
-    parser.add_argument("--no-enrich-symbols", action="store_true",
-                        help="disable symbol-level enrichment (file-level only)")
+    parser.add_argument(
+        "--repo",
+        metavar="OWNER/REPO",
+        default=None,
+        help="GitHub repo for symbol enrichment (e.g. jleechanorg/worldarchitect.ai)",
+    )
+    parser.add_argument(
+        "--prs",
+        metavar="N,M,...",
+        default=None,
+        help="comma-separated PR numbers in same order as branches-file (enables symbol enrichment)",
+    )
+    parser.add_argument(
+        "--no-enrich-symbols",
+        action="store_true",
+        help="disable symbol-level enrichment (file-level only)",
+    )
     args = parser.parse_args()
 
     branches_file = Path(args.branches_file)
@@ -181,7 +206,9 @@ def main() -> int:
         print(f"error: branches file not found: {branches_file}", file=sys.stderr)
         return 2
 
-    branches = [line.strip() for line in branches_file.read_text().splitlines() if line.strip()]
+    branches = [
+        line.strip() for line in branches_file.read_text().splitlines() if line.strip()
+    ]
     if len(branches) < 2:
         print(f"error: need at least 2 branches, got {len(branches)}", file=sys.stderr)
         return 2
@@ -192,10 +219,15 @@ def main() -> int:
         try:
             parsed = [int(x.strip()) for x in args.prs.split(",") if x.strip()]
         except ValueError as exc:
-            print(f"error: --prs must be comma-separated integers: {exc}", file=sys.stderr)
+            print(
+                f"error: --prs must be comma-separated integers: {exc}", file=sys.stderr
+            )
             return 2
         if len(parsed) != len(branches):
-            print(f"error: --prs has {len(parsed)} entries but branches-file has {len(branches)}", file=sys.stderr)
+            print(
+                f"error: --prs has {len(parsed)} entries but branches-file has {len(branches)}",
+                file=sys.stderr,
+            )
             return 2
         pr_numbers = parsed  # type: ignore[assignment]
 
@@ -212,7 +244,9 @@ def main() -> int:
     for a, b in pairs:
         key = f"{a} {b}"
         results[key] = _merge_tree_result(
-            args.base, a, b,
+            args.base,
+            a,
+            b,
             git_cwd=args.git_cwd,
             pr_a=branch_to_pr[a],
             pr_b=branch_to_pr[b],
@@ -223,7 +257,9 @@ def main() -> int:
     conflicts = sum(1 for v in results.values() if v.get("conflict"))
     clean = sum(1 for v in results.values() if v.get("clean"))
     symbol_conflict_pairs = sum(1 for v in results.values() if v.get("symbol_overlaps"))
-    print(f"Done: {clean} clean, {conflicts} textual-conflict, {symbol_conflict_pairs} symbol-overlapping, {len(pairs)} total")
+    print(
+        f"Done: {clean} clean, {conflicts} textual-conflict, {symbol_conflict_pairs} symbol-overlapping, {len(pairs)} total"
+    )
 
     # Human-readable summary
     for key, r in results.items():

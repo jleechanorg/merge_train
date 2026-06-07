@@ -27,7 +27,6 @@ def test_v03_agent_transcripts_have_checksum_sidecars() -> None:
     assert missing == []
 
 
-
 def test_v03_checksums_cover_all_required_artifact_files() -> None:
     checksum_lines = (EVIDENCE_V03 / "checksums.txt").read_text().splitlines()
     checksum_paths = {

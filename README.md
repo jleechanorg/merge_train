@@ -116,9 +116,9 @@ prs:
     symbols: {hello.py: [greet]}
 EOF
 
-# 3. Check-and-reserve lock at spawn time
+# 3. Check for conflicts at spawn time
 acquire --plan pr_domain_locks.yaml --registry file_domains.yaml --branch feat/level-up --agent claude-2 mvp_site/world_logic.py
-# exit 0 = free, writes lock reservation to pr_domain_locks.yaml; 1 = held/conflict
+# exit 0 = free (no conflicts); 1 = held/conflict
 ```
 
 ## Symbol-Level Locks (Sub-File Granularity)
@@ -172,7 +172,7 @@ prs:
 - Spawn-time collisions when two agents try to reserve the same domain/symbol scope.
 - Same-file Python, TypeScript, and Go edits when agents reserve disjoint symbols.
 - Local commits touching domains held by another PR, when the pre-commit hook is installed.
-- Concurrent lock plan writes, because writes are serialized with `flock(2)` on the plan file.
+- Concurrent checks, because checks are serialized with `flock(2)` on the advisory lock file.
 
 ## What is Not Protected
 

@@ -144,7 +144,7 @@ class PRSpec:
 
     ``symbols_by_file`` maps an entry of ``files`` to its touched-symbol
     set. Missing entries are treated as whole-file edits (fail-closed),
-    matching the same semantics as ``domain_lock check --diff-mode``.
+    matching the same semantics as ``predict-conflicts``.
     """
 
     pr: int

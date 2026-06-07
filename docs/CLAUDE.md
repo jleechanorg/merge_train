@@ -48,7 +48,7 @@ After any non-trivial change, spawn the `code-review` subagent with adversarial 
 ## File-touch sensitivity (this repo's own domains)
 
 Production code lives in `merge_train/`:
-- `acquire.py` — atomic check-and-reserve CLI
+- `acquire.py` — atomic check CLI
 - `predict.py` — conflict prediction engine
 - `symbols.py` — Python AST symbol resolution + git-diff hunk parser
 - `lang_extractors.py` — Multi-language symbol extraction (TS/Go/etc.)
