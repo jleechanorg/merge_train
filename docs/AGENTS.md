@@ -6,85 +6,47 @@ Recipes for AI agents working with this repo. Two audiences below — pick one.
 
 ## A. Agents *using* `merge_train` as a spawn / pre-commit gate
 
-You're an agent (Aider / OpenHands / Devin / Claude / Codex / AO worker) about to modify someone else's code. Before you spawn a task or commit a change, gate your work through `merge_train` so two of you don't trample the same file.
+You're an agent (Aider / OpenHands / Devin / Claude / Codex / AO worker) about to modify someone else's code. Before you spawn a task or commit a change, gate your work through `merge_train` so two of you don't trample the same file/symbol scope.
 
-### Minimum integration (3 calls)
+The upstream `merge_train` package installs two CLI scripts:
+1. `acquire` — check-and-reserve tool (spawn-time hook)
+2. `predict-conflicts` — read-only pairwise analysis tool (pre-commit / CI gate)
 
-```bash
-# 1. PRE-SPAWN: refuse to start if the file is held
-domain_lock check --files mvp_site/world_logic.py --pr 7000
-test $? -eq 0 || { echo "REFUSE: file held by another PR"; exit 1; }
+### Minimum integration (spawn time)
 
-# 2. RESERVE: claim it before writing
-domain_lock reserve --domain level_up_core \
-  --pr 7000 --agent $(whoami) --branch feat/dice-fix
-
-# 3. RELEASE: after PR merges (or you give up)
-domain_lock release --pr 7000
-```
-
-### Symbol-level locking (preferred when two agents need the same file)
+At spawn time, run `acquire` against the in-flight plan:
 
 ```bash
-# Reserve only the functions you'll modify
-domain_lock reserve --domain level_up_core \
-  --symbols compute_dice,_roll_die \
-  --pr 7000 --agent claude-1 --branch feat/dice-fix
+# 1. PRE-SPAWN check-and-reserve:
+acquire --plan pr_domain_locks.yaml \
+        --registry file_domains.yaml \
+        --branch feat/dice-fix \
+        --agent $(whoami) \
+        mvp_site/world_logic.py
+
+test $? -eq 0 || { echo "REFUSE: file/domain held or conflicts with another PR"; exit 1; }
 ```
 
-Other agents can co-tenant the same domain if their symbol sets don't overlap.
+If successful, `acquire` writes the branch's reservation to the plan file (`pr_domain_locks.yaml`).
 
-At commit time, use `--diff-mode` to scope the check to the staged diff's symbols (not the whole file):
+### Symbol-level check (commit time / pre-commit hook)
+
+To predict conflicts before committing, run `predict-conflicts` (which automatically checks staged symbol diffs when running inside a git repo):
 
 ```bash
-git add mvp_site/world_logic.py
-domain_lock check --files mvp_site/world_logic.py --pr 7000 --diff-mode
+# 2. PRE-COMMIT check:
+predict-conflicts --plan pr_domain_locks.yaml --registry file_domains.yaml
 ```
 
-### Multi-domain task (use `reserve-plan`)
-
-If your task touches several domains, **don't** call `reserve` in a loop — it's not atomic. Use `reserve-plan` so either all legs succeed or none do:
-
-```yaml
-# plan.yaml
-plan:
-  - domain: level_up_core
-    symbols: [level_up]
-  - domain: agents
-    symbols: [Agent.tick]
-```
-
-```bash
-domain_lock reserve-plan --pr 7000 --agent claude-1 \
-  --branch feat/cross-domain --plan plan.yaml
-```
-
-### Working from a different git worktree
-
-If your `cwd` is a worktree (`~/.agent-orchestrator/.../worker-foo/`) but the canonical repo is elsewhere, pass `--git-cwd` so the right remote-hash resolves the log path:
-
-```bash
-domain_lock --git-cwd /path/to/main/repo \
-  check --files mvp_site/world_logic.py --pr 7000
-```
-
-`--git-cwd` works **before or after** the subcommand — both shapes parse (see commit `ce47114` for the backward-compat fix).
-
-### How to respond to a `DENIED` / exit 1
-
-You hit `HELD: <domain> by PR#<N> agent=<who> branch=<b>`. **Do not retry, do not force.** Three legitimate responses:
-
-1. **Pick a different scope.** Reserve a sibling domain or disjoint symbols on the same file.
-2. **Wait.** Re-check in a few minutes; the holder may release.
-3. **Coordinate.** Ping the holder PR / agent. Many domains can be re-scoped to symbols if you ask.
+If the staged changes conflict with any *other* PR in the plan, `predict-conflicts` exits with `1` and prints the conflicting PR numbers and symbols.
 
 ### Exit codes (memorize these)
 
 | Code | Meaning | Agent action |
 |---|---|---|
-| 0 | free / reserved / released | proceed |
-| 1 | held (collision) | refuse spawn / commit |
-| 2 | config error (missing registry, bad args) | fix the call, do not retry blindly |
+| 0 | free / allowed / successfully acquired | proceed |
+| 1 | held / conflict | refuse spawn / commit |
+| 2 | config error (missing plan, bad args) | fix the call, do not retry blindly |
 
 ---
 
@@ -95,17 +57,15 @@ You're working on this codebase. Rules:
 ### Test discipline
 
 ```bash
-python -m pytest tests/ -q       # must stay green, currently 134 passed
+pytest       # must stay green, currently 239 passed
 ```
 
-- Add a regression test for every bug fix. Existing pattern: `tests/test_domain_lock.py` for parser/CLI, `tests/test_symbol_locks.py` for symbol resolution, `tests/test_reserve_plan.py` for atomic plans.
-- Concurrency claims need a `multiprocessing.Pool`-style test (see `test_concurrent_reserve_only_one_wins`).
+- Add a regression test for every bug fix.
+- Existing tests: `tests/test_acquire_files.py` (acquire CLI), `tests/test_predict.py` (predict-conflicts CLI), `tests/test_symbols.py` (AST symbol unit tests), `tests/test_lang_extractors.py` (multi-language parser checks).
 
 ### Style
 
 - No new dependencies beyond `PyYAML` without explicit approval.
-- CLI subcommands re-register the three global flags (`--registry`, `--log`, `--git-cwd`) via `_add_global_opts_to_subparser` so both positions parse. New subcommands must follow this pattern.
-- Lock-log writes go through `LockLog.append()` — never write JSONL by hand. `append()` holds `flock(2)`.
 - CLI exit codes: 0 (success), 1 (collision/held), 2 (config error). Don't invent new codes.
 
 ### Push policy
@@ -122,26 +82,17 @@ When fixing a non-trivial bug or shipping a feature, drop a bundle at `/tmp/merg
 
 The `/es` (evidence-standards) and `/er` (evidence-reviewer) skills audit these bundles — both must `PASS` for non-trivial work.
 
-### Adversarial review
-
-For any non-trivial change, spawn a `code-review` subagent with adversarial framing (find real problems, not nits). Address `CRITICAL` and `MAJOR` findings before declaring done. Pattern in `/tmp/merge_train_evidence/proofs/parser_compat_fix/` (commit `ce47114` → review → follow-up `15e2d0c`).
-
 ---
 
 ## C. Useful one-liners
 
 ```bash
-# What's currently held in this repo?
-domain_lock list --status active --json | jq
+# Predict conflicts for an in-flight plan:
+predict-conflicts --plan pr_domain_locks.yaml --registry file_domains.yaml
 
-# Full audit (registry + log) for debugging
-domain_lock audit | jq
+# Run predict-conflicts emitting JSON output:
+predict-conflicts --plan pr_domain_locks.yaml --registry file_domains.yaml --json | jq
 
-# Where will the log actually be written?
-python -c "from merge_train.domain_lock import _resolve_default_log; print(_resolve_default_log())"
-
-# Smoke-test the parser-compat fix
-python -m merge_train.domain_lock check --files mvp_site/world_logic.py \
-  --registry examples/file_domains.yaml --log /tmp/d.jsonl --git-cwd /tmp
-# expected: FREE: 1 domain(s) clear (level-up-pipeline)
+# Acquire files programmatically:
+python -m merge_train.acquire --plan pr_domain_locks.yaml --branch feat/test-branch --agent my-agent file1.py
 ```

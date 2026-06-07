@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **CLI surface** (`domain_lock`): Deleted the `domain_lock` CLI stack (`reserve`, `reserve-plan`, `release`, `check`, `list`, `audit`), replacing it with two standalone binaries: `acquire` and `predict-conflicts`.
+- **Log file**: Removed the persistent jsonl lock log (`pr_domain_locks.jsonl`). Declarative plan file (`pr_domain_locks.yaml`) is now the single source of truth.
+- **Workflow**: Deleted the `release-domain-lock-on-merge` GitHub Actions workflow.
+
+### Changed
+
+- **Docs & Hooks**: Cleaned up stale `domain_lock` references in documentation (`README.md`, `docs/AGENTS.md`, `docs/CLAUDE.md`) and hooks.
+
 ## [0.1.0] — 2026-05-18
+
 
 First MVP release. Spawn-time file-domain lock registry for AI-agent PR pipelines.
 

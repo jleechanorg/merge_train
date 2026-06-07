@@ -2,7 +2,7 @@
 
 Resolves which top-level Python symbols (functions, classes, methods) are
 touched by a set of file modifications. Powers symbol-level reservations
-in :mod:`merge_train.domain_lock` — two PRs editing the same file but
+in :mod:`merge_train.predict` — two PRs editing the same file but
 disjoint symbols both proceed; overlapping symbols collide.
 
 Python files are parsed with the stdlib :mod:`ast` module. Non-Python

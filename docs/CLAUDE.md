@@ -14,8 +14,8 @@ This file (`docs/CLAUDE.md`) only carries the Claude-specific deltas.
 ## Quick facts
 
 - **Package:** `merge_train` (installable via `pip install -e .`)
-- **CLI:** `domain_lock {reserve, reserve-plan, release, check, list, audit}`
-- **Tests:** `python -m pytest tests/ -q` — must stay green (currently 134).
+- **CLI:** `predict-conflicts` (standalone) and `acquire` (standalone)
+- **Tests:** `pytest` — must stay green (currently 239).
 - **Git remote:** `https://github.com/jleechanorg/merge_train.git`
 - **Main branch:** `main` (no PR pipeline for this repo yet; commits land on main directly).
 
@@ -31,7 +31,7 @@ A spawn-time file-domain lock registry. Stops two AI agents from grabbing the sa
 
 ## Test before push
 
-Every commit on `main` must pass `python -m pytest tests/ -q`. No exceptions — there is no CI yet for this repo, so the local pytest is the only gate.
+Every commit on `main` must pass `pytest`. No exceptions — there is no CI yet for this repo, so the local pytest is the only gate.
 
 ## Evidence convention
 
@@ -48,16 +48,21 @@ After any non-trivial change, spawn the `code-review` subagent with adversarial 
 ## File-touch sensitivity (this repo's own domains)
 
 Production code lives in `merge_train/`:
-- `domain_lock.py` — CLI + registry + lock log + reserve/release/check
+- `acquire.py` — atomic check-and-reserve CLI
+- `predict.py` — conflict prediction engine
 - `symbols.py` — Python AST symbol resolution + git-diff hunk parser
+- `lang_extractors.py` — Multi-language symbol extraction (TS/Go/etc.)
+- `symbol_discovery.py` — Symbol database discovery
+- `hook_install.py` — Hooks installer
 
 Tests pair 1:1 with module concerns:
-- `tests/test_domain_lock.py` — CLI/parser/log
-- `tests/test_symbol_locks.py` — sub-file symbol-level integration
+- `tests/test_acquire_files.py` — acquire unit tests
+- `tests/test_predict.py` — predict-conflicts unit tests
 - `tests/test_symbols.py` — AST-symbol unit tests
-- `tests/test_reserve_plan.py` — atomic multi-domain plans
-
-When adding a new CLI subcommand, remember to call `_add_global_opts_to_subparser(sp)` so `--registry`, `--log`, `--git-cwd` parse on either side.
+- `tests/test_lang_extractors.py` — language parser tests
+- `tests/test_hook_install.py` — hook installation checks
+- `tests/test_evidence_bundle.py` — evidence bundle schema validation
+- `tests/test_domain_recommender.py` — domain recommender checks
 
 ## Roadmap discipline
 
