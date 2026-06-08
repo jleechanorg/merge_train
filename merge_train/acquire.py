@@ -263,11 +263,11 @@ def acquire_flock(
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except (BlockingIOError, OSError):
+            except (BlockingIOError, OSError) as e:
                 if time.monotonic() >= deadline:
                     raise LockAcquireError(
                         f"could not acquire flock on {lock_path} within {timeout_seconds}s"
-                    )
+                    ) from e
                 time.sleep(0.05)
         yield fd
     finally:
@@ -471,7 +471,7 @@ def _load_from_prs(
     try:
         pr_numbers = [int(x.strip()) for x in from_prs.split(",") if x.strip()]
     except ValueError as exc:
-        raise ValueError(f"--from-prs must be comma-separated integers: {exc}")
+        raise ValueError(f"--from-prs must be comma-separated integers: {exc}") from exc
     specs, failed = _load_specs_from_github(pr_numbers, repo)
     if failed:
         raise ValueError(

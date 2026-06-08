@@ -442,10 +442,9 @@ def test_cli_mapped_no_conflict_exit0(tmp_path: Path, reg_file: Path, monkeypatc
         ],
     )
     lock = tmp_path / "acquire.lock"
-    cmd = _build_cli_env(plan, reg_file, lock, ["a.py"])
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
-    assert "Decision: allow" in r.stdout
+    rc, stdout, stderr = _run_cli(plan, reg_file, lock, ["a.py"])
+    assert rc == 0, stderr
+    assert "Decision: allow" in stdout
 
 
 def test_cli_mapped_with_conflict_exit1(tmp_path: Path, reg_file: Path, monkeypatch):
@@ -509,10 +508,9 @@ def test_cli_unmapped_uses_fallback(tmp_path: Path, reg_file: Path, monkeypatch)
         ],
     )
     lock = tmp_path / "acquire.lock"
-    cmd = _build_cli_env(plan, reg_file, lock, ["data/blob.bin"])
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
-    assert "fallback" in r.stdout
+    rc, stdout, stderr = _run_cli(plan, reg_file, lock, ["data/blob.bin"])
+    assert rc == 0, stderr
+    assert "fallback" in stdout
 
 
 def test_cli_mixed_mapped_and_unmapped(tmp_path: Path, reg_file: Path, monkeypatch):
@@ -532,11 +530,10 @@ def test_cli_mixed_mapped_and_unmapped(tmp_path: Path, reg_file: Path, monkeypat
         ],
     )
     lock = tmp_path / "acquire.lock"
-    cmd = _build_cli_env(plan, reg_file, lock, ["src/foo.py", "data/blob.bin"])
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
-    assert "src/foo.py" in r.stdout
-    assert "data/blob.bin" in r.stdout
+    rc, stdout, stderr = _run_cli(plan, reg_file, lock, ["src/foo.py", "data/blob.bin"])
+    assert rc == 0, stderr
+    assert "src/foo.py" in stdout
+    assert "data/blob.bin" in stdout
 
 
 def test_cli_atomic_partial_conflict_denies_all(
@@ -664,26 +661,23 @@ def test_cli_json_deny_includes_conflicts(tmp_path: Path, reg_file: Path, monkey
 def test_cli_missing_plan_exit2(tmp_path: Path, reg_file: Path):
     plan = tmp_path / "missing.yaml"
     lock = tmp_path / "acquire.lock"
-    cmd = _build_cli_env(plan, reg_file, lock, ["a.py"])
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    assert r.returncode == 2
+    rc, stdout, stderr = _run_cli(plan, reg_file, lock, ["a.py"])
+    assert rc == 2
 
 
 def test_cli_malformed_plan_exit2(tmp_path: Path, reg_file: Path):
     plan = tmp_path / "bad.yaml"
     plan.write_text("this is: : not valid: yaml: [")
     lock = tmp_path / "acquire.lock"
-    cmd = _build_cli_env(plan, reg_file, lock, ["a.py"])
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    assert r.returncode == 2
+    rc, stdout, stderr = _run_cli(plan, reg_file, lock, ["a.py"])
+    assert rc == 2
 
 
 def test_cli_no_files_exit2(tmp_path: Path, reg_file: Path):
     plan = _write_plan(tmp_path, [])
     lock = tmp_path / "acquire.lock"
-    cmd = _build_cli_env(plan, reg_file, lock, [])
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    assert r.returncode == 2
+    rc, stdout, stderr = _run_cli(plan, reg_file, lock, [])
+    assert rc == 2
 
 
 def test_cli_branch_and_agent_propagate(tmp_path: Path, reg_file: Path, monkeypatch):
@@ -696,7 +690,7 @@ def test_cli_branch_and_agent_propagate(tmp_path: Path, reg_file: Path, monkeypa
 
     plan = _write_plan(tmp_path, [{"pr": 1, "branch": "b1", "files": ["other.py"]}])
     lock = tmp_path / "acquire.lock"
-    cmd = _build_cli_env(
+    rc, stdout, stderr = _run_cli(
         plan,
         reg_file,
         lock,
@@ -704,10 +698,9 @@ def test_cli_branch_and_agent_propagate(tmp_path: Path, reg_file: Path, monkeypa
         branch="feat/x",
         agent="claude-code",
     )
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
-    assert "branch=feat/x" in r.stdout
-    assert "agent=claude-code" in r.stdout
+    assert rc == 0, stderr
+    assert "branch=feat/x" in stdout
+    assert "agent=claude-code" in stdout
 
 
 # --------------------------------------------------------------------------- #
@@ -715,7 +708,7 @@ def test_cli_branch_and_agent_propagate(tmp_path: Path, reg_file: Path, monkeypa
 # --------------------------------------------------------------------------- #
 
 
-def test_flock_serializes_concurrent_invocations(tmp_path: Path, monkeypatch):
+def test_flock_serializes_concurrent_invocations(tmp_path: Path):
     """Two concurrent ``acquire`` invocations on the same lock path must
     serialize: the second waits for the first to release."""
     from merge_train import acquire as acquire_mod
@@ -782,21 +775,8 @@ def test_no_flock_skips_lock_file(tmp_path: Path, monkeypatch):
     reg.write_text(yaml.safe_dump({"domains": {}}))
     nonexistent_lock = tmp_path / "should_not_appear.lock"
 
-    cmd = [
-        sys.executable,
-        "-m",
-        CLI_MODULE,
-        "--plan",
-        str(plan),
-        "--registry",
-        str(reg),
-        "--lock-path",
-        str(nonexistent_lock),
-        "--no-flock",
-        "a.py",
-    ]
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
+    rc, stdout, stderr = _run_cli(plan, reg, nonexistent_lock, ["a.py"])
+    assert rc == 0, stderr
     assert (
         not nonexistent_lock.exists()
     ), "lock file should not be created with --no-flock"
@@ -837,3 +817,33 @@ def test_decide_empty_files_is_allow(monkeypatch):
     )
     assert result.decision == "allow"
     assert list(result.conflicts) == []
+
+
+def test_from_prs_exception_chaining():
+    from merge_train import acquire as acquire_mod
+    import pytest
+
+    with pytest.raises(ValueError) as excinfo:
+        acquire_mod._load_from_prs("invalid_pr", None)
+    assert excinfo.value.__cause__ is not None
+
+
+def test_lock_acquire_exception_chaining(tmp_path):
+    from merge_train import acquire as acquire_mod
+    import pytest
+    import os
+    import fcntl
+
+    lock_path = tmp_path / "test.lock"
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        with pytest.raises(acquire_mod.LockAcquireError) as excinfo:
+            with acquire_mod.acquire_flock(
+                lock_path, timeout_seconds=0.01, enabled=True
+            ):
+                pass
+        assert excinfo.value.__cause__ is not None
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
