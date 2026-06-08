@@ -43,7 +43,6 @@ from merge_train.symbols import (
     touched_symbols_for_staged_file,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Exit codes — match the project-wide contract (0 ok, 1 held, 2 config)
 # --------------------------------------------------------------------------- #
@@ -203,9 +202,7 @@ def decide(
             continue
         other_pr = pc.pr_b if pc.pr_a == _SYNTHETIC_CANDIDATE_PR else pc.pr_a
         # Surface up to one domain conflict and one textual per pair.
-        first_dc = next(
-            (dc for dc in pc.domain_conflicts if not dc.advisory), None
-        )
+        first_dc = next((dc for dc in pc.domain_conflicts if not dc.advisory), None)
         first_tc = pc.textual_conflicts[0] if pc.textual_conflicts else None
         if first_dc is not None:
             conflicts.append(_conflict_to_dict(first_dc, None, other_pr))
@@ -266,11 +263,11 @@ def acquire_flock(
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except (BlockingIOError, OSError):
+            except (BlockingIOError, OSError) as e:
                 if time.monotonic() >= deadline:
                     raise LockAcquireError(
                         f"could not acquire flock on {lock_path} within {timeout_seconds}s"
-                    )
+                    ) from e
                 time.sleep(0.05)
         yield fd
     finally:
@@ -294,9 +291,7 @@ DEFAULT_LOCK_PATH = Path.home() / ".merge_train" / "acquire.lock"
 
 
 def _print_human(result: AcquireResult) -> None:
-    print(
-        f"acquire: branch={result.candidate_branch} agent={result.candidate_agent}"
-    )
+    print(f"acquire: branch={result.candidate_branch} agent={result.candidate_agent}")
     print(f"  Resolved {len(result.files)}/{len(result.files)} files.")
     for path in result.files:
         syms = result.resolved.get(path, [])
@@ -308,9 +303,7 @@ def _print_human(result: AcquireResult) -> None:
         else:
             print(f"  {path}\t-> (no touched symbols)")
     if result.in_flight_prs:
-        print(
-            f"  In-flight PRs: {','.join(str(p) for p in result.in_flight_prs)}"
-        )
+        print(f"  In-flight PRs: {','.join(str(p) for p in result.in_flight_prs)}")
     if result.decision == "allow":
         print("  Decision: allow (exit 0)")
     else:
@@ -337,52 +330,68 @@ def main(argv: Optional[list[str]] = None) -> int:
             "can be acquired without conflicting with the in-flight PR set."
         ),
     )
-    parser.add_argument(
-        "files", nargs="*", help="Files to acquire (one or more)."
-    )
+    parser.add_argument("files", nargs="*", help="Files to acquire (one or more).")
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument(
-        "--plan", metavar="FILE",
+        "--plan",
+        metavar="FILE",
         help="YAML/JSON file declaring the in-flight PR set.",
     )
     source.add_argument(
-        "--from-prs", metavar="N,N,...",
+        "--from-prs",
+        metavar="N,N,...",
         help="Comma-separated PR numbers to fetch from GitHub.",
     )
     parser.add_argument(
-        "--registry", metavar="FILE", default=None,
+        "--registry",
+        metavar="FILE",
+        default=None,
         help="Optional YAML domain registry.",
     )
     parser.add_argument(
-        "--repo", metavar="OWNER/REPO", default=None,
+        "--repo",
+        metavar="OWNER/REPO",
+        default=None,
         help="GitHub repo for --from-prs and symbol enrichment.",
     )
     parser.add_argument(
-        "--branch", default="acquire",
+        "--branch",
+        default="acquire",
         help="Branch name requesting acquisition (default: acquire).",
     )
     parser.add_argument(
-        "--agent", default="acquire",
+        "--agent",
+        default="acquire",
         help="Agent name requesting acquisition (default: acquire).",
     )
     parser.add_argument(
-        "--json", action="store_true", dest="json_output",
+        "--json",
+        action="store_true",
+        dest="json_output",
         help="Emit JSON output instead of human-readable text.",
     )
     parser.add_argument(
-        "--lock-path", metavar="FILE", default=str(DEFAULT_LOCK_PATH),
+        "--lock-path",
+        metavar="FILE",
+        default=str(DEFAULT_LOCK_PATH),
         help=f"Path for the advisory flock (default: {DEFAULT_LOCK_PATH}).",
     )
     parser.add_argument(
-        "--lock-timeout", metavar="SECONDS", type=float, default=30.0,
+        "--lock-timeout",
+        metavar="SECONDS",
+        type=float,
+        default=30.0,
         help="How long to wait for the flock (default: 30).",
     )
     parser.add_argument(
-        "--no-flock", action="store_true",
+        "--no-flock",
+        action="store_true",
         help="Skip the advisory flock (for tests/CI).",
     )
     parser.add_argument(
-        "--git-cwd", metavar="DIR", default=None,
+        "--git-cwd",
+        metavar="DIR",
+        default=None,
         help="Working directory for git commands (symbol resolution).",
     )
 
@@ -458,13 +467,16 @@ def _load_from_prs(
 ) -> list[PRSpec]:
     """Fetch in-flight PR specs from GitHub via ``gh``."""
     from merge_train.predict import _load_specs_from_github
+
     try:
         pr_numbers = [int(x.strip()) for x in from_prs.split(",") if x.strip()]
     except ValueError as exc:
-        raise ValueError(f"--from-prs must be comma-separated integers: {exc}")
+        raise ValueError(f"--from-prs must be comma-separated integers: {exc}") from exc
     specs, failed = _load_specs_from_github(pr_numbers, repo)
     if failed:
-        raise ValueError(f"could not load requested PRs: {','.join(str(p) for p in failed)}")
+        raise ValueError(
+            f"could not load requested PRs: {','.join(str(p) for p in failed)}"
+        )
     if not specs:
         raise ValueError("no PRs could be loaded from GitHub")
     return specs

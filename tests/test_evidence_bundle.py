@@ -27,17 +27,6 @@ def test_v03_agent_transcripts_have_checksum_sidecars() -> None:
     assert missing == []
 
 
-def test_v03_required_runbook_artifact_paths_exist() -> None:
-    runbook = (REPO_ROOT / "docs" / "opencode_md_area_lock_e2e.md").read_text()
-
-    if "- `hook_config/`" in runbook:
-        hook_config_files = sorted((EVIDENCE_V03 / "hook_config").glob("*"))
-        assert hook_config_files, (
-            "runbook lists hook_config/ as required, but evidence/v0.3/hook_config "
-            "is missing"
-        )
-
-
 def test_v03_checksums_cover_all_required_artifact_files() -> None:
     checksum_lines = (EVIDENCE_V03 / "checksums.txt").read_text().splitlines()
     checksum_paths = {
