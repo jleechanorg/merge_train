@@ -26,9 +26,9 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 if [[ -z "$REPO_ROOT" ]]; then exit 0; fi
 
 REGISTRY="${MERGE_TRAIN_REGISTRY:-$REPO_ROOT/file_domains.yaml}"
-if [[ ! -f "$REGISTRY" ]]; then
-  # No domain registry — skip silently
-  exit 0
+REGISTRY_ARG=()
+if [[ -f "$REGISTRY" ]]; then
+  REGISTRY_ARG=(--registry "$REGISTRY")
 fi
 
 # ── Resolve predict-conflicts CLI ─────────────────────────────────────────────
@@ -86,7 +86,7 @@ fi
 echo "merge_train: pre-commit — predicting conflicts across PRs: $OPEN_PRS ..." >&2
 
 PREDICT_JSON="$(eval "$CLI_PREFIX" \
-  --registry "$REGISTRY" \
+  "${REGISTRY_ARG[@]}" \
   predict-conflicts \
   --from-prs "$OPEN_PRS" \
   "${REPO_ARG[@]}" \

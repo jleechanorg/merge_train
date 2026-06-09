@@ -16,9 +16,6 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 if [[ -z "$REPO_ROOT" ]]; then exit 0; fi
 
-# Bail fast if no domain registry
-if [[ ! -f "$REPO_ROOT/file_domains.yaml" ]]; then exit 0; fi
-
 # Per-session sentinel: only run once per repo+session combination
 REPO_HASH="$(echo "$REPO_ROOT" | md5 -q 2>/dev/null || echo "$REPO_ROOT" | md5sum 2>/dev/null | cut -d' ' -f1)"
 SESSION_KEY="${ANTIGRAVITY_SESSION_ID:-${AO_SESSION_ID:-$$}}"
@@ -33,8 +30,19 @@ touch "$SENTINEL"
 MERGE_TRAIN_AGENT="${AO_SESSION_ID:+antigravity-${AO_SESSION_ID}}"
 export MERGE_TRAIN_AGENT
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SPAWN_CHECK="$SCRIPT_DIR/predict-spawn-check.sh"
+# Locate the global installed predict-spawn-check.sh, falling back to sibling path
+SPAWN_CHECK="$HOME/.local/bin/predict-spawn-check.sh"
+if [[ ! -f "$SPAWN_CHECK" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  SPAWN_CHECK="$SCRIPT_DIR/predict-spawn-check.sh"
+fi
+
+# Ensure we don't call ourselves recursively
+if [[ -f "$SPAWN_CHECK" ]] && [[ "$(realpath "$SPAWN_CHECK")" == "$(realpath "${BASH_SOURCE[0]}")" ]]; then
+  # If we resolved to ourselves, we cannot run
+  exit 0
+fi
+
 if [[ ! -f "$SPAWN_CHECK" ]]; then
   # merge_train not fully installed — skip silently
   exit 0

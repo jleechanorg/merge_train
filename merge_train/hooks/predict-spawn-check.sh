@@ -27,9 +27,9 @@ if [[ -z "$REPO_ROOT" ]]; then
 fi
 
 REGISTRY="${MERGE_TRAIN_REGISTRY:-$REPO_ROOT/file_domains.yaml}"
-if [[ ! -f "$REGISTRY" ]]; then
-  # No domain registry in this repo — skip silently
-  exit 0
+REGISTRY_ARG=()
+if [[ -f "$REGISTRY" ]]; then
+  REGISTRY_ARG=(--registry "$REGISTRY")
 fi
 
 if [[ -z "${MERGE_TRAIN_FILES:-}" ]]; then
@@ -91,7 +91,7 @@ fi
 echo "merge_train: predicting conflicts across open PRs: $OPEN_PRS ..." >&2
 
 PREDICT_JSON="$(eval "$CLI_PREFIX" \
-  --registry "$REGISTRY" \
+  "${REGISTRY_ARG[@]}" \
   predict-conflicts \
   --from-prs "$OPEN_PRS" \
   "${REPO_ARG[@]}" \
