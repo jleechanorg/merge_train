@@ -74,7 +74,7 @@ def main():
     enforcement = False
     if repo_name == "merge_train":
         enforcement = True
-    elif repo_name in ["jleechanclaw", "agent-orchestrator", "worldarchitect.ai"]:
+    elif repo_name in ["workspace", "jleechanclaw", "agent-orchestrator", "worldarchitect.ai"]:
         enforcement = False
     else:
         # Default warn-only
@@ -95,6 +95,8 @@ def main():
         ["git", "branch", "--show-current"],
         capture_output=True, text=True, check=False
     ).stdout.strip()
+
+    print(f"merge_train: checking conflicts for '{rel_path}' (branch '{current_branch}')...", file=sys.stderr)
 
     # Detect remote repo OWNER/REPO
     repo_remote = ""
@@ -155,12 +157,14 @@ def main():
                     "timestamp": time.time(),
                     "prs": prs_data
                 }))
-        except Exception:
+        except Exception as e:
+            print(f"merge_train: checked '{rel_path}' — conflict check skipped due to error: {e}", file=sys.stderr)
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
             return
 
     if not prs_data:
         # No other open PRs, allow
+        print(f"merge_train: checked '{rel_path}' — no conflicts found (no other open PRs).", file=sys.stderr)
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
         return
 
@@ -236,6 +240,7 @@ def main():
             return
 
     # No conflicts
+    print(f"merge_train: checked '{rel_path}' — no conflicts found.", file=sys.stderr)
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
 
 if __name__ == "__main__":
