@@ -146,6 +146,7 @@ _HOOK_NAMES=(
     "predict-spawn-check.sh"
     "conflict-warn-pre-tool.sh"
     "gemini-conflict-warn.sh"
+    "conflict_check_helper.py"
 )
 echo "[1b/5] Installing hook scripts to $HOOKS_INSTALL_DIR..."
 for _hname in "${_HOOK_NAMES[@]}"; do
