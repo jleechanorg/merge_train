@@ -49,6 +49,7 @@ ALL_HOOK_SCRIPTS: tuple[str, ...] = (
     "predict-spawn-check.sh",
     "conflict-warn-pre-tool.sh",
     "gemini-conflict-warn.sh",
+    "conflict_check_helper.py",
 )
 
 #: Canonical install dir for hook scripts. ``$HOME/.local/bin`` is on

@@ -68,5 +68,5 @@ where = ["."]
 include = ["merge_train*"]
 
 [tool.setuptools.package-data]
-merge_train = ["hooks/*.sh"]
+merge_train = ["hooks/*.sh", "hooks/*.py"]
 
