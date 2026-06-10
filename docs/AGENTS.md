@@ -48,6 +48,26 @@ If the staged changes conflict with any *other* PR in the plan, `predict-conflic
 | 1 | held / conflict | refuse spawn / commit |
 | 2 | config error (missing plan, bad args) | fix the call, do not retry blindly |
 
+### Per-repo enforcement config (Claude Code hook)
+
+The Claude Code PreToolUse hook (`conflict-warn-pre-tool.sh`) reads `~/merge_train/config.json` to decide whether a conflict should **block**, **warn-only**, or **allow**. No per-repo install needed — one user-scope wiring covers every repo you work in.
+
+```bash
+# Initialise the config file (idempotent):
+merge_train config init
+
+# Add or update a repo entry:
+merge_train config add /path/to/myrepo --enforce block
+merge_train config add /path/to/other  --enforce warn --alias other
+
+# Inspect / remove:
+merge_train config show
+merge_train config show /path/to/myrepo
+merge_train config remove /path/to/other
+```
+
+If the file is missing, the hook falls back to a built-in default (`merge_train` = block, everything else = warn), so existing installs keep working.
+
 ---
 
 ## B. Agents *modifying* `merge_train` itself

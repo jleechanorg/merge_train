@@ -325,6 +325,116 @@ def test_predict_unmapped_files_recorded(reg: Registry):
     assert plan.unmapped_files_by_pr == {1: ["some_unmapped_file.py"]}
 
 
+def test_predict_unmapped_files_symbol_level():
+    # Empty registry
+    empty_reg = Registry.empty()
+
+    # Disjoint symbols on same unmapped file => no conflict
+    specs_disjoint = [
+        PRSpec(
+            pr=1,
+            branch="b1",
+            files=("some_unmapped_file.py",),
+            symbols_by_file={"some_unmapped_file.py": frozenset({"foo"})},
+        ),
+        PRSpec(
+            pr=2,
+            branch="b2",
+            files=("some_unmapped_file.py",),
+            symbols_by_file={"some_unmapped_file.py": frozenset({"bar"})},
+        ),
+    ]
+    plan = predict_conflicts(specs_disjoint, empty_reg, include_textual=False)
+    assert all(not pc.is_conflict for pc in plan.pairwise_conflicts)
+    assert plan.parallel_batches == [[1, 2]]
+
+    # Overlapping symbols on same unmapped file => conflict
+    specs_overlap = [
+        PRSpec(
+            pr=1,
+            branch="b1",
+            files=("some_unmapped_file.py",),
+            symbols_by_file={"some_unmapped_file.py": frozenset({"foo"})},
+        ),
+        PRSpec(
+            pr=2,
+            branch="b2",
+            files=("some_unmapped_file.py",),
+            symbols_by_file={"some_unmapped_file.py": frozenset({"foo"})},
+        ),
+    ]
+    plan = predict_conflicts(specs_overlap, empty_reg, include_textual=False)
+    assert any(pc.is_conflict for pc in plan.pairwise_conflicts)
+
+
+def test_unmapped_file_becomes_implicit_file_domain(reg: Registry):
+    spec = PRSpec(
+        pr=1,
+        branch="b1",
+        files=("pkg/unmapped.py",),
+        symbols_by_file={"pkg/unmapped.py": frozenset({"foo"})},
+    )
+    entries = _spec_as_lock_entries(spec, reg)
+    assert len(entries) == 1
+    assert entries[0].domain == "file:pkg/unmapped.py"
+    assert entries[0].symbols == ["foo"]
+
+
+def test_unmapped_same_file_whole_file_side_conflicts(reg: Registry):
+    """A PR with no symbol info for an unmapped file locks the whole file."""
+    specs = [
+        PRSpec(pr=1, branch="b1", files=("pkg/unmapped.py",)),
+        PRSpec(
+            pr=2,
+            branch="b2",
+            files=("pkg/unmapped.py",),
+            symbols_by_file={"pkg/unmapped.py": frozenset({"bar"})},
+        ),
+    ]
+    plan = predict_conflicts(specs, reg, include_textual=False)
+    conflicts = [pc for pc in plan.pairwise_conflicts if pc.is_conflict]
+    assert len(conflicts) == 1
+    dc = conflicts[0].domain_conflicts[0]
+    assert dc.domain == "file:pkg/unmapped.py"
+    assert dc.symbols == ()  # whole-file lock
+
+
+def test_empty_registry_symbol_level_end_to_end():
+    """No registry at all: per-file symbol scopes drive the conflict graph."""
+    empty_reg = Registry.empty()
+    specs = [
+        PRSpec(
+            pr=1,
+            branch="b1",
+            files=("a.py", "b.py"),
+            symbols_by_file={
+                "a.py": frozenset({"f"}),
+                "b.py": frozenset({"g"}),
+            },
+        ),
+        PRSpec(
+            pr=2,
+            branch="b2",
+            files=("a.py",),
+            symbols_by_file={"a.py": frozenset({"f"})},
+        ),
+        PRSpec(
+            pr=3,
+            branch="b3",
+            files=("b.py",),
+            symbols_by_file={"b.py": frozenset({"h"})},
+        ),
+    ]
+    plan = predict_conflicts(specs, empty_reg, include_textual=False)
+    conflicting_pairs = {
+        frozenset((pc.pr_a, pc.pr_b))
+        for pc in plan.pairwise_conflicts
+        if pc.is_conflict
+    }
+    # 1<->2 collide on a.py::f; 1<->3 share b.py but disjoint symbols; 2<->3 disjoint files
+    assert conflicting_pairs == {frozenset((1, 2))}
+
+
 # --------------------------------------------------------------------------- #
 # JSON output shape
 # --------------------------------------------------------------------------- #

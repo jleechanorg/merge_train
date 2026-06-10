@@ -27,3 +27,6 @@ uv.lock
 # Session-local scratch research (sweep reports, throwaway analysis).
 # Promote useful helpers to scripts/ instead.
 scratch/
+# User-scope per-repo enforcement config (created by `merge_train config init`).
+# Machine-local: keeps block/warn/allow rules out of version control.
+config.json
