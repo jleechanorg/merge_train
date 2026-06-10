@@ -34,10 +34,25 @@ _HOOK_INSTALL_EXPORTS = (
     "test_hooks_for_agent",
 )
 
+# Names re-exported from merge_train.config (per-repo enforcement config)
+_CONFIG_EXPORTS = (
+    "CONFIG_FILENAME",
+    "VALID_ENFORCEMENT",
+    "config_path",
+    "default_config",
+    "load_config",
+    "save_config",
+    "add_repo",
+    "remove_repo",
+    "lookup_enforcement",
+    "get_repo_alias",
+)
+
 __all__ = (
     list(_PREDICT_EXPORTS)
     + list(_SYMBOL_DISCOVERY_EXPORTS)
     + list(_HOOK_INSTALL_EXPORTS)
+    + list(_CONFIG_EXPORTS)
 )
 
 
@@ -54,4 +69,8 @@ def __getattr__(name):
         from merge_train import hook_install
 
         return getattr(hook_install, name)
+    if name in _CONFIG_EXPORTS:
+        from merge_train import config
+
+        return getattr(config, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
