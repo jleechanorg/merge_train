@@ -252,7 +252,12 @@ def _spec_as_lock_entries(spec: PRSpec, registry: Registry) -> list[LockEntry]:
     union of touched symbols within the domain.
     """
     grouped = registry.domains_for_paths(spec.files)
-    grouped.pop("__unmapped__", None)
+    # Registry-free symbol detection: each unmapped file becomes its own
+    # implicit single-file domain ("file:<path>") so two PRs touching the
+    # same file still get symbol-level (or whole-file) conflict checks
+    # even when no domain registry maps it.
+    for path in grouped.pop("__unmapped__", []):
+        grouped.setdefault(f"file:{path}", []).append(path)
     entries: list[LockEntry] = []
     for domain, paths in grouped.items():
         agg: set[str] = set()
@@ -836,7 +841,10 @@ def _print_human(plan: Plan) -> None:
     print(f"PRs analyzed: {plan.input_prs}")
     if plan.unmapped_files_by_pr:
         for pr, files in plan.unmapped_files_by_pr.items():
-            print(f"  WARN: PR#{pr} touches unmapped files: {', '.join(files)}")
+            print(
+                f"  INFO: PR#{pr} files without a registry domain "
+                f"(checked as per-file scopes): {', '.join(files)}"
+            )
     conflicts = [pc for pc in plan.pairwise_conflicts if pc.is_conflict]
     advisory = [
         pc
