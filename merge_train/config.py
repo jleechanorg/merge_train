@@ -167,11 +167,18 @@ def add_repo(
 
 
 def remove_repo(repo_path: str, path: Optional[Path] = None) -> dict:
-    """Remove a repo entry. No-op if absent. Returns the updated config."""
+    """Remove a repo entry. Truly a no-op if absent (no file write).
+
+    Returns the (possibly unchanged) config dict. This matters for fresh
+    installs: ``merge_train config remove /typo/path`` should not create
+    the config file just to record the absent removal.
+    """
     cfg = load_config(path=path)
     abs_path = str(Path(repo_path).expanduser().resolve())
     repos = cfg.setdefault("repos", {})
-    repos.pop(abs_path, None)
+    if abs_path not in repos:
+        return cfg
+    repos.pop(abs_path)
     save_config(cfg, path=path)
     return cfg
 
