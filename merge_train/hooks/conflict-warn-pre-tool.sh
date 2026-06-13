@@ -39,17 +39,16 @@ LOG_FILE="${LOG_DIR}/hook-${LOG_DATE}.log"
 # We also drop the file_path from the log entry because the file_path
 # often embeds private info (e.g. ~/projects/<customer>/secret.txt).
 # Branch and repo name are kept (already known to the user via git).
-# Note: this redaction runs UNCONDITIONALLY — before the log-dir guard
-# below — so even on a non-git cwd (where LOG_DIR was never created) the
-# in-memory PAYLOAD_SUMMARY is still sanitised. The log write itself is
-# gated on `[[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]` further down.
-PAYLOAD_SUMMARY="$INPUT"
-if [[ "$PAYLOAD_SUMMARY" == *"\"new_string\""* || "$PAYLOAD_SUMMARY" == *"\"new_text\""* || "$PAYLOAD_SUMMARY" == *"\"content\""* ]]; then
-  # Pull the tool_name and file_path out of the JSON for the log entry —
-  # both are safe (no body content) and useful for "what was edited?".
-  # Use python3 to parse since bash JSON parsing is fragile; python3 is
-  # already a hard dep of this script.
-  PAYLOAD_SUMMARY="$(printf '%s' "$INPUT" | python3 -c '
+# ALWAYS redact the input via the Python helper, regardless of which
+# JSON keys the tool uses. The prior version only redacted when the
+# input contained "new_string" / "new_text" / "content" — if an agent
+# tool used a different key (e.g. "insert_text" or a custom field),
+# the full payload (potentially containing secrets) was written to the
+# log. The Python helper pulls out only tool_name and a basename of
+# file_path; the rest of the body is dropped.
+# Use python3 to parse since bash JSON parsing is fragile; python3 is
+# already a hard dep of this script.
+PAYLOAD_SUMMARY="$(printf '%s' "$INPUT" | python3 -c '
 import json, sys
 try:
     d = json.loads(sys.stdin.read())
@@ -63,7 +62,6 @@ try:
 except Exception:
     print("tool_name=? body=<redacted> (parse error)")
 ')"
-fi
 
 if [[ -n "${REPO_ROOT}" ]]; then
   mkdir -p "$LOG_DIR" 2>/dev/null || true
@@ -82,28 +80,22 @@ fi
 # around tee prevents `tee: No such file or directory` from polluting
 # stderr on a non-git cwd (where the log dir was never created).
 EXIT=0
-# Capture the helper's stderr to a temp file FIRST, then mirror it to
-# the TUI and the log. The previous shape
-#   `2> >(tee -a "$LOG_FILE" >&2)` inside `$(...)`
-# is a process substitution inside a command substitution — a teed log
-# write failure (disk full, perms, missing dir) happens in a subshell
-# and $? is the inner pipeline's exit, not tee's, so the failure is
-# silently invisible. The 2-step capture below lets the helper's exit
-# propagate to EXIT cleanly and surfaces any later tee/log error to the
-# real stderr without losing the helper's own stderr to the TUI.
-HELPER_STDERR_FILE="$(mktemp -t mt-helper-stderr.XXXXXX 2>/dev/null || mktemp)"
-# shellcheck disable=SC2064  # We want $HELPER_STDERR_FILE expanded NOW.
-trap "rm -f '$HELPER_STDERR_FILE'" EXIT
-STDOUT="$(echo "$INPUT" | python3 ~/.local/bin/conflict_check_helper.py 2> "$HELPER_STDERR_FILE")" || EXIT=$?
-
-# Now mirror the captured helper stderr to BOTH the log file (when the
-# log dir exists) and the TUI. If tee fails, the failure hits the real
-# stderr directly — no hidden subshell.
-if [[ -d "$LOG_DIR" ]]; then
-  tee -a "$LOG_FILE" < "$HELPER_STDERR_FILE" >&2 || true
-else
-  cat "$HELPER_STDERR_FILE" >&2
+# Point tee at /dev/null when the log dir wasn't created (non-git cwd),
+# so the process substitution never errors. Keeps stderr clean for the TUI.
+_TEE_TARGET="$LOG_FILE"
+if [[ ! -d "$LOG_DIR" ]]; then
+  _TEE_TARGET="/dev/null"
 fi
+# Resolve the helper path. Prefer the installed copy at ~/.local/bin/;
+# fall back to the in-tree sibling (merge_train/hooks/conflict_check_helper.py)
+# so the script works in CI / fresh checkouts where install-hooks has
+# not been run.
+HELPER_PATH="$HOME/.local/bin/conflict_check_helper.py"
+if [[ ! -f "$HELPER_PATH" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  HELPER_PATH="${SCRIPT_DIR}/conflict_check_helper.py"
+fi
+STDOUT="$(echo "$INPUT" | python3 "$HELPER_PATH" 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
 
 if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   TS="$(date '+%Y-%m-%dT%H:%M:%S%z')"
