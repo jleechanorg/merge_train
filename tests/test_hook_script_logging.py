@@ -186,6 +186,64 @@ def test_hook_script_handles_non_git_cwd(clean_log_dir: None, tmp_path: Path) ->
     )
 
 
+def test_hook_script_redacts_arbitrary_body_keys(clean_log_dir: None) -> None:
+    """Regression test for the brittle redaction logic.
+
+    The original code only invoked the Python redaction helper when the
+    input JSON contained one of the well-known Edit/Write keys
+    (``new_string``, ``new_text``, ``content``). If an agent tool used a
+    different key (e.g. ``insert_text``, ``replacement``, or a custom
+    field), the redaction was skipped and the full payload — potentially
+    containing secrets — was written verbatim to the log.
+
+    This test feeds a synthetic tool invocation with a custom key
+    (``insert_text``) carrying a secret-looking value and asserts that
+    the literal value does NOT appear in the logfile. The fix made the
+    Python redaction unconditional.
+    """
+    repo = Path(__file__).resolve().parents[1]
+    payload = json.dumps(
+        {
+            "tool_name": "CustomTool",
+            "tool_input": {
+                "file_path": str(repo / "hello.py"),
+                "insert_text": "SUPER_SECRET_TOKEN_42",
+            },
+        }
+    )
+    result = subprocess.run(
+        ["bash", str(_hook_script())],
+        input=payload.encode(),
+        capture_output=True,
+        cwd=repo,
+        timeout=30,
+    )
+    assert result.returncode == 0, f"hook exited {result.returncode}: {result.stderr.decode()}"
+
+    branch = subprocess.run(
+        ["git", "symbolic-ref", "--short", "HEAD"],
+        cwd=repo, capture_output=True, text=True,
+    ).stdout.strip() or "detached"
+    log_dir = Path("/tmp/merge_train") / repo.name / branch
+    logs = sorted(log_dir.glob("hook-*.log"))
+    assert logs, f"no log file in {log_dir}"
+    content_text = logs[-1].read_text()
+    # The secret literal must NOT appear anywhere in the log, regardless
+    # of which JSON key carried it. The Python helper writes only
+    # tool_name + basename(file_path) + body=<redacted>.
+    assert "SUPER_SECRET_TOKEN_42" not in content_text, (
+        f"secret value leaked into log via non-standard key 'insert_text'. "
+        f"Log content: {content_text!r}"
+    )
+    assert "body=<redacted>" in content_text, (
+        f"expected body=<redacted> marker; got: {content_text!r}"
+    )
+    assert "insert_text" not in content_text, (
+        f"insert_text key leaked into log; expected body=<redacted> only. "
+        f"Log content: {content_text!r}"
+    )
+
+
 def test_hook_script_logfile_is_owner_only(clean_log_dir: None) -> None:
     """The log file must be 0600 (owner-only) and the log dir 0700.
     Otherwise on a shared box, any local user can read every file the
