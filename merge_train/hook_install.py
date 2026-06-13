@@ -301,6 +301,17 @@ def _install_codex(target: Path) -> dict:
         # And any prior install that wired predict-spawn-check.sh into the
         # Edit matcher — that script needs MERGE_TRAIN_FILES, so it never
         # fires on normal Edits and would just mask the per-edit one.
+        #
+        # STRIP SEMANTICS: this removes ANY Edit hook whose command string
+        # contains the substring ``predict-spawn-check`` (the basename of
+        # the spawn-time script). The match is substring-based, not path-
+        # aware, so a user who customized the hook (different flags, env
+        # vars, wrappers) will see their custom command removed too. This
+        # is intentional: the codex installer is migrating to
+        # ``conflict-warn-pre-tool.sh`` and we want exactly one per-edit
+        # hook wired in. See CHANGELOG.md "Unreleased" for the breaking
+        # change note and the re-run instructions. Behavior is unchanged
+        # from the prior PR; this comment is documentation only.
         for matcher in pre_tool:
             if matcher.get("matcher") == "Edit":
                 matcher["hooks"] = [
