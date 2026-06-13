@@ -78,13 +78,28 @@ fi
 # around tee prevents `tee: No such file or directory` from polluting
 # stderr on a non-git cwd (where the log dir was never created).
 EXIT=0
-# Point tee at /dev/null when the log dir wasn't created (non-git cwd),
-# so the process substitution never errors. Keeps stderr clean for the TUI.
-_TEE_TARGET="$LOG_FILE"
-if [[ ! -d "$LOG_DIR" ]]; then
-  _TEE_TARGET="/dev/null"
+# Capture the helper's stderr to a temp file FIRST, then mirror it to
+# the TUI and the log. The previous shape
+#   `2> >(tee -a "$LOG_FILE" >&2)` inside `$(...)`
+# is a process substitution inside a command substitution — a teed log
+# write failure (disk full, perms, missing dir) happens in a subshell
+# and $? is the inner pipeline's exit, not tee's, so the failure is
+# silently invisible. The 2-step capture below lets the helper's exit
+# propagate to EXIT cleanly and surfaces any later tee/log error to the
+# real stderr without losing the helper's own stderr to the TUI.
+HELPER_STDERR_FILE="$(mktemp -t mt-helper-stderr.XXXXXX 2>/dev/null || mktemp)"
+# shellcheck disable=SC2064  # We want $HELPER_STDERR_FILE expanded NOW.
+trap "rm -f '$HELPER_STDERR_FILE'" EXIT
+STDOUT="$(echo "$INPUT" | python3 ~/.local/bin/conflict_check_helper.py 2> "$HELPER_STDERR_FILE")" || EXIT=$?
+
+# Now mirror the captured helper stderr to BOTH the log file (when the
+# log dir exists) and the TUI. If tee fails, the failure hits the real
+# stderr directly — no hidden subshell.
+if [[ -d "$LOG_DIR" ]]; then
+  tee -a "$LOG_FILE" < "$HELPER_STDERR_FILE" >&2 || true
+else
+  cat "$HELPER_STDERR_FILE" >&2
 fi
-STDOUT="$(echo "$INPUT" | python3 ~/.local/bin/conflict_check_helper.py 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
 
 if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   TS="$(date '+%Y-%m-%dT%H:%M:%S%z')"

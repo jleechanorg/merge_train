@@ -100,3 +100,53 @@ def test_emit_empty_payload_includes_system_message() -> None:
     payload = json.loads(result.stdout.decode().strip().splitlines()[-1])
     assert "systemMessage" in payload
     assert "empty payload" in payload["systemMessage"]
+
+
+def test_decision_payload_truncates_long_reason() -> None:
+    """A 12K-char reason must be truncated so ``systemMessage`` stays
+    under Claude Code's 10K-char cap. The chat banner is the whole
+    point of this feature — if it gets silently replaced with a
+    "see file path" stub, the user loses visibility. See M2 in the
+    adversarial review of PR #29."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Synthesize a reason that would otherwise blow past 10K chars —
+    # e.g., the conflict reason for 50 PRs all touching the same file.
+    long_reason = "PR#1/foo.py — conflict: " + ("x" * 12_000)
+    payload = module._decision_payload("deny", long_reason)
+
+    # The two chat-visible fields must stay under the 10K cap and
+    # carry the same (truncated) text.
+    assert len(payload["systemMessage"]) < 10_000, (
+        f"systemMessage over the 10K cap: len={len(payload['systemMessage'])}"
+    )
+    assert "truncated" in payload["systemMessage"], (
+        f"expected ' (truncated)' suffix after cut; got tail: {payload['systemMessage'][-80:]!r}"
+    )
+    assert payload["systemMessage"] == payload["hookSpecificOutput"]["permissionDecisionReason"]
+    # And the original 12K payload must NOT have been passed through
+    # verbatim (the cut was applied before fanning out to both fields).
+    assert len(payload["systemMessage"]) < len(long_reason)
+
+
+def test_decision_payload_short_reason_unchanged() -> None:
+    """Truncation is a no-op for short reasons. We must not gratuitously
+    mutate well-formed output."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    short = "merge_train: hello — no conflicts."
+    payload = module._decision_payload("allow", short)
+    assert payload["systemMessage"] == short
+    assert "truncated" not in payload["systemMessage"]
