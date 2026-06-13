@@ -64,6 +64,24 @@ except ImportError:  # pragma: no cover — fall back to legacy hardcoded enforc
 # --------------------------------------------------------------------------- #
 
 
+# Claude Code's hook schema caps ``systemMessage`` and ``stdout`` at
+# 10,000 characters. When the reason text exceeds 10K (e.g., a 5+ PR
+# conflict breakdown), Claude Code silently replaces it with a preview
+# + "see file path" — the chat banner this whole feature exists to
+# surface disappears. We pre-truncate at 8,000 chars (safe margin under
+# the 10K cap) and append " (truncated)" so consumers can see the cut.
+_REASON_HARD_CAP = 8_000
+
+
+def _truncate_reason(reason: str) -> str:
+    """Cap ``reason`` at :data:`_REASON_HARD_CAP` chars; append
+    " (truncated)" if we cut anything. Identical truncation is
+    applied to both chat-visible fields so they stay in sync."""
+    if len(reason) <= _REASON_HARD_CAP:
+        return reason
+    return reason[:_REASON_HARD_CAP] + " (truncated)"
+
+
 def _decision_payload(decision: str, reason: str) -> dict:
     """Build a PreToolUse hook output payload with a chat-visible reason.
 
@@ -76,15 +94,25 @@ def _decision_payload(decision: str, reason: str) -> dict:
     - ``permissionDecisionReason`` (inside ``hookSpecificOutput``): the
       per-decision reason line shown in the Edit approval UI.
 
+    Schema note (M3): ``systemMessage`` is a Claude Code hook field.
+    Codex and Agy MAY or MAY NOT surface it (their hook output schemas
+    are not publicly documented). The legacy
+    ``hookSpecificOutput.permissionDecisionReason`` field is the
+    universal fallback — every CLI honors it. Both fields carry the
+    same text so any consumer that supports either will work. Do NOT
+    remove one of them without re-checking all 3 CLI contracts.
+
     The two fields carry identical text so a future parser can rely
-    on either.
+    on either. Both are run through :func:`_truncate_reason` so the
+    chat banner never silently disappears under the 10K cap.
     """
+    safe_reason = _truncate_reason(reason)
     return {
-        "systemMessage": reason,
+        "systemMessage": safe_reason,
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": decision,
-            "permissionDecisionReason": reason,
+            "permissionDecisionReason": safe_reason,
         },
     }
 
