@@ -8,8 +8,12 @@ copies to ``~/.local/bin/``. It must:
 3. Write a logfile to ``/tmp/merge_train/{repo}/{branch}/hook-<date>.log``
    containing timestamp + stdin payload + exit code.
 
-We run the installed script from ``~/.local/bin/`` to test the artifact
-that production actually invokes. If not installed, we skip.
+We target the **in-tree** script under ``merge_train/hooks/`` so the test
+is immune to a stale ``~/.local/bin/`` install (e.g., if the user hasn't
+re-run ``install-hooks`` after a security fix). Falls back to the global
+copy if the in-tree file is missing (e.g., wheel install) and skips
+with a clear message otherwise — same pattern as
+``tests/test_conflict_helper.py::_helper_path_for_test``.
 """
 
 from __future__ import annotations
@@ -21,13 +25,16 @@ from pathlib import Path
 
 import pytest
 
-HOOK_SCRIPT = Path.home() / ".local" / "bin" / "conflict-warn-pre-tool.sh"
+HOOK_SCRIPT = Path(__file__).resolve().parents[1] / "merge_train" / "hooks" / "conflict-warn-pre-tool.sh"
+_HOOK_SCRIPT_FALLBACK = Path.home() / ".local" / "bin" / "conflict-warn-pre-tool.sh"
 
 
 def _hook_script() -> Path:
-    if not HOOK_SCRIPT.is_file():
-        pytest.skip("conflict-warn-pre-tool.sh not installed at ~/.local/bin/")
-    return HOOK_SCRIPT
+    if HOOK_SCRIPT.is_file():
+        return HOOK_SCRIPT
+    if _HOOK_SCRIPT_FALLBACK.is_file():
+        return _HOOK_SCRIPT_FALLBACK
+    pytest.skip("conflict-warn-pre-tool.sh not found in-tree or at ~/.local/bin/")
 
 
 @pytest.fixture
