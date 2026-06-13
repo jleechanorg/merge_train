@@ -696,6 +696,23 @@ def test_install_hooks_codex_removes_stale_source_repo_entries(
         ), "stale source-repo path not stripped"
 
 
+def test_install_hooks_copies_logging_bash_script(
+    fake_home: Path,
+    fake_claude_settings: Path,
+    fake_repo: Path,
+) -> None:
+    """The bash script installed to ~/.local/bin/ must include the
+    per-repo/branch log-tee logic. Without it, the user has no
+    terminal-visible record of hook activity."""
+    install_hooks_for_agent("claude", target=fake_repo)
+    installed = hooks_install_dir() / "conflict-warn-pre-tool.sh"
+    assert installed.is_file()
+    body = installed.read_text()
+    assert "LOG_DIR=" in body
+    assert "/tmp/merge_train" in body
+    assert "tee -a" in body, "stderr must be mirrored to the log file"
+
+
 def test_install_hooks_fails_when_hook_scripts_missing(
     fake_home: Path,
     fake_repo: Path,

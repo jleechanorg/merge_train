@@ -68,6 +68,22 @@ merge_train config remove /path/to/other
 
 If the file is missing, the hook falls back to a built-in default (`merge_train` = block, everything else = warn), so existing installs keep working.
 
+### Hook activity log (where to look if you don't see anything in chat)
+
+Every conflict-warn invocation is logged to a per-repo, per-branch daily file:
+
+```
+/tmp/merge_train/{repo_name}/{branch_name}/hook-YYYY-MM-DD.log
+```
+
+`tail -f` the file in a second terminal to watch conflict-check decisions live:
+
+```bash
+tail -f /tmp/merge_train/$(basename "$(git rev-parse --show-toplevel)")/$(git symbolic-ref --short HEAD)/hook-$(date +%Y-%m-%d).log
+```
+
+The hook also emits a top-level `systemMessage` in its JSON output, which Claude Code renders as a chat banner regardless of decision. The log file is a durable record even after the chat scrolls away.
+
 ---
 
 ## B. Agents *modifying* `merge_train` itself
@@ -77,7 +93,7 @@ You're working on this codebase. Rules:
 ### Test discipline
 
 ```bash
-pytest       # must stay green, currently 239 passed
+pytest       # must stay green, currently 276 passed
 ```
 
 - Add a regression test for every bug fix.
