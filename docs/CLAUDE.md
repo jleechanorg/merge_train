@@ -15,7 +15,7 @@ This file (`docs/CLAUDE.md`) only carries the Claude-specific deltas.
 
 - **Package:** `merge_train` (installable via `pip install -e .`)
 - **CLI:** `predict-conflicts` (standalone) and `acquire` (standalone)
-- **Tests:** `pytest` — must stay green (currently 276).
+- **Tests:** `pytest` — must stay green (currently 277).
 - **Git remote:** `https://github.com/jleechanorg/merge_train.git`
 - **Main branch:** `main` (no PR pipeline for this repo yet; commits land on main directly).
 

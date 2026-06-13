@@ -15,7 +15,6 @@ that production actually invokes. If not installed, we skip.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -91,7 +90,14 @@ def test_hook_script_writes_logfile(clean_log_dir: None) -> None:
 
     content = logs[-1].read_text()
     assert "=== Edit attempt" in content
-    assert payload in content
+    # The Edit body (new_string) is REDACTED from the log entry — only the
+    # file_path + tool_name summary is written. This prevents leaking the
+    # literal content the agent is about to write into a world-readable log.
+    assert "new_string" not in content, (
+        f"new_string leaked into log; expected body=<redacted>. Content: {content!r}"
+    )
+    assert "body=<redacted>" in content or '"new_string"' not in content
+    assert "hello.py" in content, "file_path should still be present in log"
     assert "exit=0" in content
     assert "stdout:" in content
 
@@ -167,3 +173,46 @@ def test_hook_script_handles_non_git_cwd(clean_log_dir: None, tmp_path: Path) ->
     assert "systemMessage" in parsed
     # And the reason should reflect that we're not in a git repo.
     assert "not inside a git repo" in parsed["systemMessage"]
+    # CRITICAL: the non-git path must not pollute stderr with a
+    # `tee: No such file or directory` error (C2 in the adversarial review).
+    err = result.stderr.decode()
+    assert "tee:" not in err, (
+        f"hook polluted stderr on non-git cwd; defeats chat-visible UX. Got: {err!r}"
+    )
+    # And no log dir should have been created for `no-repo` when REPO_ROOT is empty.
+    no_repo_dir = Path("/tmp/merge_train") / "no-repo"
+    assert not no_repo_dir.exists() or not any(no_repo_dir.iterdir()), (
+        f"non-git cwd should not create a no-repo log dir; got: {list(no_repo_dir.iterdir())}"
+    )
+
+
+def test_hook_script_logfile_is_owner_only(clean_log_dir: None) -> None:
+    """The log file must be 0600 (owner-only) and the log dir 0700.
+    Otherwise on a shared box, any local user can read every file the
+    agent edited plus the literal Edit body (C1 in adversarial review)."""
+    import stat
+    import datetime
+
+    repo = Path(__file__).resolve().parents[1]
+    payload = json.dumps(
+        {"tool_name": "Edit", "tool_input": {"file_path": str(repo / "hello.py"), "new_string": "SECRET = 42"}}
+    )
+    subprocess.run(
+        ["bash", str(_hook_script())],
+        input=payload.encode(),
+        capture_output=True,
+        cwd=repo,
+        timeout=30,
+    )
+    branch = subprocess.run(
+        ["git", "symbolic-ref", "--short", "HEAD"],
+        cwd=repo, capture_output=True, text=True,
+    ).stdout.strip() or "detached"
+    log_date = datetime.date.today().isoformat()
+    log_file = Path("/tmp/merge_train") / repo.name / branch / f"hook-{log_date}.log"
+    assert log_file.exists(), f"log file not created: {log_file}"
+    mode = stat.S_IMODE(log_file.stat().st_mode)
+    assert mode & 0o077 == 0, f"log file is group/world readable: mode={oct(mode)}"
+    log_dir = log_file.parent
+    dmode = stat.S_IMODE(log_dir.stat().st_mode)
+    assert dmode & 0o077 == 0, f"log dir is group/world readable: mode={oct(dmode)}"

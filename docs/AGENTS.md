@@ -93,7 +93,7 @@ You're working on this codebase. Rules:
 ### Test discipline
 
 ```bash
-pytest       # must stay green, currently 276 passed
+pytest       # must stay green, currently 277 passed
 ```
 
 - Add a regression test for every bug fix.
