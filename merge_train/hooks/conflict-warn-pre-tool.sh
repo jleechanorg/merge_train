@@ -39,16 +39,13 @@ LOG_FILE="${LOG_DIR}/hook-${LOG_DATE}.log"
 # We also drop the file_path from the log entry because the file_path
 # often embeds private info (e.g. ~/projects/<customer>/secret.txt).
 # Branch and repo name are kept (already known to the user via git).
-# ALWAYS redact the input via the Python helper, regardless of which
-# JSON keys the tool uses. The prior version only redacted when the
-# input contained "new_string" / "new_text" / "content" — if an agent
-# tool used a different key (e.g. "insert_text" or a custom field),
-# the full payload (potentially containing secrets) was written to the
-# log. The Python helper pulls out only tool_name and a basename of
-# file_path; the rest of the body is dropped.
-# Use python3 to parse since bash JSON parsing is fragile; python3 is
-# already a hard dep of this script.
-PAYLOAD_SUMMARY="$(printf '%s' "$INPUT" | python3 -c '
+PAYLOAD_SUMMARY="$INPUT"
+if [[ "$PAYLOAD_SUMMARY" == *"\"new_string\""* || "$PAYLOAD_SUMMARY" == *"\"new_text\""* || "$PAYLOAD_SUMMARY" == *"\"content\""* ]]; then
+  # Pull the tool_name and file_path out of the JSON for the log entry —
+  # both are safe (no body content) and useful for "what was edited?".
+  # Use python3 to parse since bash JSON parsing is fragile; python3 is
+  # already a hard dep of this script.
+  PAYLOAD_SUMMARY="$(printf '%s' "$INPUT" | python3 -c '
 import json, sys
 try:
     d = json.loads(sys.stdin.read())
@@ -62,6 +59,7 @@ try:
 except Exception:
     print("tool_name=? body=<redacted> (parse error)")
 ')"
+fi
 
 if [[ -n "${REPO_ROOT}" ]]; then
   mkdir -p "$LOG_DIR" 2>/dev/null || true
