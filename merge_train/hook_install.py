@@ -46,7 +46,13 @@ AGENT_CHOICES: tuple[str, ...] = ("claude", "opencode", "codex", "agy", "all")
 
 ``agy`` is the user-scope installer for the Antigravity / Gemini CLI
 (``~/.local/bin/agy``). It writes the per-edit conflict-warn hook to
-``~/.gemini/config/hooks.json`` under the ``BeforeTool`` event.
+``~/.gemini/config/hooks.json`` under the ``PreToolUse`` event.
+
+Note on schema: Antigravity uses the Claude-Code-style hook schema
+(``PreToolUse`` / ``PostToolUse``) — NOT the legacy Gemini
+``BeforeTool`` / ``AfterTool`` event names. Verified via
+``strings ~/.local/bin/agy | grep -E '^(PreToolUse|BeforeTool)$'``
+which returns only ``PreToolUse`` and ``PostToolUse``.
 """
 
 #: Hook shell scripts shipped in this repo that get installed to ~/.local/bin.
@@ -387,15 +393,24 @@ def _install_opencode(target: Path) -> dict:
 
 
 def _install_agy(target: Path) -> dict:
-    """Patch ``~/.gemini/config/hooks.json`` ``BeforeTool`` event.
+    """Patch ``~/.gemini/config/hooks.json`` ``PreToolUse`` event.
 
     Hook: ``bash ~/.local/bin/conflict-warn-pre-tool.sh`` (warn-only).
 
-    The Gemini / Antigravity hook schema is intentionally simpler than
-    Codex's: a single ``BeforeTool`` event with no per-tool matcher (it
-    fires on every tool call). Filtering to Edit / Write happens
-    inside ``conflict_check_helper.py`` itself — non-file-mutation
-    tool calls short-circuit to a no-op allow.
+    Antigravity (the Google CLI behind the ``agy`` binary at
+    ``~/.local/bin/agy``) uses the Claude-Code-style hook schema, NOT
+    the legacy Gemini schema. Concretely, the agy binary only
+    recognizes ``PreToolUse`` / ``PostToolUse`` as event names —
+    writing ``hooks.BeforeTool`` (Gemini schema) means the installer
+    reports success but agy never fires the hook. See
+    ``strings ~/.local/bin/agy | grep -E '^(PreToolUse|BeforeTool)$'``
+    for the proof.
+
+    The schema is intentionally simpler than Codex's: a single
+    ``PreToolUse`` event with no per-tool matcher (it fires on every
+    tool call). Filtering to Edit / Write happens inside
+    ``conflict_check_helper.py`` itself — non-file-mutation tool calls
+    short-circuit to a no-op allow.
 
     The per-edit wiring (rather than the project-scope session guard
     ``gemini-conflict-warn.sh``) gives the user real symbol-level
@@ -420,22 +435,21 @@ def _install_agy(target: Path) -> dict:
             data = {}
 
         data.setdefault("hooks", {})
-        before_tool = data["hooks"].setdefault("BeforeTool", [])
+        pre_tool_use = data["hooks"].setdefault("PreToolUse", [])
 
         # Remove any stale entries that still reference the old source-repo path.
-        _strip_stale_source_entries({"BeforeTool": before_tool}, src_root)
-        before_tool = data["hooks"]["BeforeTool"]
+        _strip_stale_source_entries({"PreToolUse": pre_tool_use}, src_root)
+        pre_tool_use = data["hooks"]["PreToolUse"]
 
-        # Agy / Gemini schema mirrors Codex: ``BeforeTool[]`` is a list of
-        # wrapper objects, each carrying a nested ``hooks[]`` list. The
-        # project-scope ``.gemini/settings.json`` uses the same shape
-        # (no per-tool matcher — the script itself filters Edit/Write).
-        # If a wrapper already exists with our command, skip appending.
+        # Agy schema mirrors Codex: ``PreToolUse[]`` is a list of wrapper
+        # objects, each carrying a nested ``hooks[]`` list. No per-tool
+        # matcher — the script itself filters Edit/Write. If a wrapper
+        # already exists with our command, skip appending.
         def _has_cmd(wrapper: dict) -> bool:
             return any(h.get("command") == cmd for h in wrapper.get("hooks", []))
 
-        if not any(_has_cmd(w) for w in before_tool):
-            before_tool.append({"hooks": [{"type": "command", "command": cmd}]})
+        if not any(_has_cmd(w) for w in pre_tool_use):
+            pre_tool_use.append({"hooks": [{"type": "command", "command": cmd}]})
 
         hooks_path.parent.mkdir(parents=True, exist_ok=True)
         hooks_path.write_text(json.dumps(data, indent=2))
@@ -675,10 +689,13 @@ def _test_opencode(target: Path) -> dict:
 
 
 def _test_agy(target: Path) -> dict:
-    """Synthesize a BeforeTool Edit payload; assert hook exits 0 + allows.
+    """Synthesize a PreToolUse Edit payload; assert hook exits 0 + allows.
 
-    Mirrors ``_test_claude`` but for the agy / Gemini schema: a single
-    ``BeforeTool`` event (no matcher) wired to ``conflict-warn-pre-tool.sh``.
+    Mirrors ``_test_claude`` but for the agy / Antigravity schema: a
+    single ``PreToolUse`` event (no matcher) wired to
+    ``conflict-warn-pre-tool.sh``. Antigravity uses the
+    Claude-Code-style schema, NOT the legacy Gemini ``BeforeTool``
+    event.
     """
     hooks_path = AGY_HOOKS_PATH()
     if not hooks_path.exists():
@@ -697,17 +714,17 @@ def _test_agy(target: Path) -> dict:
             "exit_code": -1,
             "reason": f"agy hooks.json malformed: {exc}",
         }
-    before_tool = data.get("hooks", {}).get("BeforeTool", [])
+    pre_tool_use = data.get("hooks", {}).get("PreToolUse", [])
     if not any(
         "conflict-warn-pre-tool" in h.get("command", "")
-        for wrapper in before_tool
+        for wrapper in pre_tool_use
         for h in wrapper.get("hooks", [])
     ):
         return {
             "agent": "agy",
             "ok": False,
             "exit_code": -1,
-            "reason": "conflict-warn-pre-tool hook not wired into BeforeTool event",
+            "reason": "conflict-warn-pre-tool hook not wired into PreToolUse event",
         }
     bin_path = HOOKS_INSTALL_DIR() / "conflict-warn-pre-tool.sh"
     if not bin_path.is_file():
@@ -717,11 +734,11 @@ def _test_agy(target: Path) -> dict:
             "exit_code": -1,
             "reason": f"hook script missing: {bin_path}",
         }
-    # The agy BeforeTool payload uses the Claude-style nested shape
+    # The agy PreToolUse payload uses the Claude-style nested shape
     # (the script's own tool-name filter handles the dispatch).
     payload = {
         "session_id": "synthetic",
-        "hook_event_name": "BeforeTool",
+        "hook_event_name": "PreToolUse",
         "tool_name": "Edit",
         "tool_input": {"file_path": "/tmp/example.py"},
     }

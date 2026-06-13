@@ -11,9 +11,11 @@ The installer must:
 - For Codex: patch ``~/.codex/hooks.json`` PreToolUse matcher Edit.
 - For OpenCode: write predict-conflicts instructions to ``.opencode.json``
   at the target repo root (matches the repo's own config).
-- For Agy: patch ``~/.gemini/config/hooks.json`` ``BeforeTool`` event
+- For Agy: patch ``~/.gemini/config/hooks.json`` ``PreToolUse`` event
   with ``conflict-warn-pre-tool.sh`` (warn-only, per-edit symbol-level
-  conflict detection — mirrors Claude UX).
+  conflict detection — mirrors Claude UX). Antigravity uses the
+  Claude-Code-style hook schema, not the legacy Gemini ``BeforeTool``
+  event.
 """
 
 from __future__ import annotations
@@ -402,14 +404,19 @@ def test_install_hooks_agy_patches_hooks_json(
     fake_agy_hooks: Path,
     fake_repo: Path,
 ) -> None:
-    """Agy install adds conflict-warn-pre-tool to BeforeTool event."""
+    """Agy install adds conflict-warn-pre-tool to PreToolUse event.
+
+    Antigravity (the ``agy`` binary) uses the Claude-Code-style hook
+    schema with ``PreToolUse`` as the event name, NOT the legacy
+    Gemini ``BeforeTool`` event.
+    """
     install_hooks_for_agent("agy", target=fake_repo)
     data = json.loads(fake_agy_hooks.read_text())
-    before = data.get("hooks", {}).get("BeforeTool", [])
-    assert before, "BeforeTool event must be populated"
+    pre_tool_use = data.get("hooks", {}).get("PreToolUse", [])
+    assert pre_tool_use, "PreToolUse event must be populated"
     cmds = " ".join(
         h.get("command", "")
-        for wrapper in before
+        for wrapper in pre_tool_use
         for h in wrapper.get("hooks", [])
     )
     assert "conflict-warn-pre-tool" in cmds
@@ -420,15 +427,15 @@ def test_install_hooks_agy_is_idempotent(
     fake_agy_hooks: Path,
     fake_repo: Path,
 ) -> None:
-    """Re-running agy install does not duplicate BeforeTool entries."""
+    """Re-running agy install does not duplicate PreToolUse entries."""
     install_hooks_for_agent("agy", target=fake_repo)
     install_hooks_for_agent("agy", target=fake_repo)
 
     data = json.loads(fake_agy_hooks.read_text())
-    before = data.get("hooks", {}).get("BeforeTool", [])
+    pre_tool_use = data.get("hooks", {}).get("PreToolUse", [])
     # Exactly one wrapper, with exactly one inner hook.
-    assert len(before) == 1
-    assert len(before[0].get("hooks", [])) == 1
+    assert len(pre_tool_use) == 1
+    assert len(pre_tool_use[0].get("hooks", [])) == 1
 
 
 def test_install_hooks_agy_creates_hooks_json_if_missing(
@@ -442,7 +449,7 @@ def test_install_hooks_agy_creates_hooks_json_if_missing(
     assert p.is_file()
     data = json.loads(p.read_text())
     assert "hooks" in data
-    assert data["hooks"].get("BeforeTool"), "BeforeTool must be populated"
+    assert data["hooks"].get("PreToolUse"), "PreToolUse must be populated (Antigravity schema)"
 
 
 def test_install_hooks_agy_removes_stale_source_repo_entries(
@@ -466,7 +473,7 @@ def test_install_hooks_agy_removes_stale_source_repo_entries(
         json.dumps(
             {
                 "hooks": {
-                    "BeforeTool": [
+                    "PreToolUse": [
                         {
                             "hooks": [
                                 {
@@ -484,7 +491,7 @@ def test_install_hooks_agy_removes_stale_source_repo_entries(
     data = json.loads(fake_agy_hooks.read_text())
     cmds = " ".join(
         h.get("command", "")
-        for wrapper in data.get("hooks", {}).get("BeforeTool", [])
+        for wrapper in data.get("hooks", {}).get("PreToolUse", [])
         for h in wrapper.get("hooks", [])
     )
     assert "old-predict-spawn-check" not in cmds
@@ -510,7 +517,51 @@ def test_install_hooks_agy_preserves_other_top_level_keys(
     data = json.loads(fake_agy_hooks.read_text())
     assert data.get("some_unrelated_setting") == {"nested": True}
     assert data.get("mcp_servers") == {"foo": {"command": "x"}}
-    assert data["hooks"]["BeforeTool"]
+    assert data["hooks"]["PreToolUse"], (
+        "Antigravity uses PreToolUse (Claude-Code-style), not BeforeTool (Gemini-style). "
+        "The agy binary's hook event names are PreToolUse / PostToolUse only."
+    )
+
+
+def test_install_hooks_agy_uses_antigravity_pretoluse_schema(
+    fake_home: Path,
+    fake_agy_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    """Regression test: agy installer must use Antigravity's PreToolUse event.
+
+    Antigravity (the Google CLI behind the ``agy`` binary at
+    ``~/.local/bin/agy``) uses the Claude-Code-style hook schema, not the
+    legacy Gemini schema. Concretely, the agy binary only recognizes
+    ``PreToolUse`` / ``PostToolUse`` as event names (verified by
+    ``strings ~/.local/bin/agy | grep -E '^(PreToolUse|BeforeTool)$'`` —
+    only ``PreToolUse`` and ``PostToolUse`` match). Writing
+    ``hooks.BeforeTool`` (Gemini schema) means the installer reports
+    success but agy never fires the hook — users get no conflict
+    warnings.
+    """
+    install_hooks_for_agent("agy", target=fake_repo)
+    data = json.loads(fake_agy_hooks.read_text())
+    hooks = data.get("hooks", {})
+
+    # The CORRECT schema: PreToolUse populated, BeforeTool absent.
+    pre_tool_use = hooks.get("PreToolUse", [])
+    assert pre_tool_use, f"Antigravity's PreToolUse event must be populated, got hooks={hooks}"
+
+    cmds = " ".join(
+        h.get("command", "")
+        for wrapper in pre_tool_use
+        for h in wrapper.get("hooks", [])
+    )
+    assert "conflict-warn-pre-tool" in cmds, (
+        f"conflict-warn-pre-tool.sh must be wired to PreToolUse, got cmds={cmds!r}"
+    )
+
+    # The legacy Gemini schema must NOT be written for agy.
+    assert not hooks.get("BeforeTool"), (
+        "Gemini-style BeforeTool should NOT be populated for Antigravity. "
+        f"Found: {hooks.get('BeforeTool')}"
+    )
 
 
 # --------------------------------------------------------------------------- #
