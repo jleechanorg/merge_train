@@ -7,6 +7,10 @@ Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Codex hook installer**: `merge_train install-hooks --agent codex` now wires `conflict-warn-pre-tool.sh` into the `Edit` PreToolUse matcher instead of `predict-spawn-check.sh`. The per-edit hook gives Codex users the same chat-visible `permissionDecisionReason` Claude Code gets, and the existing `predict-spawn-check.sh` (for AO spawn-time checks via `MERGE_TRAIN_FILES`) is unchanged. **Breaking change for existing codex users:** re-run `merge_train install-hooks --agent codex` to migrate. The installer strips any prior Edit hook whose command contains the substring `predict-spawn-check` (see `merge_train/hook_install.py` `_install_codex`); custom variations of that command will be removed too, so re-add them after the migration if you need them. See [docs/AGENTS.md](./docs/AGENTS.md) for the per-edit log location.
+
 ### Removed
 
 - **CLI surface** (`domain_lock`): Deleted the `domain_lock` CLI stack (`reserve`, `reserve-plan`, `release`, `check`, `list`, `audit`), replacing it with two standalone binaries: `acquire` and `predict-conflicts`.
