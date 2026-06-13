@@ -455,8 +455,13 @@ def test_install_hooks_agy_removes_stale_source_repo_entries(
 
     # Discover the source-repo root the installer would consider "stale".
     # The installer treats any command containing the repo root and
-    # "hooks/" as stale (see ``_is_stale_source_cmd``).
-    src_root_marker = "/Users/jleechan/projects/merge_train"
+    # "hooks/" as stale (see ``_is_stale_source_cmd``). Use the same
+    # resolution as the installer so this test is path-agnostic across
+    # worktrees, editable installs, and the main checkout (the
+    # hardcoded value was a coincidental substring match in the main
+    # checkout only and would fail on Linux CI / non-default paths).
+    from merge_train.hook_install import _repo_root
+    src_root_marker = str(_repo_root())
     fake_agy_hooks.write_text(
         json.dumps(
             {
