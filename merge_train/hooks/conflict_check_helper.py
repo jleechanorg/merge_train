@@ -67,10 +67,20 @@ except ImportError:  # pragma: no cover — fall back to legacy hardcoded enforc
 def _decision_payload(decision: str, reason: str) -> dict:
     """Build a PreToolUse hook output payload with a chat-visible reason.
 
-    ``permissionDecisionReason`` is rendered in the chat UI, so the
-    user sees the hook's verdict even on a silent allow.
+    Two parallel channels surface the same ``reason`` to the user:
+
+    - ``systemMessage`` (top-level): rendered as a real user-visible
+      chat banner by Claude Code, regardless of decision. This is the
+      strongest visibility signal — the user sees the hook's verdict
+      on every Edit, including a silent allow.
+    - ``permissionDecisionReason`` (inside ``hookSpecificOutput``): the
+      per-decision reason line shown in the Edit approval UI.
+
+    The two fields carry identical text so a future parser can rely
+    on either.
     """
     return {
+        "systemMessage": reason,
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": decision,
