@@ -11,6 +11,9 @@ The installer must:
 - For Codex: patch ``~/.codex/hooks.json`` PreToolUse matcher Edit.
 - For OpenCode: write predict-conflicts instructions to ``.opencode.json``
   at the target repo root (matches the repo's own config).
+- For Agy: patch ``~/.gemini/config/hooks.json`` ``BeforeTool`` event
+  with ``conflict-warn-pre-tool.sh`` (warn-only, per-edit symbol-level
+  conflict detection — mirrors Claude UX).
 """
 
 from __future__ import annotations
@@ -76,16 +79,26 @@ def fake_codex_hooks(fake_home: Path) -> Path:
     return p
 
 
+@pytest.fixture
+def fake_agy_hooks(fake_home: Path) -> Path:
+    """Write a minimal ``~/.gemini/config/hooks.json`` with no hooks block."""
+    p = fake_home / ".gemini" / "config" / "hooks.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({}))
+    return p
+
+
 # --------------------------------------------------------------------------- #
 # Module-level sanity
 # --------------------------------------------------------------------------- #
 
 
 def test_agent_choices_includes_required_agents() -> None:
-    """The CLI must accept claude, opencode, codex, and all."""
+    """The CLI must accept claude, opencode, codex, agy, and all."""
     assert "claude" in AGENT_CHOICES
     assert "opencode" in AGENT_CHOICES
     assert "codex" in AGENT_CHOICES
+    assert "agy" in AGENT_CHOICES
     assert "all" in AGENT_CHOICES
 
 
@@ -226,7 +239,7 @@ def test_install_hooks_codex_patches_hooks_json(
     fake_codex_hooks: Path,
     fake_repo: Path,
 ) -> None:
-    """Codex install adds predict-spawn-check to PreToolUse Edit matcher."""
+    """Codex install adds conflict-warn-pre-tool to PreToolUse Edit matcher."""
     install_hooks_for_agent("codex", target=fake_repo)
     data = json.loads(fake_codex_hooks.read_text())
     pre = data.get("hooks", {}).get("PreToolUse", [])
@@ -235,7 +248,7 @@ def test_install_hooks_codex_patches_hooks_json(
     cmds = " ".join(
         h.get("command", "") for m in edit_matchers for h in m.get("hooks", [])
     )
-    assert "predict-spawn-check" in cmds
+    assert "conflict-warn-pre-tool" in cmds
 
 
 def test_install_hooks_codex_is_idempotent(
@@ -265,6 +278,48 @@ def test_install_hooks_codex_creates_hooks_json_if_missing(
     assert p.is_file()
     data = json.loads(p.read_text())
     assert "hooks" in data
+
+
+def test_install_hooks_codex_strips_legacy_predict_spawn_check(
+    fake_home: Path,
+    fake_codex_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    """A prior install that wired predict-spawn-check.sh gets replaced.
+
+    ``predict-spawn-check.sh`` is the orchestrator-mode hook (needs
+    ``MERGE_TRAIN_FILES``) and is silent on normal Edits — running the
+    codex installer should replace it with ``conflict-warn-pre-tool.sh``
+    so Codex users get the same per-edit visibility as Claude + Agy.
+    """
+    fake_codex_hooks.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Edit",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "bash /Users/jleechan/.local/bin/predict-spawn-check.sh",
+                                    "timeoutSec": 15,
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    install_hooks_for_agent("codex", target=fake_repo)
+    data = json.loads(fake_codex_hooks.read_text())
+    edit = next(m for m in data["hooks"]["PreToolUse"] if m["matcher"] == "Edit")
+    cmds = [h.get("command", "") for h in edit["hooks"]]
+    assert not any("predict-spawn-check" in c for c in cmds), (
+        f"legacy predict-spawn-check not stripped: {cmds}"
+    )
+    assert any("conflict-warn-pre-tool" in c for c in cmds)
 
 
 # --------------------------------------------------------------------------- #
@@ -338,6 +393,122 @@ def test_install_hooks_opencode_only_appends_predict_conflicts_block(
 
 
 # --------------------------------------------------------------------------- #
+# install_hooks_for_agent — Agy (Antigravity / Gemini)
+# --------------------------------------------------------------------------- #
+
+
+def test_install_hooks_agy_patches_hooks_json(
+    fake_home: Path,
+    fake_agy_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    """Agy install adds conflict-warn-pre-tool to BeforeTool event."""
+    install_hooks_for_agent("agy", target=fake_repo)
+    data = json.loads(fake_agy_hooks.read_text())
+    before = data.get("hooks", {}).get("BeforeTool", [])
+    assert before, "BeforeTool event must be populated"
+    cmds = " ".join(
+        h.get("command", "")
+        for wrapper in before
+        for h in wrapper.get("hooks", [])
+    )
+    assert "conflict-warn-pre-tool" in cmds
+
+
+def test_install_hooks_agy_is_idempotent(
+    fake_home: Path,
+    fake_agy_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    """Re-running agy install does not duplicate BeforeTool entries."""
+    install_hooks_for_agent("agy", target=fake_repo)
+    install_hooks_for_agent("agy", target=fake_repo)
+
+    data = json.loads(fake_agy_hooks.read_text())
+    before = data.get("hooks", {}).get("BeforeTool", [])
+    # Exactly one wrapper, with exactly one inner hook.
+    assert len(before) == 1
+    assert len(before[0].get("hooks", [])) == 1
+
+
+def test_install_hooks_agy_creates_hooks_json_if_missing(
+    fake_home: Path,
+    fake_repo: Path,
+) -> None:
+    """If ~/.gemini/config/hooks.json does not exist, installer creates it."""
+    assert not (fake_home / ".gemini" / "config" / "hooks.json").exists()
+    install_hooks_for_agent("agy", target=fake_repo)
+    p = fake_home / ".gemini" / "config" / "hooks.json"
+    assert p.is_file()
+    data = json.loads(p.read_text())
+    assert "hooks" in data
+    assert data["hooks"].get("BeforeTool"), "BeforeTool must be populated"
+
+
+def test_install_hooks_agy_removes_stale_source_repo_entries(
+    fake_home: Path,
+    fake_agy_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    """If ~/.gemini/config/hooks.json references old source-repo paths, strip them."""
+    import re
+
+    # Discover the source-repo root the installer would consider "stale".
+    # The installer treats any command containing the repo root and
+    # "hooks/" as stale (see ``_is_stale_source_cmd``).
+    src_root_marker = "/Users/jleechan/projects/merge_train"
+    fake_agy_hooks.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "BeforeTool": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": f"bash {src_root_marker}/hooks/old-predict-spawn-check.sh",
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    install_hooks_for_agent("agy", target=fake_repo)
+    data = json.loads(fake_agy_hooks.read_text())
+    cmds = " ".join(
+        h.get("command", "")
+        for wrapper in data.get("hooks", {}).get("BeforeTool", [])
+        for h in wrapper.get("hooks", [])
+    )
+    assert "old-predict-spawn-check" not in cmds
+    # And the live install is present.
+    assert "conflict-warn-pre-tool" in cmds
+
+
+def test_install_hooks_agy_preserves_other_top_level_keys(
+    fake_home: Path,
+    fake_agy_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    """Unrelated top-level keys in ~/.gemini/config/hooks.json survive the install."""
+    fake_agy_hooks.write_text(
+        json.dumps(
+            {
+                "some_unrelated_setting": {"nested": True},
+                "mcp_servers": {"foo": {"command": "x"}},
+            }
+        )
+    )
+    install_hooks_for_agent("agy", target=fake_repo)
+    data = json.loads(fake_agy_hooks.read_text())
+    assert data.get("some_unrelated_setting") == {"nested": True}
+    assert data.get("mcp_servers") == {"foo": {"command": "x"}}
+    assert data["hooks"]["BeforeTool"]
+
+
+# --------------------------------------------------------------------------- #
 # install_hooks_for_agent — dispatch + errors
 # --------------------------------------------------------------------------- #
 
@@ -346,13 +517,14 @@ def test_install_hooks_all_runs_every_agent(
     fake_home: Path,
     fake_claude_settings: Path,
     fake_codex_hooks: Path,
+    fake_agy_hooks: Path,
     fake_repo: Path,
 ) -> None:
     """`--agent all` calls each per-agent installer in turn."""
     results = install_hooks_for_agent("all", target=fake_repo)
-    assert isinstance(results, list) and len(results) == 3
+    assert isinstance(results, list) and len(results) == 4
     agents = sorted(r["agent"] for r in results)
-    assert agents == ["claude", "codex", "opencode"]
+    assert agents == ["agy", "claude", "codex", "opencode"]
 
 
 def test_install_hooks_unknown_agent_raises() -> None:
@@ -419,18 +591,40 @@ def test_test_hooks_opencode_exits_zero(
     assert result["exit_code"] == 0
 
 
+def test_test_hooks_agy_returns_dict(
+    fake_home: Path,
+    fake_agy_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    """test-hooks agy returns a single dict and reports ok=True after install."""
+    install_hooks_for_agent("agy", target=fake_repo)
+    result = test_hooks_for_agent("agy", target=fake_repo)
+    assert isinstance(result, dict)
+    assert result["agent"] == "agy"
+    assert result["ok"] is True
+    assert result["exit_code"] == 0
+
+
+def test_test_hooks_agy_missing_hooks_file_returns_dict(fake_home: Path) -> None:
+    """If ~/.gemini/config/hooks.json is missing, test-hooks still returns a dict."""
+    assert not (fake_home / ".gemini" / "config" / "hooks.json").exists()
+    result = test_hooks_for_agent("agy", target=Path("/tmp/no-such-repo-xyz"))
+    assert isinstance(result, dict)
+
+
 def test_test_hooks_all_returns_one_per_agent(
     fake_home: Path,
     fake_claude_settings: Path,
     fake_codex_hooks: Path,
+    fake_agy_hooks: Path,
     fake_repo: Path,
 ) -> None:
     """`--agent all` returns one result per installed agent."""
     install_hooks_for_agent("all", target=fake_repo)
     results = test_hooks_for_agent("all", target=fake_repo)
-    assert isinstance(results, list) and len(results) == 3
+    assert isinstance(results, list) and len(results) == 4
     agents = sorted(r["agent"] for r in results)
-    assert agents == ["claude", "codex", "opencode"]
+    assert agents == ["agy", "claude", "codex", "opencode"]
     for r in results:
         assert r["ok"] is True
 
@@ -455,10 +649,11 @@ def test_test_hooks_claude_fails_when_hook_missing(
 
 
 def test_test_hooks_dispatch_table_has_all_agents() -> None:
-    """TEST_HOOKS dispatch table covers the three required agents."""
+    """TEST_HOOKS dispatch table covers all four required agents."""
     assert "claude" in TEST_HOOKS
     assert "codex" in TEST_HOOKS
     assert "opencode" in TEST_HOOKS
+    assert "agy" in TEST_HOOKS
     for agent, fn in TEST_HOOKS.items():
         assert callable(fn), f"{agent} test_hooks entry is not callable"
 
@@ -483,7 +678,7 @@ def test_install_hooks_codex_removes_stale_source_repo_entries(
                             "hooks": [
                                 {
                                     "type": "command",
-                                    "command": f"bash {stale_repo}/hooks/predict-spawn-check.sh",
+                                    "command": f"bash {stale_repo}/hooks/conflict-warn-pre-tool.sh",
                                 },
                             ],
                         },

@@ -44,7 +44,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_install.add_argument(
         "--agent",
         required=True,
-        choices=["claude", "opencode", "codex", "all"],
+        choices=["claude", "opencode", "codex", "agy", "all"],
         help="Which agent to install hooks for.",
     )
     p_install.add_argument(
@@ -61,7 +61,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_test.add_argument(
         "--agent",
         required=True,
-        choices=["claude", "opencode", "codex", "all"],
+        choices=["claude", "opencode", "codex", "agy", "all"],
         help="Which agent to test hooks for.",
     )
     p_test.add_argument(

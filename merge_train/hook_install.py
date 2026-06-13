@@ -41,8 +41,13 @@ from typing import Callable, Optional
 # Public constants
 # --------------------------------------------------------------------------- #
 
-AGENT_CHOICES: tuple[str, ...] = ("claude", "opencode", "codex", "all")
-"""Agent selectors accepted by the install-hooks / test-hooks CLIs."""
+AGENT_CHOICES: tuple[str, ...] = ("claude", "opencode", "codex", "agy", "all")
+"""Agent selectors accepted by the install-hooks / test-hooks CLIs.
+
+``agy`` is the user-scope installer for the Antigravity / Gemini CLI
+(``~/.local/bin/agy``). It writes the per-edit conflict-warn hook to
+``~/.gemini/config/hooks.json`` under the ``BeforeTool`` event.
+"""
 
 #: Hook shell scripts shipped in this repo that get installed to ~/.local/bin.
 ALL_HOOK_SCRIPTS: tuple[str, ...] = (
@@ -59,6 +64,7 @@ ALL_HOOK_SCRIPTS: tuple[str, ...] = (
 HOOKS_INSTALL_DIR_NAME: str = ".local/bin"
 CLAUDE_SETTINGS_REL: str = ".claude/settings.json"
 CODEX_HOOKS_REL: str = ".codex/hooks.json"
+AGY_HOOKS_REL: str = ".gemini/config/hooks.json"
 
 
 def hooks_install_dir() -> Path:
@@ -76,12 +82,25 @@ def codex_hooks_path() -> Path:
     return Path.home() / CODEX_HOOKS_REL
 
 
+def agy_hooks_path() -> Path:
+    """Return ``$HOME/.gemini/config/hooks.json`` (lazy).
+
+    This is the user-scope Gemini/Antigravity hook config. The
+    project-scope equivalent lives at ``<repo>/.gemini/settings.json``
+    and is intentionally NOT touched by this installer — merge_train
+    only manages the user-scope config so the hook fires across every
+    repo the user opens in agy.
+    """
+    return Path.home() / AGY_HOOKS_REL
+
+
 # Back-compat aliases — older code/tests may import these as Path-like
 # names. Each is a function that returns a fresh Path, so test-time
 # ``monkeypatch.setattr(Path, "home", ...)`` is honored.
 HOOKS_INSTALL_DIR = hooks_install_dir
 CLAUDE_SETTINGS_PATH = claude_settings_path
 CODEX_HOOKS_PATH = codex_hooks_path
+AGY_HOOKS_PATH = agy_hooks_path
 
 
 # --------------------------------------------------------------------------- #
@@ -244,7 +263,12 @@ def _install_claude(target: Path) -> dict:
 def _install_codex(target: Path) -> dict:
     """Patch ``~/.codex/hooks.json`` PreToolUse Edit matcher.
 
-    Hook: ``bash ~/.local/bin/predict-spawn-check.sh`` (warn-only).
+    Hook: ``bash ~/.local/bin/conflict-warn-pre-tool.sh`` (warn-only).
+    Mirrors the Claude per-edit symbol-level conflict check, so Codex
+    users get the same chat-visible ``permissionDecisionReason`` on
+    every Edit. The orchestrator-mode ``predict-spawn-check.sh`` is a
+    separate, opt-in path for AO spawn-time checks (it needs the
+    ``MERGE_TRAIN_FILES`` env var and is not wired here).
     """
     try:
         _install_hook_scripts()
@@ -252,7 +276,7 @@ def _install_codex(target: Path) -> dict:
             src_root = str(_repo_root())
         except FileNotFoundError:
             src_root = ""
-        cmd = f"bash {HOOKS_INSTALL_DIR() / 'predict-spawn-check.sh'}"
+        cmd = f"bash {HOOKS_INSTALL_DIR() / 'conflict-warn-pre-tool.sh'}"
 
         hooks_path = CODEX_HOOKS_PATH()
         if hooks_path.exists():
@@ -268,6 +292,16 @@ def _install_codex(target: Path) -> dict:
 
         # Remove any stale entries that still reference the old source-repo path.
         _strip_stale_source_entries({"PreToolUse": pre_tool}, src_root)
+        # And any prior install that wired predict-spawn-check.sh into the
+        # Edit matcher — that script needs MERGE_TRAIN_FILES, so it never
+        # fires on normal Edits and would just mask the per-edit one.
+        for matcher in pre_tool:
+            if matcher.get("matcher") == "Edit":
+                matcher["hooks"] = [
+                    h
+                    for h in matcher.get("hooks", [])
+                    if "predict-spawn-check" not in h.get("command", "")
+                ]
         pre_tool = data["hooks"]["PreToolUse"]
 
         edit_entry = next((m for m in pre_tool if m.get("matcher") == "Edit"), None)
@@ -280,7 +314,7 @@ def _install_codex(target: Path) -> dict:
                     "type": "command",
                     "command": cmd,
                     "timeoutSec": 15,
-                    "statusMessage": "Running predict-conflicts pre-spawn check...",
+                    "statusMessage": "merge_train: checking conflicts...",
                 }
             )
 
@@ -352,11 +386,79 @@ def _install_opencode(target: Path) -> dict:
 # --------------------------------------------------------------------------- #
 
 
+def _install_agy(target: Path) -> dict:
+    """Patch ``~/.gemini/config/hooks.json`` ``BeforeTool`` event.
+
+    Hook: ``bash ~/.local/bin/conflict-warn-pre-tool.sh`` (warn-only).
+
+    The Gemini / Antigravity hook schema is intentionally simpler than
+    Codex's: a single ``BeforeTool`` event with no per-tool matcher (it
+    fires on every tool call). Filtering to Edit / Write happens
+    inside ``conflict_check_helper.py`` itself — non-file-mutation
+    tool calls short-circuit to a no-op allow.
+
+    The per-edit wiring (rather than the project-scope session guard
+    ``gemini-conflict-warn.sh``) gives the user real symbol-level
+    conflict detection on every Edit/Write, matching Claude Code UX.
+    Idempotent: re-running does not append a duplicate entry.
+    """
+    try:
+        _install_hook_scripts()
+        try:
+            src_root = str(_repo_root())
+        except FileNotFoundError:
+            src_root = ""
+        cmd = f"bash {HOOKS_INSTALL_DIR() / 'conflict-warn-pre-tool.sh'}"
+
+        hooks_path = AGY_HOOKS_PATH()
+        if hooks_path.exists():
+            try:
+                data = json.loads(hooks_path.read_text())
+            except json.JSONDecodeError:
+                data = {}
+        else:
+            data = {}
+
+        data.setdefault("hooks", {})
+        before_tool = data["hooks"].setdefault("BeforeTool", [])
+
+        # Remove any stale entries that still reference the old source-repo path.
+        _strip_stale_source_entries({"BeforeTool": before_tool}, src_root)
+        before_tool = data["hooks"]["BeforeTool"]
+
+        # Agy / Gemini schema mirrors Codex: ``BeforeTool[]`` is a list of
+        # wrapper objects, each carrying a nested ``hooks[]`` list. The
+        # project-scope ``.gemini/settings.json`` uses the same shape
+        # (no per-tool matcher — the script itself filters Edit/Write).
+        # If a wrapper already exists with our command, skip appending.
+        def _has_cmd(wrapper: dict) -> bool:
+            return any(h.get("command") == cmd for h in wrapper.get("hooks", []))
+
+        if not any(_has_cmd(w) for w in before_tool):
+            before_tool.append({"hooks": [{"type": "command", "command": cmd}]})
+
+        hooks_path.parent.mkdir(parents=True, exist_ok=True)
+        hooks_path.write_text(json.dumps(data, indent=2))
+        return {
+            "agent": "agy",
+            "installed": True,
+            "hooks_path": str(hooks_path),
+            "command": cmd,
+        }
+    except Exception as exc:
+        return {
+            "agent": "agy",
+            "installed": False,
+            "error": str(exc),
+        }
+
+
 def install_hooks_for_agent(agent: str, target: Optional[Path] = None) -> list | dict:
     """Install hooks for *agent*. Returns a result dict or list of dicts.
 
     Args:
-        agent: One of ``"claude"``, ``"opencode"``, ``"codex"``, or ``"all"``.
+        agent: One of ``"claude"``, ``"opencode"``, ``"codex"``, ``"agy"``,
+            or ``"all"``.
         target: For ``"opencode"``, the repo root whose ``.opencode.json``
             gets written. Defaults to the current working directory.
 
@@ -376,10 +478,11 @@ def install_hooks_for_agent(agent: str, target: Optional[Path] = None) -> list |
         "claude": _install_claude,
         "opencode": _install_opencode,
         "codex": _install_codex,
+        "agy": _install_agy,
     }
 
     if agent == "all":
-        return [installers[a](target) for a in ("claude", "opencode", "codex")]
+        return [installers[a](target) for a in ("claude", "opencode", "codex", "agy")]
     return installers[agent](target)
 
 
@@ -473,7 +576,12 @@ def _test_claude(target: Path) -> dict:
 
 
 def _test_codex(target: Path) -> dict:
-    """Synthesize a Codex BeforeTool Edit payload; assert hook exits 0."""
+    """Synthesize a Codex PreToolUse Edit payload; assert hook exits 0.
+
+    Mirrors ``_test_claude`` / ``_test_agy``: the per-edit
+    ``conflict-warn-pre-tool.sh`` script fires on every Edit and emits
+    a chat-visible ``permissionDecisionReason``.
+    """
     hooks_path = CODEX_HOOKS_PATH()
     if not hooks_path.exists():
         return {
@@ -494,7 +602,7 @@ def _test_codex(target: Path) -> dict:
     pre_tool = data.get("hooks", {}).get("PreToolUse", [])
     edit_matchers = [m for m in pre_tool if m.get("matcher") == "Edit"]
     if not edit_matchers or not any(
-        "predict-spawn-check" in h.get("command", "")
+        "conflict-warn-pre-tool" in h.get("command", "")
         for m in edit_matchers
         for h in m.get("hooks", [])
     ):
@@ -502,9 +610,9 @@ def _test_codex(target: Path) -> dict:
             "agent": "codex",
             "ok": False,
             "exit_code": -1,
-            "reason": "predict-spawn-check hook not wired into Edit matcher",
+            "reason": "conflict-warn-pre-tool hook not wired into Edit matcher",
         }
-    bin_path = HOOKS_INSTALL_DIR() / "predict-spawn-check.sh"
+    bin_path = HOOKS_INSTALL_DIR() / "conflict-warn-pre-tool.sh"
     if not bin_path.is_file():
         return {
             "agent": "codex",
@@ -512,10 +620,16 @@ def _test_codex(target: Path) -> dict:
             "exit_code": -1,
             "reason": f"hook script missing: {bin_path}",
         }
-    # predict-spawn-check.sh needs MERGE_TRAIN_FILES or a git repo to do
-    # anything; for the synthetic test we just verify the script starts
-    # and exits 0 (warn-only contract).
-    res = _run_hook_binary(bin_path, {"tool": "Edit", "input": {}})
+    # The script's own tool-name filter handles the dispatch; we send
+    # the Claude-style payload (tool_name + tool_input) and it ignores
+    # non-Edit/Write tool names internally.
+    res = _run_hook_binary(
+        bin_path,
+        {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/tmp/example.py", "new_string": "x = 1"},
+        },
+    )
     ok = res["exit_code"] == 0
     return {
         "agent": "codex",
@@ -560,10 +674,73 @@ def _test_opencode(target: Path) -> dict:
     }
 
 
+def _test_agy(target: Path) -> dict:
+    """Synthesize a BeforeTool Edit payload; assert hook exits 0 + allows.
+
+    Mirrors ``_test_claude`` but for the agy / Gemini schema: a single
+    ``BeforeTool`` event (no matcher) wired to ``conflict-warn-pre-tool.sh``.
+    """
+    hooks_path = AGY_HOOKS_PATH()
+    if not hooks_path.exists():
+        return {
+            "agent": "agy",
+            "ok": False,
+            "exit_code": -1,
+            "reason": "agy hooks.json not installed",
+        }
+    try:
+        data = json.loads(hooks_path.read_text())
+    except json.JSONDecodeError as exc:
+        return {
+            "agent": "agy",
+            "ok": False,
+            "exit_code": -1,
+            "reason": f"agy hooks.json malformed: {exc}",
+        }
+    before_tool = data.get("hooks", {}).get("BeforeTool", [])
+    if not any(
+        "conflict-warn-pre-tool" in h.get("command", "")
+        for wrapper in before_tool
+        for h in wrapper.get("hooks", [])
+    ):
+        return {
+            "agent": "agy",
+            "ok": False,
+            "exit_code": -1,
+            "reason": "conflict-warn-pre-tool hook not wired into BeforeTool event",
+        }
+    bin_path = HOOKS_INSTALL_DIR() / "conflict-warn-pre-tool.sh"
+    if not bin_path.is_file():
+        return {
+            "agent": "agy",
+            "ok": False,
+            "exit_code": -1,
+            "reason": f"hook script missing: {bin_path}",
+        }
+    # The agy BeforeTool payload uses the Claude-style nested shape
+    # (the script's own tool-name filter handles the dispatch).
+    payload = {
+        "session_id": "synthetic",
+        "hook_event_name": "BeforeTool",
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "/tmp/example.py"},
+    }
+    res = _run_hook_binary(bin_path, payload)
+    ok = res["exit_code"] == 0
+    return {
+        "agent": "agy",
+        "ok": ok,
+        "exit_code": res["exit_code"],
+        "hook": str(bin_path),
+        "stderr": res["stderr"][:500],
+    }
+
+
 TEST_HOOKS: dict[str, Callable[[Path], dict]] = {
     "claude": _test_claude,
     "codex": _test_codex,
     "opencode": _test_opencode,
+    "agy": _test_agy,
 }
 """Per-agent test hook runners. Each takes the install target and returns a result dict."""
 
@@ -572,7 +749,8 @@ def test_hooks_for_agent(agent: str, target: Optional[Path] = None) -> list | di
     """Run the synthetic-Edit test for *agent*.
 
     Args:
-        agent: One of ``"claude"``, ``"opencode"``, ``"codex"``, or ``"all"``.
+        agent: One of ``"claude"``, ``"opencode"``, ``"codex"``, ``"agy"``,
+            or ``"all"``.
         target: Repo root used by OpenCode's test (looks for ``.opencode.json``).
     """
     if agent not in AGENT_CHOICES:
@@ -584,7 +762,7 @@ def test_hooks_for_agent(agent: str, target: Optional[Path] = None) -> list | di
     target = Path(target).resolve()
 
     if agent == "all":
-        return [TEST_HOOKS[a](target) for a in ("claude", "opencode", "codex")]
+        return [TEST_HOOKS[a](target) for a in ("claude", "opencode", "codex", "agy")]
     return TEST_HOOKS[agent](target)
 
 
