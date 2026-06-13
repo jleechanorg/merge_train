@@ -76,11 +76,17 @@ Every conflict-warn invocation is logged to a per-repo, per-branch daily file:
 /tmp/merge_train/{repo_name}/{branch_name}/hook-YYYY-MM-DD.log
 ```
 
+Nested branch names produce nested log directories: `feature/foo` writes to `/tmp/merge_train/<repo>/feature/foo/hook-YYYY-MM-DD.log` (one segment per `/` in the branch name). The `tail -f` snippet below follows the same nesting.
+
 `tail -f` the file in a second terminal to watch conflict-check decisions live:
 
 ```bash
 tail -f /tmp/merge_train/$(basename "$(git rev-parse --show-toplevel)")/$(git symbolic-ref --short HEAD)/hook-$(date +%Y-%m-%d).log
 ```
+
+**Note on symlinks:** `git rev-parse --show-toplevel` resolves the **real** path of the repo root, so if you reach the repo via a symlink (e.g. `~/work/myrepo` → `/private/tmp/repo_test`), the log lives at `/tmp/merge_train/<real-basename>/...` — the symlink name is **not** used.
+
+**Note on detached HEAD:** when `git symbolic-ref HEAD` fails (e.g. checking out a commit, a rebase in progress), the script falls back to the branch name `detached`. All detached-HEAD activity for that repo lands in a **single shared** `detached/` subdir. If you need to separate analysis by commit, confirm the branch first with `git symbolic-ref HEAD 2>/dev/null || git rev-parse --short HEAD`.
 
 The hook also emits a top-level `systemMessage` in its JSON output, which Claude Code renders as a chat banner regardless of decision. The log file is a durable record even after the chat scrolls away.
 

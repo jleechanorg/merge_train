@@ -39,6 +39,10 @@ LOG_FILE="${LOG_DIR}/hook-${LOG_DATE}.log"
 # We also drop the file_path from the log entry because the file_path
 # often embeds private info (e.g. ~/projects/<customer>/secret.txt).
 # Branch and repo name are kept (already known to the user via git).
+# Note: this redaction runs UNCONDITIONALLY — before the log-dir guard
+# below — so even on a non-git cwd (where LOG_DIR was never created) the
+# in-memory PAYLOAD_SUMMARY is still sanitised. The log write itself is
+# gated on `[[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]` further down.
 PAYLOAD_SUMMARY="$INPUT"
 if [[ "$PAYLOAD_SUMMARY" == *"\"new_string\""* || "$PAYLOAD_SUMMARY" == *"\"new_text\""* || "$PAYLOAD_SUMMARY" == *"\"content\""* ]]; then
   # Pull the tool_name and file_path out of the JSON for the log entry —

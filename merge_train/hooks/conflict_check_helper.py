@@ -241,6 +241,14 @@ def main() -> None:
     )
 
     # Detect remote OWNER/REPO for `gh --repo` scoping.
+    # NOTE: the regex below matches github.com remotes only. For non-
+    # GitHub remotes (gitlab.example.com, self-hosted Gitea, etc.) the
+    # pattern won't match and `repo_remote` stays empty — downstream
+    # `gh pr list` / `gh pr diff` calls then run WITHOUT `--repo`, which
+    # works only when the current CWD is inside the right local checkout
+    # (so `gh` can infer the repo from the git remote it sees locally).
+    # Cross-host self-hosted remotes without a local CWD match will fall
+    # through to the error-handling branch below with a `gh CLI error`.
     repo_remote = ""
     try:
         remote_url = subprocess.run(
