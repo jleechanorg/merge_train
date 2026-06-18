@@ -220,8 +220,9 @@ if [[ ! -f "$CODEX_HOOKS" ]]; then
     cat > "$CODEX_HOOKS" <<CODEX_EOF
 {
   "hooks": {
-    "BeforeTool": [
+    "PreToolUse": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -240,7 +241,7 @@ else
     # Idempotent: only patch if our hook isn't already present
     if ! grep -q "predict-spawn-check" "$CODEX_HOOKS" 2>/dev/null; then
         echo "  WARN: $CODEX_HOOKS exists but has no predict-spawn-check hook."
-        echo "        Manually add predict-spawn-check.sh to the BeforeTool hook."
+        echo "        Manually add predict-spawn-check.sh to the PreToolUse hook."
     else
         echo "  ok: $CODEX_HOOKS already wired."
     fi
@@ -279,12 +280,12 @@ else
     echo "  ok: $GEMINI_GUARD (copied from installed)"
 fi
 
-# Patch .gemini/settings.json to call the guard in BeforeTool
+# Patch .gemini/settings.json to call the guard in PreToolUse
 if [[ ! -f "$GEMINI_SETTINGS" ]]; then
     cat > "$GEMINI_SETTINGS" <<GEMINI_EOF
 {
   "hooks": {
-    "BeforeTool": [
+    "PreToolUse": [
       {
         "hooks": [
           {
@@ -300,7 +301,7 @@ GEMINI_EOF
     echo "  ok: created $GEMINI_SETTINGS"
 elif ! grep -q "predict-spawn-check" "$GEMINI_SETTINGS" 2>/dev/null; then
     echo "  WARN: $GEMINI_SETTINGS exists but has no predict-spawn-check hook."
-    echo "        Manually add predict-spawn-check.sh to the BeforeTool hook."
+    echo "        Manually add predict-spawn-check.sh to the PreToolUse hook."
 else
     echo "  ok: $GEMINI_SETTINGS already wired."
 fi
