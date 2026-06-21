@@ -133,8 +133,14 @@ def test_hook_script_still_emits_valid_json(clean_log_dir: None) -> None:
     last = [ln for ln in result.stdout.decode().splitlines() if ln.strip()][-1]
     parsed = json.loads(last)
     assert "systemMessage" in parsed
+    # Top-level canonical field (Claude Code hook spec): "approve" or "block".
+    # "allow"/"deny"/"ask" were the old values — now rejected by Claude Code.
+    assert parsed["decision"] in {"approve", "block"}, (
+        f"expected canonical decision approve/block; got {parsed.get('decision')!r}"
+    )
+    # Legacy hookSpecificOutput kept for codex/cursor/gemini backward compat.
     assert "hookSpecificOutput" in parsed
-    assert parsed["hookSpecificOutput"]["permissionDecision"] in {"allow", "deny", "ask"}
+    assert parsed["hookSpecificOutput"]["permissionDecision"] in {"approve", "block"}
 
 
 def test_hook_script_mirrors_stderr(clean_log_dir: None) -> None:
