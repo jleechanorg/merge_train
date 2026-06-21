@@ -47,12 +47,9 @@ except ImportError:  # pragma: no cover — fail-safe fallback
     # masking the real ImportError.
     _reason = "merge_train: package import failed; allowing"
     print(json.dumps({
+        "decision": "approve",
+        "reason": _reason,
         "systemMessage": _reason,
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
-            "permissionDecisionReason": _reason,
-        },
     }))
     sys.exit(0)
 
@@ -71,9 +68,20 @@ except ImportError:  # pragma: no cover — fall back to legacy hardcoded enforc
 
 
 # --------------------------------------------------------------------------- #
-# Output helpers — every decision is chat-visible via permissionDecisionReason
+# Output helpers — every decision is chat-visible via reason/systemMessage
 # --------------------------------------------------------------------------- #
 
+# Map internal decision names to Claude Code's canonical hook output values.
+# Claude Code uses "approve" (not "allow") and "block" (not "deny").
+# "allow"/"warn" both mean "let the tool proceed". "deny" is an old alias for "block".
+# always_approve.sh (the reference implementation) outputs {"decision":"approve"}.
+_DECISION_MAP: dict = {
+    "allow": "approve",
+    "warn": "approve",
+    "deny": "block",
+    "block": "block",
+    "approve": "approve",
+}
 
 # Claude Code's hook schema caps ``systemMessage`` and ``stdout`` at
 # 10,000 characters. When the reason text exceeds 10K (e.g., a 5+ PR
@@ -96,33 +104,22 @@ def _truncate_reason(reason: str) -> str:
 def _decision_payload(decision: str, reason: str) -> dict:
     """Build a PreToolUse hook output payload with a chat-visible reason.
 
-    Two parallel channels surface the same ``reason`` to the user:
-
-    - ``systemMessage`` (top-level): rendered as a real user-visible
-      chat banner by Claude Code, regardless of decision. This is the
-      strongest visibility signal — the user sees the hook's verdict
-      on every Edit, including a silent allow.
-    - ``permissionDecisionReason`` (inside ``hookSpecificOutput``): the
-      per-decision reason line shown in the Edit approval UI.
-
-    Schema note (M3): ``systemMessage`` is a Claude Code hook field.
-    Codex and Agy MAY or MAY NOT surface it (their hook output schemas
-    are not publicly documented). The legacy
-    ``hookSpecificOutput.permissionDecisionReason`` field is the
-    universal fallback — every CLI honors it. Both fields carry the
-    same text so any consumer that supports either will work. Do NOT
-    remove one of them without re-checking all 3 CLI contracts.
-
-    The two fields carry identical text so a future parser can rely
-    on either. Both are run through :func:`_truncate_reason` so the
-    chat banner never silently disappears under the 10K cap.
+    Output format uses the canonical Claude Code top-level fields:
+      {"decision": "approve"|"block", "reason": "...", "systemMessage": "..."}
+    The old ``hookSpecificOutput.permissionDecision`` wrapper is kept as a
+    parallel field so codex/cursor/gemini runtimes that may still read it
+    continue to work. Internal decision names ("allow", "warn", "deny") are
+    mapped via :data:`_DECISION_MAP` to the canonical values before output.
     """
     safe_reason = _truncate_reason(reason)
+    cc_decision = _DECISION_MAP.get(decision, "approve")
     return {
+        "decision": cc_decision,
+        "reason": safe_reason,
         "systemMessage": safe_reason,
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": decision,
+            "permissionDecision": cc_decision,
             "permissionDecisionReason": safe_reason,
         },
     }
@@ -334,7 +331,15 @@ def main() -> None:
         or ""
     )
     if tool_name not in _MUTATION_TOOLS:
-        _emit("allow", f"merge_train: tool {tool_name!r} not a file mutation; skipping conflict check.")
+        # Not a file-mutation tool — no conflict check needed. Exit 0 with no
+        # stdout: Claude Code (and all other runtimes) treat no output as
+        # implicit approve. Emitting a decision payload here triggered
+        # "unsupported permissionDecision:allow" when tools like Bash fired
+        # through a hook with a broad (*) matcher.
+        print(
+            f"merge_train: tool {tool_name!r} not a file mutation; skipping conflict check.",
+            file=sys.stderr,
+        )
         return
 
     # Extract target file path(s). Most runtimes give a single file_path;
