@@ -30,10 +30,14 @@ def _helper_path_for_test() -> Path:
 
 
 def test_decision_payload_includes_system_message() -> None:
-    """``_decision_payload`` puts a top-level ``systemMessage`` alongside
-    the ``permissionDecisionReason``. Without this, the chat banner
-    doesn't appear in any CLI."""
-    # Import the helper module directly to test the helper function.
+    """``_decision_payload`` outputs the canonical Claude Code hook format.
+
+    - Top-level ``decision`` uses "approve"/"block" (NOT "allow"/"deny").
+    - Top-level ``reason`` and ``systemMessage`` carry the same text.
+    - Legacy ``hookSpecificOutput.permissionDecision`` is kept for backward
+      compat with codex/cursor/gemini runtimes — it also uses "approve".
+    always_approve.sh (the reference implementation) uses {"decision":"approve"}.
+    """
     import importlib.util
 
     helper = _helper_path_for_test()
@@ -42,10 +46,16 @@ def test_decision_payload_includes_system_message() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     payload = module._decision_payload("allow", "merge_train: hello — no conflicts.")
+    # Top-level canonical fields (Claude Code PreToolUse hook spec).
+    assert payload["decision"] == "approve", (
+        f"'allow' must map to 'approve' (not 'allow'); got {payload['decision']!r}. "
+        "Claude Code rejects 'allow' as unsupported (see always_approve.sh)."
+    )
     assert "systemMessage" in payload, "systemMessage must be at top level"
     assert payload["systemMessage"] == "merge_train: hello — no conflicts."
-    # The legacy field is preserved for back-compat.
-    assert payload["hookSpecificOutput"]["permissionDecision"] == "allow"
+    assert payload["reason"] == "merge_train: hello — no conflicts."
+    # Legacy field preserved for codex/cursor/gemini backward compat.
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "approve"
     assert (
         payload["hookSpecificOutput"]["permissionDecisionReason"]
         == "merge_train: hello — no conflicts."
@@ -71,21 +81,59 @@ def test_system_message_matches_permission_decision_reason() -> None:
         assert p["systemMessage"] == p["hookSpecificOutput"]["permissionDecisionReason"]
 
 
-def test_emit_allow_path_includes_system_message(tmp_path: Path) -> None:
-    """End-to-end: helper called as a subprocess emits systemMessage
-    on the allow path."""
+def test_non_mutation_tool_emits_no_stdout(tmp_path: Path) -> None:
+    """Non-mutation tools (Read, Bash, ...) must produce NO stdout.
+
+    Exit 0 with no stdout is the correct "implicit approve" signal for
+    Claude Code (and other runtimes). Previously the helper emitted a
+    decision payload with permissionDecision:"allow" which Claude Code
+    rejected as "unsupported permissionDecision:allow".
+    """
     helper = _helper_path_for_test()
-    # A non-Edit tool short-circuits to allow with systemMessage.
-    result = subprocess.run(
-        [sys.executable, str(helper)],
-        input=json.dumps({"tool_name": "Read", "tool_input": {}}).encode(),
-        capture_output=True,
-        check=True,
-    )
-    payload = json.loads(result.stdout.decode().strip().splitlines()[-1])
-    assert "systemMessage" in payload
-    assert "Read" in payload["systemMessage"]  # reason mentions the skipped tool
-    assert payload["hookSpecificOutput"]["permissionDecision"] == "allow"
+    for tool in ("Read", "Bash", "TodoWrite", "unknown_tool"):
+        result = subprocess.run(
+            [sys.executable, str(helper)],
+            input=json.dumps({"tool_name": tool, "tool_input": {}}).encode(),
+            capture_output=True,
+            check=True,
+        )
+        assert result.stdout == b"", (
+            f"tool={tool!r}: expected empty stdout (implicit approve); "
+            f"got: {result.stdout!r}"
+        )
+        assert b"not a file mutation" in result.stderr, (
+            f"tool={tool!r}: expected skip warning on stderr; got: {result.stderr!r}"
+        )
+
+
+def test_decision_map_canonical_values() -> None:
+    """_DECISION_MAP must translate every internal name to Claude Code's values.
+
+    Claude Code only accepts "approve" and "block" as permissionDecision values.
+    "allow"/"warn" → "approve", "deny"/"block" → "block".
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    expected = {
+        "allow": "approve",
+        "warn": "approve",
+        "approve": "approve",
+        "deny": "block",
+        "block": "block",
+    }
+    for internal, canonical in expected.items():
+        p = module._decision_payload(internal, "test reason")
+        assert p["decision"] == canonical, (
+            f"_DECISION_MAP[{internal!r}] should map to {canonical!r}; "
+            f"got {p['decision']!r}"
+        )
+        assert p["hookSpecificOutput"]["permissionDecision"] == canonical
 
 
 def test_emit_empty_payload_includes_system_message() -> None:

@@ -167,6 +167,23 @@ SPAWN_CHECK="$HOOKS_INSTALL_DIR/predict-spawn-check.sh"
 CLAUDE_PRE_TOOL="$HOOKS_INSTALL_DIR/conflict-warn-pre-tool.sh"
 GEMINI_HOOK_INSTALLED="$HOOKS_INSTALL_DIR/gemini-conflict-warn.sh"
 
+# The single runtime-agnostic wrapper every CLI fires on edits. The wrapper
+# reads the tool payload on stdin and calls conflict_check_helper.py, which now
+# recognizes every runtime's edit-tool schema (Edit/Write, write_file/replace,
+# apply_patch, edit/write). Same command for Claude, Codex, Gemini, Cursor.
+WIRE_CMD="bash $CLAUDE_PRE_TOOL"
+# Idempotent JSON wiring helper (claude/cursor entry shapes; strips stale
+# predict-spawn-check / mt_capture entries so re-runs upgrade instead of skip).
+WIRE_HELPER="$MERGE_TRAIN_ROOT/merge_train/hooks/wire_hook_config.py"
+# Global (all-repos) runtime config locations, mirroring the global Claude
+# wiring in ~/.claude/settings.json.
+CODEX_GLOBAL_HOOKS="$HOME/.codex/hooks.json"
+GEMINI_GLOBAL_SETTINGS="$HOME/.gemini/settings.json"
+CURSOR_GLOBAL_HOOKS="$HOME/.cursor/hooks.json"
+OPENCODE_PLUGIN_DIR="$HOME/.config/opencode/plugins"
+OPENCODE_PLUGIN_SRC="$MERGE_TRAIN_ROOT/merge_train/hooks/opencode-conflict-plugin.js"
+OPENCODE_PLUGIN_DST="$OPENCODE_PLUGIN_DIR/merge-train-conflict.js"
+
 # ------------------------------------------------------------------------- #
 # 3. (no-op) Domain registry YAML removed — predict-conflicts needs no config
 # ------------------------------------------------------------------------- #
@@ -216,36 +233,12 @@ CODEX_HOOKS="$CODEX_DIR/hooks.json"
 
 echo "[3a/5] Codex per-repo hooks.json..."
 mkdir -p "$CODEX_DIR"
-if [[ ! -f "$CODEX_HOOKS" ]]; then
-    cat > "$CODEX_HOOKS" <<CODEX_EOF
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash $SPAWN_CHECK",
-            "timeoutSec": 15,
-            "statusMessage": "Running predict-conflicts pre-spawn check..."
-          }
-        ]
-      }
-    ]
-  }
-}
-CODEX_EOF
-    echo "  ok: created $CODEX_HOOKS"
-else
-    # Idempotent: only patch if our hook isn't already present
-    if ! grep -q "predict-spawn-check" "$CODEX_HOOKS" 2>/dev/null; then
-        echo "  WARN: $CODEX_HOOKS exists but has no predict-spawn-check hook."
-        echo "        Manually add predict-spawn-check.sh to the PreToolUse hook."
-    else
-        echo "  ok: $CODEX_HOOKS already wired."
-    fi
-fi
+# Codex's real edit tool is apply_patch (NOT Edit) — matcher "*" + the helper's
+# own tool-name filter is what actually catches edits. The wiring helper is
+# idempotent and upgrades stale predict-spawn-check entries from older installs.
+"$PYTHON_BIN" "$WIRE_HELPER" \
+    --config "$CODEX_HOOKS" --event PreToolUse --command "$WIRE_CMD" --style claude \
+    || echo "  WARN: codex per-repo wiring failed (non-fatal)"
 echo
 
 # ------------------------------------------------------------------------- #
@@ -253,58 +246,42 @@ echo
 # ------------------------------------------------------------------------- #
 
 GEMINI_DIR="$TARGET/.gemini"
-GEMINI_GUARD="$GEMINI_DIR/predict-spawn-check.sh"
 GEMINI_SETTINGS="$GEMINI_DIR/settings.json"
 
-echo "[3b/5] Antigravity (.gemini) per-repo guard..."
+echo "[3b/5] Gemini (.gemini) per-repo hooks..."
 mkdir -p "$GEMINI_DIR"
+# Gemini CLI uses the BeforeTool event (NOT PreToolUse — gemini rejects
+# PreToolUse as an invalid event name) and its write_file/replace tools carry
+# tool_input.file_path (Claude-compatible), so the same wrapper works.
+"$PYTHON_BIN" "$WIRE_HELPER" \
+    --config "$GEMINI_SETTINGS" --event BeforeTool --command "$WIRE_CMD" --style claude \
+    || echo "  WARN: gemini per-repo wiring failed (non-fatal)"
+echo
 
-# Copy guard from installed location (not a symlink to source repo).
-# GEMINI_HOOK_INSTALLED may not exist when the hooks PR lands separately —
-# skip gracefully so this branch's CI passes without the hook files.
-if [[ ! -f "$GEMINI_HOOK_INSTALLED" ]]; then
-    echo "  SKIP: $GEMINI_HOOK_INSTALLED not present in this release (hook files pending)"
-elif [[ -f "$GEMINI_GUARD" ]]; then
-    # Replace if it's a stale symlink to the old source-repo path
-    if [[ -L "$GEMINI_GUARD" ]]; then
-        rm "$GEMINI_GUARD"
-        cp "$GEMINI_HOOK_INSTALLED" "$GEMINI_GUARD"
-        chmod +x "$GEMINI_GUARD"
-        echo "  updated: $GEMINI_GUARD (replaced old source-repo symlink)"
-    else
-        echo "  ok: $GEMINI_GUARD already exists (leaving untouched)."
-    fi
-else
-    cp "$GEMINI_HOOK_INSTALLED" "$GEMINI_GUARD"
-    chmod +x "$GEMINI_GUARD"
-    echo "  ok: $GEMINI_GUARD (copied from installed)"
-fi
+# ------------------------------------------------------------------------- #
+# 4b-2. Cursor per-repo .cursor/hooks.json
+# ------------------------------------------------------------------------- #
+#
+# The cursor-agent CLI (the fanout path: `cursor-agent -f`/`-p`) only executes
+# hooks from the PROJECT-level .cursor/hooks.json — the global ~/.cursor/hooks.json
+# is NOT loaded for headless CLI sessions (empirically: global-only => the
+# preToolUse hook never fires; a project-level copy => it fires, Δ>0). So unlike
+# codex/gemini (which read their GLOBAL config fine), cursor REQUIRES per-repo
+# wiring for the conflict hook to fire on cursor fanout edits.
 
-# Patch .gemini/settings.json to call the guard in PreToolUse
-if [[ ! -f "$GEMINI_SETTINGS" ]]; then
-    cat > "$GEMINI_SETTINGS" <<GEMINI_EOF
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash $GEMINI_GUARD"
-          }
-        ]
-      }
-    ]
-  }
-}
-GEMINI_EOF
-    echo "  ok: created $GEMINI_SETTINGS"
-elif ! grep -q "predict-spawn-check" "$GEMINI_SETTINGS" 2>/dev/null; then
-    echo "  WARN: $GEMINI_SETTINGS exists but has no predict-spawn-check hook."
-    echo "        Manually add predict-spawn-check.sh to the PreToolUse hook."
-else
-    echo "  ok: $GEMINI_SETTINGS already wired."
-fi
+CURSOR_DIR="$TARGET/.cursor"
+CURSOR_HOOKS="$CURSOR_DIR/hooks.json"
+
+echo "[3b/5] Cursor per-repo .cursor/hooks.json (CLI loads project-level hooks only)..."
+mkdir -p "$CURSOR_DIR"
+"$PYTHON_BIN" "$WIRE_HELPER" \
+    --config "$CURSOR_HOOKS" --event preToolUse --command "$WIRE_CMD" --style cursor \
+    || echo "  WARN: cursor per-repo preToolUse wiring failed (non-fatal)"
+"$PYTHON_BIN" "$WIRE_HELPER" \
+    --config "$CURSOR_HOOKS" --event subagentStart \
+    --command "bash -c 'echo \"merge_train: cursor subagent (fanout) starting — conflict hook active\" >&2'" \
+    --style cursor \
+    || echo "  WARN: cursor per-repo subagentStart wiring failed (non-fatal)"
 echo
 
 # ------------------------------------------------------------------------- #
@@ -393,6 +370,51 @@ with open(settings_path, "w") as f:
     json.dump(data, f, indent=2)
 print("  ok: patched ~/.claude/settings.json with conflict-warn PreToolUse hooks.")
 '
+echo
+
+# ------------------------------------------------------------------------- #
+# 4d-2. Global (all-repos) wiring for the OTHER fanout runtimes
+#       Parity with the global Claude block above so codex / gemini / cursor /
+#       opencode fanout subagents fire the SAME conflict-warn hook in EVERY repo.
+#       Each helper call SKIPs cleanly if that runtime isn't installed (its
+#       config dir won't exist), and is idempotent + upgrades stale wiring.
+# ------------------------------------------------------------------------- #
+
+echo "[3d/5] Codex global ~/.codex/hooks.json (matcher '*' — codex edits via apply_patch)..."
+"$PYTHON_BIN" "$WIRE_HELPER" \
+    --config "$CODEX_GLOBAL_HOOKS" --event PreToolUse --command "$WIRE_CMD" --style claude \
+    || echo "  WARN: codex global wiring failed (non-fatal)"
+echo
+
+echo "[3d/5] Gemini global ~/.gemini/settings.json (BeforeTool event)..."
+"$PYTHON_BIN" "$WIRE_HELPER" \
+    --config "$GEMINI_GLOBAL_SETTINGS" --event BeforeTool --command "$WIRE_CMD" --style claude \
+    || echo "  WARN: gemini global wiring failed (non-fatal)"
+echo
+
+echo "[3d/5] Cursor global ~/.cursor/hooks.json (preToolUse + subagentStart fanout signal)..."
+"$PYTHON_BIN" "$WIRE_HELPER" \
+    --config "$CURSOR_GLOBAL_HOOKS" --event preToolUse --command "$WIRE_CMD" --style cursor \
+    || echo "  WARN: cursor preToolUse wiring failed (non-fatal)"
+# subagentStart: the one runtime exposing a fanout-start signal -> make fanout visible.
+"$PYTHON_BIN" "$WIRE_HELPER" \
+    --config "$CURSOR_GLOBAL_HOOKS" --event subagentStart \
+    --command "bash -c 'echo \"merge_train: cursor subagent (fanout) starting — conflict hook active\" >&2'" \
+    --style cursor \
+    || echo "  WARN: cursor subagentStart wiring failed (non-fatal)"
+echo
+
+echo "[3d/5] OpenCode global plugin ~/.config/opencode/plugins/..."
+if [[ -d "$OPENCODE_PLUGIN_DIR" ]]; then
+    if [[ -f "$OPENCODE_PLUGIN_SRC" ]]; then
+        cp "$OPENCODE_PLUGIN_SRC" "$OPENCODE_PLUGIN_DST"
+        echo "  ok: installed $OPENCODE_PLUGIN_DST"
+    else
+        echo "  WARN: $OPENCODE_PLUGIN_SRC missing; opencode plugin not installed."
+    fi
+else
+    echo "  SKIP: $OPENCODE_PLUGIN_DIR not present; opencode plugin not installed."
+fi
 echo
 
 
