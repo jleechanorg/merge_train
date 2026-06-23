@@ -110,8 +110,16 @@ def test_hook_script_writes_logfile(clean_log_dir: None) -> None:
 
 
 def test_hook_script_still_emits_valid_json(clean_log_dir: None) -> None:
-    """Stdout of the script must be a parseable JSON envelope (so the
-    CLI's hook protocol parser still works)."""
+    """Stdout of the script must be parseable JSON with a canonical ``decision``
+    field. For no-conflict edits the output is intentionally minimal
+    (``{"decision":"approve"}`` with no ``systemMessage``) so Claude Code shows
+    nothing on routine edits — spamming the user with "no conflicts found" on
+    every file write is the anti-pattern this test was introduced to prevent.
+
+    If a CONFLICT is detected the payload does contain ``systemMessage`` and
+    ``hookSpecificOutput`` — those fields are tested via
+    ``test_conflict_helper.py::test_warn_only_conflict_exits_nonzero``.
+    """
     repo = Path(__file__).resolve().parents[1]
     payload = json.dumps(
         {
@@ -132,15 +140,13 @@ def test_hook_script_still_emits_valid_json(clean_log_dir: None) -> None:
     # The script's stdout is the JSON envelope (last non-empty line).
     last = [ln for ln in result.stdout.decode().splitlines() if ln.strip()][-1]
     parsed = json.loads(last)
-    assert "systemMessage" in parsed
     # Top-level canonical field (Claude Code hook spec): "approve" or "block".
     # "allow"/"deny"/"ask" were the old values — now rejected by Claude Code.
     assert parsed["decision"] in {"approve", "block"}, (
         f"expected canonical decision approve/block; got {parsed.get('decision')!r}"
     )
-    # Legacy hookSpecificOutput kept for codex/cursor/gemini backward compat.
-    assert "hookSpecificOutput" in parsed
-    assert parsed["hookSpecificOutput"]["permissionDecision"] in {"approve", "block"}
+    # No-conflict path: minimal silent approve — no systemMessage, no hookSpecificOutput.
+    # Conflict path: full payload with systemMessage (tested separately).
 
 
 def test_hook_script_mirrors_stderr(clean_log_dir: None) -> None:
