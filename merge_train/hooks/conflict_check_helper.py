@@ -381,11 +381,6 @@ def main() -> None:
         capture_output=True, text=True, check=False,
     ).stdout.strip()
 
-    print(
-        f"merge_train: checking conflicts for {paths_label} (branch '{current_branch}') in '{repo_alias}'...",
-        file=sys.stderr,
-    )
-
     # Detect remote OWNER/REPO for `gh --repo` scoping.
     # NOTE: the regex below matches github.com remotes only. For non-
     # GitHub remotes (gitlab.example.com, self-hosted Gitea, etc.) the
@@ -409,6 +404,17 @@ def main() -> None:
                 repo_remote = m.group(1)
     except Exception:
         pass
+
+    # If the alias is still the raw directory name (fallback / unregistered
+    # worktree at /tmp/ or similar), use the GitHub repo name from the remote
+    # for a cleaner, recognizable label in conflict messages.
+    if repo_remote and repo_alias == repo_name:
+        repo_alias = repo_remote.split("/")[-1]
+
+    print(
+        f"merge_train: checking conflicts for {paths_label} (branch '{current_branch}') in '{repo_alias}'...",
+        file=sys.stderr,
+    )
 
     # Read from cache (45s TTL).
     cache_file = Path(f"/tmp/merge_train_cache_{repo_name}.json")
