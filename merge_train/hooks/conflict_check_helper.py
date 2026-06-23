@@ -68,8 +68,15 @@ except ImportError:  # pragma: no cover — fall back to legacy hardcoded enforc
 
 
 # --------------------------------------------------------------------------- #
-# Output helpers — every decision is chat-visible via reason/systemMessage
+# Output helpers
 # --------------------------------------------------------------------------- #
+
+# Exit codes used for Claude Code TUI visibility:
+#   0  → silent approve (tool runs, no notification)
+#   1  → non-blocking warn (tool runs, TUI shows first line of stderr)
+#   2  → block (tool prevented, stderr shown as reason)
+_EXIT_SILENT_APPROVE = 0
+_EXIT_WARN_NOTIFY = 1  # triggers "hook error" TUI notice — first stderr line shown
 
 # Map internal decision names to Claude Code's canonical hook output values.
 # Claude Code uses "approve" (not "allow") and "block" (not "deny").
@@ -128,6 +135,16 @@ def _decision_payload(decision: str, reason: str) -> dict:
 def _emit(decision: str, reason: str) -> None:
     """Print the decision JSON to stdout (Claude Code reads this)."""
     print(json.dumps(_decision_payload(decision, reason)))
+
+
+def _silent_approve() -> None:
+    """Emit a minimal approve with no systemMessage.
+
+    Used for the no-conflict case so routine edits are completely silent.
+    Claude Code shows nothing for exit 0 + ``{"decision":"approve"}`` with
+    no ``systemMessage`` — the user is not spammed on every file write.
+    """
+    print(json.dumps({"decision": "approve"}))
 
 
 # --------------------------------------------------------------------------- #
@@ -472,10 +489,7 @@ def main() -> None:
             f"merge_train: checked {paths_label} — no conflicts found (no other open PRs).",
             file=sys.stderr,
         )
-        _emit(
-            "allow",
-            f"merge_train: {paths_label} — no conflicts found (no other open PRs in {repo_alias}).",
-        )
+        _silent_approve()
         return
 
     # Check every target path against other open PRs. Symbol-level line ranges
@@ -503,25 +517,24 @@ def main() -> None:
         )
 
         if enforcement_bool:
-            # Block: return deny with the same reason the user sees in chat.
+            # Block: deny — the tool is prevented. User sees reason in chat.
             print(msg, file=sys.stderr)
             _emit("deny", reason)
             return
         else:
-            # Warn-only: still allow, but the user sees the conflict reason in chat.
+            # Warn-only: tool runs, but exit 1 makes Claude Code surface the
+            # first line of stderr as a TUI notification ("hook error" notice).
+            # systemMessage also reaches Claude's context for relaying to user.
             print(msg, file=sys.stderr)
             _emit("allow", f"{reason} (warn-only for {repo_alias}; check the other PR before merging).")
-            return
+            sys.exit(_EXIT_WARN_NOTIFY)
 
-    # No conflicts.
+    # No conflicts — silent approve. No systemMessage to avoid noise on every edit.
     print(
         f"merge_train: checked {paths_label} — no conflicts found.",
         file=sys.stderr,
     )
-    _emit(
-        "allow",
-        f"merge_train: {paths_label} — no conflicts found in {repo_alias}.",
-    )
+    _silent_approve()
 
 
 if __name__ == "__main__":
