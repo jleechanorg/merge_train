@@ -336,3 +336,15 @@ def test_warn_only_conflict_exits_nonzero(tmp_path: Path) -> None:
         )
     except json.JSONDecodeError:
         pytest.fail(f"stdout last line is not valid JSON: {last_line!r}")
+
+    # CRITICAL: the FIRST line of stderr is what Claude Code surfaces in the
+    # TUI "hook error" banner. It MUST contain "CONFLICT" — not a generic
+    # "checking conflicts..." status message — otherwise the user sees noise
+    # instead of the actual warning.
+    stderr_lines = [ln for ln in result.stderr.decode().splitlines() if ln.strip()]
+    assert stderr_lines, "expected non-empty stderr (conflict banner)"
+    first_line = stderr_lines[0]
+    assert "CONFLICT" in first_line, (
+        f"first stderr line must contain 'CONFLICT' (this is the TUI banner); "
+        f"got: {first_line!r}\nfull stderr: {result.stderr.decode()!r}"
+    )
