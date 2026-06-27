@@ -62,17 +62,19 @@ VALID_ENFORCEMENT: tuple[str, ...] = ("block", "warn", "allow")
 def default_config() -> dict:
     """Return the in-memory default config used when no file exists.
 
-    The defaults are deliberately conservative: the merge_train repo
-    itself enforces (block) so PRs don't trample its own code, every
-    other repo defaults to ``warn`` so the hook stays informative
-    without surprising the user.
+    Every repo defaults to ``warn``. The previous default of ``block``
+    for the merge_train repo itself was misleading: Claude Code's
+    PreToolUse protocol does not actually prevent the Edit tool from
+    running when the hook returns ``decision: block``, so a "blocked"
+    edit silently completed and was committed. The honest default is
+    warn-only for every repo — the TUI banner is the visible signal.
     """
     return {
         "default_enforcement": "warn",
         "repos": {
             "/Users/jleechan/projects/merge_train": {
                 "alias": "merge_train",
-                "enforcement": "block",
+                "enforcement": "warn",
             },
         },
     }
