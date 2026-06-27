@@ -16,6 +16,38 @@ def test_default_config():
     cfg = default_config()
     assert cfg["default_enforcement"] == "warn"
     assert "/Users/jleechan/projects/merge_train" in cfg["repos"]
+    # Honest default: merge_train itself is warn, not block.
+    # Claude Code's PreToolUse protocol does not actually prevent the
+    # Edit tool from running when the hook returns ``decision: block``
+    # — the tool still applies the change. The honest default is
+    # warn-only for every repo, so the TUI banner is the visible signal
+    # rather than a false promise of enforcement.
+    assert cfg["repos"]["/Users/jleechan/projects/merge_train"]["enforcement"] == "warn"
+
+
+def test_legacy_enforcement_falls_back_to_warn():
+    """Every repo (including merge_train) must default to warn.
+
+    See ``test_default_config`` for the rationale — the legacy fallback
+    in ``conflict_check_helper._legacy_enforcement`` must also return
+    ``warn`` for every repo so a missing or unloadable config file
+    does not silently regress to the misleading ``block`` behavior.
+    """
+    from merge_train.hooks import conflict_check_helper as helper_mod
+    # Stub out the package-level config loader so the legacy fallback is
+    # exercised — we want to test the hardcoded fallback, not whatever
+    # the user's ~/merge_train/config.json happens to say.
+    cfg_module_saved = helper_mod._load_config
+    lookup_module_saved = helper_mod._lookup_enforcement
+    helper_mod._load_config = None
+    helper_mod._lookup_enforcement = None
+    try:
+        assert helper_mod._legacy_enforcement("merge_train") == "warn"
+        assert helper_mod._legacy_enforcement("anything_else") == "warn"
+    finally:
+        helper_mod._load_config = cfg_module_saved
+        helper_mod._lookup_enforcement = lookup_module_saved
+
 
 def test_load_save_config(tmp_path):
     cfg_file = tmp_path / "config.json"

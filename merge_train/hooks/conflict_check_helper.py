@@ -16,9 +16,13 @@ Enforcement
 -----------
 Per-repo enforcement is read from ``~/merge_train/config.json`` via
 :func:`merge_train.config.load_config`. If the config file is missing
-or the package is not importable, falls back to the previous
-hardcoded defaults (``merge_train`` repo = block, others = warn) so
-existing installs keep working.
+or the package is not importable, falls back to ``warn`` for every
+repo. The historical default of ``block`` for the merge_train repo
+itself was misleading: Claude Code's PreToolUse protocol surfaces the
+``block`` decision in the TUI but does not actually prevent the Edit
+tool from running, so a "blocked" edit silently completed and was
+committed. Treating merge_train as warn-only makes the banner the
+honest, visible signal.
 """
 
 from __future__ import annotations
@@ -153,13 +157,22 @@ def _silent_approve() -> None:
 
 
 def _legacy_enforcement(repo_name: str) -> str:
-    """Pre-config-file fallback: merge_train = block, others = warn.
+    """Pre-config-file fallback: every repo = warn.
 
-    Preserved verbatim so existing installs behave identically when
-    the config file is absent or the package can't be imported.
+    Historically the merge_train repo defaulted to ``block``, but in
+    practice the Claude Code PreToolUse protocol does not actually
+    prevent the Edit tool from running when the hook returns
+    ``decision: block`` — the tool still applies the change. Treating
+    that as a real block was misleading: a "blocked" merge_train edit
+    silently completed and was committed. The honest behavior is
+    warn-only for every repo, including merge_train itself, so the
+    banner is the visible signal and there is no false promise of
+    enforcement.
+
+    Preserved as a function (rather than a constant) so existing
+    installs behave identically when the config file is absent or
+    the package can't be imported.
     """
-    if repo_name == "merge_train":
-        return "block"
     return "warn"
 
 
@@ -168,7 +181,7 @@ def _resolve_enforcement(repo_root: str) -> tuple[str, str]:
 
     Resolution order:
         1. ``~/merge_train/config.json`` (if importable + present)
-        2. Legacy hardcoded defaults (merge_train = block, others = warn)
+        2. Legacy hardcoded defaults (every repo = warn)
     """
     alias = Path(repo_root).name
     if _load_config is None or _lookup_enforcement is None or _get_repo_alias is None:
