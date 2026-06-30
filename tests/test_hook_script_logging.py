@@ -169,10 +169,12 @@ def test_hook_script_mirrors_stderr(clean_log_dir: None) -> None:
         timeout=30,
     )
     err = result.stderr.decode()
-    assert "merge_train: checking conflicts" in err, (
+    # The "checking conflicts" status line was removed so the FIRST line of
+    # stderr remains available for the actual conflict banner when one fires.
+    # No-conflict stderr still includes a status line ("merge_train: checked").
+    assert "merge_train: checked" in err, (
         f"stderr lost; the CLI TUI would see no status line. Got: {err!r}"
     )
-    assert "merge_train: checked" in err
 
 
 def test_hook_script_handles_non_git_cwd(clean_log_dir: None, tmp_path: Path) -> None:
