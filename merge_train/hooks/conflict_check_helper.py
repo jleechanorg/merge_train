@@ -143,6 +143,9 @@ def _silent_approve() -> None:
     Used for the no-conflict case so routine edits are completely silent.
     Claude Code shows nothing for exit 0 + ``{"decision":"approve"}`` with
     no ``systemMessage`` — the user is not spammed on every file write.
+
+    NOTE (conflict-demo-A): marker comment added to exercise the
+    conflict-warn-pre-tool hook. Safe, docstring-only change.
     """
     print(json.dumps({"decision": "approve"}))
 
