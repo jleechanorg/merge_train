@@ -22,19 +22,13 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
-import subprocess
-import sys
 from pathlib import Path
-from typing import Iterator
-from unittest import mock
 
 import pytest
 
 from merge_train.hook_install import (
     AGENT_CHOICES,
     ALL_HOOK_SCRIPTS,
-    HOOKS_INSTALL_DIR,
     TEST_HOOKS,
     hooks_install_dir,
     install_hooks_for_agent,
@@ -324,6 +318,55 @@ def test_install_hooks_codex_strips_legacy_predict_spawn_check(
     assert any("conflict-warn-pre-tool" in c for c in cmds)
 
 
+def test_install_hooks_codex_strips_wildcard_conflict_warn(
+    fake_home: Path,
+    fake_codex_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    """A prior broad "*" conflict hook must not survive beside Edit.
+
+    Codex loads all matching hook groups, so keeping both "*" and "Edit"
+    runs ``conflict-warn-pre-tool.sh`` twice for every edit.
+    """
+    fake_codex_hooks.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "*",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "bash /home/jleechan/.local/bin/conflict-warn-pre-tool.sh",
+                                },
+                                {
+                                    "type": "command",
+                                    "command": "python3 /tmp/other-policy.py",
+                                },
+                            ],
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    install_hooks_for_agent("codex", target=fake_repo)
+    data = json.loads(fake_codex_hooks.read_text())
+    pre_tool = data["hooks"]["PreToolUse"]
+    conflict_cmds = [
+        h.get("command", "")
+        for matcher in pre_tool
+        for h in matcher.get("hooks", [])
+        if "conflict-warn-pre-tool" in h.get("command", "")
+    ]
+    assert len(conflict_cmds) == 1
+    edit = next(m for m in pre_tool if m["matcher"] == "Edit")
+    assert edit["hooks"][0]["command"] == conflict_cmds[0]
+    star = next(m for m in pre_tool if m["matcher"] == "*")
+    assert [h["command"] for h in star["hooks"]] == ["python3 /tmp/other-policy.py"]
+
+
 # --------------------------------------------------------------------------- #
 # install_hooks_for_agent — OpenCode
 # --------------------------------------------------------------------------- #
@@ -458,8 +501,6 @@ def test_install_hooks_agy_removes_stale_source_repo_entries(
     fake_repo: Path,
 ) -> None:
     """If ~/.gemini/config/hooks.json references old source-repo paths, strip them."""
-    import re
-
     # Discover the source-repo root the installer would consider "stale".
     # The installer treats any command containing the repo root and
     # "hooks/" as stale (see ``_is_stale_source_cmd``). Use the same
