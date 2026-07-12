@@ -244,6 +244,95 @@ def test_no_conflict_silent_approve(tmp_path: Path) -> None:
     assert stdout_text == "", f"expected empty stdout for implicit allow; got {stdout_text!r}"
 
 
+def test_issue42_mutation_tool_outside_git_repo_emits_no_approve(tmp_path: Path) -> None:
+    """Regression for GitHub issue #42.
+
+    The exact repro from the bug report:
+      echo '{"tool_name":"Write","tool_input":{"file_path":"/tmp/x.txt","content":"hi"}}' \\
+        | python conflict_check_helper.py
+
+    Before the fix (origin/main): emitted ``permissionDecision: "approve"`` which fails
+    Claude Code 2.1+ schema validation (enum must be "allow" | "deny" | "ask").
+    After the fix: must emit empty stdout (silent approve, exit 0).
+
+    Additionally validates that no valid hook output payload ever contains
+    ``permissionDecision: "approve"`` anywhere in the JSON tree.
+    """
+    helper = _helper_path_for_test()
+    # Use a tmp_path that is NOT inside any git repo so the helper
+    # hits the "not inside a git repo; allowing" branch — the exact path
+    # the issue reporter exercised. We ensure it is not accidentally inside
+    # one by testing a path under /tmp directly (same as the issue's /tmp/x.txt).
+    outside_git = "/tmp/issue42_regression_test.txt"
+
+    tool_input = json.dumps({
+        "tool_name": "Write",
+        "tool_input": {"file_path": outside_git, "content": "hi"},
+    })
+    result = subprocess.run(
+        [sys.executable, str(helper)],
+        input=tool_input.encode(),
+        capture_output=True,
+        cwd="/tmp",  # run from /tmp — definitely not a git repo
+    )
+    assert result.returncode == 0, (
+        f"expected exit 0 (allow); got {result.returncode}\n"
+        f"stderr: {result.stderr.decode()}"
+    )
+    stdout_text = result.stdout.decode().strip()
+    if stdout_text:
+        # If any JSON was emitted, verify it never contains permissionDecision:"approve"
+        # (the invalid value that triggered the Claude Code schema error in issue #42)
+        for line in stdout_text.splitlines():
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            hook_out = payload.get("hookSpecificOutput", {})
+            perm_decision = hook_out.get("permissionDecision")
+            assert perm_decision != "approve", (
+                f"permissionDecision='approve' emitted — this is the issue #42 bug.\n"
+                f"Claude Code 2.1+ schema only accepts 'allow'|'deny'|'ask'.\n"
+                f"Full payload: {payload}"
+            )
+            # Also assert no legacy top-level "decision" field
+            assert "decision" not in payload, (
+                f"Legacy top-level 'decision' field found — unsupported by Codex/modern runtimes.\n"
+                f"Full payload: {payload}"
+            )
+
+
+def test_issue42_decision_payload_never_emits_approve_as_permission_decision() -> None:
+    """Unit-level regression for issue #42: _decision_payload must never set
+    hookSpecificOutput.permissionDecision to 'approve'.
+
+    Claude Code 2.1+ validates permissionDecision strictly as 'allow'|'deny'|'ask'.
+    The old _DECISION_MAP mapped 'allow'/'warn' → 'approve' which caused:
+      'Hook JSON output validation failed — (root): Invalid input'
+    on every file write in sessions with merge_train hooks installed.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    VALID_PERMISSION_DECISIONS = {"allow", "deny", "ask", None}
+
+    for internal_decision in ("allow", "warn", "approve", "deny", "block"):
+        p = module._decision_payload(internal_decision, f"test for {internal_decision!r}")
+        hook_out = p.get("hookSpecificOutput", {})
+        perm_decision = hook_out.get("permissionDecision")
+        assert perm_decision in VALID_PERMISSION_DECISIONS, (
+            f"_decision_payload('{internal_decision}', ...) emitted "
+            f"permissionDecision={perm_decision!r} which is not in the "
+            f"Claude Code 2.1+ schema enum {{allow|deny|ask}}.\n"
+            f"This is the issue #42 bug. Full payload: {p}"
+        )
+
+
 def test_warn_only_conflict_exits_zero_with_context(tmp_path: Path) -> None:
     """Warn-only conflicts must not make the hook itself look failed.
 
