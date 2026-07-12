@@ -54,15 +54,26 @@ jobs:
             echo "FAIL: bundle SHA $BUNDLE_SHA not found in git history" >&2
             exit 1
           fi
-          # Count commits HEAD is ahead of bundle SHA
-          COMMITS_AHEAD=$(git rev-list --count "${BUNDLE_SHA}..HEAD" 2>/dev/null || echo 999)
-          echo "HEAD is $COMMITS_AHEAD commits ahead of bundle SHA $BUNDLE_SHA"
+          # In a PR context, HEAD is a synthetic merge commit (PR branch merged into base).
+          # git rev-list BUNDLE_SHA..merge_commit would count all of main's history as
+          # "commits ahead", falsely failing the staleness gate. Use the PR branch tip
+          # (second parent of the merge commit) when available; fall back to HEAD otherwise.
+          if git cat-file -e HEAD^2 2>/dev/null; then
+            COMPARE_REF=$(git rev-parse HEAD^2)
+            echo "PR context detected: comparing against branch tip $COMPARE_REF (HEAD^2)"
+          else
+            COMPARE_REF=HEAD
+            echo "Non-PR context: comparing against HEAD"
+          fi
+          # Count commits branch tip is ahead of bundle SHA
+          COMMITS_AHEAD=$(git rev-list --count "${BUNDLE_SHA}..${COMPARE_REF}" 2>/dev/null || echo 999)
+          echo "Branch tip is $COMMITS_AHEAD commits ahead of bundle SHA $BUNDLE_SHA"
           if [ "$COMMITS_AHEAD" -gt "$MAX_STALE_COMMITS" ]; then
             echo "FAIL: evidence bundle is $COMMITS_AHEAD commits stale (max allowed: $MAX_STALE_COMMITS)." >&2
             echo "Rerun scripts/e2e_md_area_lock_runner.py at current HEAD to refresh evidence." >&2
             exit 1
           fi
-          echo "PASS: bundle is current ($COMMITS_AHEAD commits behind HEAD)"
+          echo "PASS: bundle is current ($COMMITS_AHEAD commits behind branch tip)"
 
       - name: Verify sha256 sidecars
         run: |
