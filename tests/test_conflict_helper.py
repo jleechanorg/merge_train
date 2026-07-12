@@ -30,11 +30,16 @@ def _helper_path_for_test() -> Path:
 
 
 def test_decision_payload_includes_system_message() -> None:
-    """``_decision_payload`` outputs a current-runtime hook format.
+    """``_decision_payload`` outputs the canonical Claude Code hook format.
 
-    Non-blocking payloads must not emit legacy ``decision:"approve"`` because
-    Codex rejects that field value. They carry a chat-visible ``systemMessage``
-    and model-visible additional context instead.
+    Both blocking and non-blocking decisions live under ``hookSpecificOutput``
+    with ``permissionDecision`` in the strict ``allow|deny|ask|defer`` enum.
+    No legacy top-level ``decision`` field is emitted (Codex rejects
+    ``decision: "approve"`` and Claude Code rejects ``approve`` as an
+    unsupported ``permissionDecision`` enum value with the message
+    ``Hook JSON output validation failed — (root): Invalid input``).
+
+    See https://code.claude.com/docs/en/hooks for the current schema.
     """
     import importlib.util
 
@@ -44,32 +49,20 @@ def test_decision_payload_includes_system_message() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     payload = module._decision_payload("allow", "merge_train: hello — no conflicts.")
-    assert "decision" not in payload, f"legacy top-level decision is unsupported: {payload}"
-    assert "systemMessage" in payload, "systemMessage must be at top level"
-    assert payload["systemMessage"] == "merge_train: hello — no conflicts."
+    # No legacy top-level fields — current runtimes reject both `decision`
+    # and `systemMessage` as legacy / ambiguous.
+    assert "decision" not in payload, f"legacy top-level 'decision' is rejected: {payload}"
+    assert "systemMessage" not in payload, (
+        f"top-level 'systemMessage' is ambiguous when paired with permissionDecision; "
+        f"the runtime picks one based on structured-concurrency semantics: {payload}"
+    )
+    # Canonical hook-specific fields.
     assert payload["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
-    assert payload["hookSpecificOutput"]["additionalContext"] == "merge_train: hello — no conflicts."
-    assert "permissionDecision" not in payload["hookSpecificOutput"]
-
-
-def test_system_message_matches_permission_decision_reason() -> None:
-    """Both chat-visible fields carry the same text. A future parser can
-    rely on either."""
-    import importlib.util
-
-    helper = _helper_path_for_test()
-    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    for decision, reason in [("allow", "ok"), ("deny", "blocked by config")]:
-        p = module._decision_payload(decision, reason)
-        hook_output = p["hookSpecificOutput"]
-        visible_reason = (
-            hook_output.get("permissionDecisionReason")
-            or hook_output.get("additionalContext")
-        )
-        assert p["systemMessage"] == visible_reason
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "allow"
+    assert (
+        payload["hookSpecificOutput"]["permissionDecisionReason"]
+        == "merge_train: hello — no conflicts."
+    )
 
 
 def test_non_mutation_tool_emits_no_stdout(tmp_path: Path) -> None:
@@ -98,11 +91,125 @@ def test_non_mutation_tool_emits_no_stdout(tmp_path: Path) -> None:
 
 
 def test_decision_map_canonical_values() -> None:
-    """_DECISION_MAP must avoid unsupported non-blocking decisions.
+    """``_DECISION_MAP`` must translate every internal name to a value in the
+    Claude Code ``permissionDecision`` strict enum (``allow | deny | ask |
+    defer``). The legacy ``"approve"`` / ``"block"`` values are NOT in the
+    enum and are rejected with ``Hook JSON output validation failed —
+    (root): Invalid input`` on every Write/Edit (see issue #42)."""
+    import importlib.util
 
-    Codex rejects legacy ``decision:"approve"``. Non-blocking internal names
-    should produce no permission decision; blocking names should produce
-    ``permissionDecision:"deny"``.
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Every internal name must map to either "allow" or "deny" — never the
+    # legacy "approve"/"block" values (now strict-enum violations).
+    expected = {
+        "allow": "allow",
+        "warn": "allow",
+        "approve": "allow",
+        "deny": "deny",
+        "block": "deny",
+    }
+    for internal, canonical in expected.items():
+        p = module._decision_payload(internal, "test reason")
+        assert p["hookSpecificOutput"]["permissionDecision"] == canonical, (
+            f"_DECISION_MAP[{internal!r}] should map to {canonical!r}; "
+            f"got {p['hookSpecificOutput']['permissionDecision']!r}"
+        )
+        # The deprecated top-level 'decision' field is never emitted.
+        assert "decision" not in p, (
+            f"legacy top-level 'decision' field emitted for {internal!r}: {p}"
+        )
+        # The chat-visible reason always travels as permissionDecisionReason.
+        assert p["hookSpecificOutput"]["permissionDecisionReason"] == "test reason"
+
+
+def test_emit_empty_payload_includes_system_message() -> None:
+    """Empty stdin → allow payload with ``permissionDecision: "allow"`` and
+    a chat-visible ``permissionDecisionReason``, not legacy
+    ``systemMessage`` (the empty-payload path passes through
+    ``_decision_payload``, so we just verify the canonical shape)."""
+    helper = _helper_path_for_test()
+    result = subprocess.run(
+        [sys.executable, str(helper)],
+        input=b"",
+        capture_output=True,
+        check=True,
+    )
+    payload = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "allow"
+    assert "empty payload" in payload["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_issue_42_repro_emits_allow_permission_decision(tmp_path: Path) -> None:
+    """End-to-end regression for issue #42.
+
+    ``echo '{"tool_name":"Write","tool_input":{"file_path":"/tmp/x.txt","content":"hi"}}' |
+       bash ~/.local/bin/conflict-warn-pre-tool.sh``
+
+    Before the fix, this emitted ``{"decision":"approve"}`` (legacy top-level
+    field) which Claude Code rejected on every Write/Edit with
+    ``PreToolUse:Write hook error / Hook JSON output validation failed —
+    (root): Invalid input``. After the fix, the output is the current-schema
+    ``hookSpecificOutput.permissionDecision="allow"`` — strictly inside the
+    Claude Code enum (``allow | deny | ask | defer``).
+
+    We exercise the in-tree wrapper via subprocess.run with the same args as
+    the issue repro. Using the in-tree wrapper is equivalent for a Write on
+    a non-git path: the bash wrapper delegates to the helper, which falls
+    through to ``_emit("allow", "...not inside a git repo; allowing.")``.
+    """
+    helper = _helper_path_for_test()
+    wrapper = helper.parent / "conflict-warn-pre-tool.sh"
+    if not wrapper.is_file():
+        pytest.skip("conflict-warn-pre-tool.sh wrapper not in tree")
+
+    stdin_payload = (
+        '{"tool_name":"Write","tool_input":{"file_path":"/tmp/x.txt","content":"hi"}}'
+    )
+    result = subprocess.run(
+        ["bash", str(wrapper)],
+        input=stdin_payload.encode(),
+        capture_output=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, (
+        f"wrapper should not error on a non-mutation / non-git path; got rc={result.returncode}\n"
+        f"stderr: {result.stderr.decode()}"
+    )
+
+    stdout_text = result.stdout.decode().strip()
+    assert stdout_text, "expected non-empty stdout (allow JSON payload)"
+    payload = json.loads(stdout_text.splitlines()[-1])
+
+    # The fix: canonical permissionDecision enum value.
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "allow", (
+        f"issue #42 regression: expected permissionDecision='allow', "
+        f"got {payload['hookSpecificOutput'].get('permissionDecision')!r}.\n"
+        f"Claude Code rejects any value outside the strict enum "
+        f"{{allow, deny, ask, defer}} with "
+        f"'Hook JSON output validation failed — (root): Invalid input'."
+    )
+    # No legacy top-level "decision" field — that was the bug.
+    assert "decision" not in payload, (
+        f"legacy top-level 'decision' field emitted; this is the bug from issue #42: "
+        f"the helper used to emit {{'decision':'approve'}} which Claude Code "
+        f"rejected. payload={payload}"
+    )
+    # The chat-visible reason travels as permissionDecisionReason, not as
+    # the legacy "reason" or "systemMessage".
+    assert "permissionDecisionReason" in payload["hookSpecificOutput"]
+    assert payload["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
+
+
+def test_decision_payload_deny_uses_deny_enum_value() -> None:
+    """Block path emits ``permissionDecision: "deny"`` (canonical enum).
+
+    Confirms the deny side of the mapping too; covers the full
+    ``allow|deny`` split instead of just the allow side of the regression.
     """
     import importlib.util
 
@@ -112,43 +219,54 @@ def test_decision_map_canonical_values() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    expected = {
-        "allow": None,
-        "warn": None,
-        "approve": None,
-        "deny": "deny",
-        "block": "deny",
-    }
-    for internal, canonical in expected.items():
-        p = module._decision_payload(internal, "test reason")
-        assert "decision" not in p
-        if canonical is None:
-            assert "permissionDecision" not in p["hookSpecificOutput"]
-            assert p["hookSpecificOutput"]["additionalContext"] == "test reason"
-        else:
-            assert p["hookSpecificOutput"]["permissionDecision"] == canonical
+    for internal in ("deny", "block"):
+        p = module._decision_payload(internal, "blocked: conflict with PR #41")
+        assert p["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            f"_DECISION_MAP[{internal!r}] should map to 'deny'; got "
+            f"{p['hookSpecificOutput']['permissionDecision']!r}"
+        )
+        assert p["hookSpecificOutput"]["permissionDecisionReason"] == "blocked: conflict with PR #41"
 
 
-def test_emit_empty_payload_includes_system_message() -> None:
-    """Empty stdin → allow with a systemMessage, not silent."""
+def test_decision_payload_never_emits_legacy_approve_value() -> None:
+    """Regression guard: assert ``"approve"`` is never present anywhere in the
+    payload output. The legacy value used to appear at top-level ``decision``
+    AND at ``hookSpecificOutput.permissionDecision`` (the bug). Both surfaces
+    are now strictly inside the ``allow|deny|ask|defer`` enum.
+    """
+    import importlib.util
+
     helper = _helper_path_for_test()
-    result = subprocess.run(
-        [sys.executable, str(helper)],
-        input=b"",
-        capture_output=True,
-        check=True,
-    )
-    payload = json.loads(result.stdout.decode().strip().splitlines()[-1])
-    assert "systemMessage" in payload
-    assert "empty payload" in payload["systemMessage"]
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    serialized_all = []
+    for internal in ("allow", "warn", "approve", "deny", "block"):
+        serialized_all.append(module._decision_payload(internal, f"reason for {internal}"))
+    # Any one of these carries "approve" anywhere → the bug returns.
+    for payload in serialized_all:
+        assert "approve" not in json.dumps(payload), (
+            f"legacy 'approve' value present in payload — this is the bug from issue #42: "
+            f"{payload}"
+        )
+        # Also block side: 'block' was the legacy top-level decision value.
+        assert "block" not in json.dumps(payload).replace("PermissionRequest", "").replace(
+            "permissionDecisionReason", ""
+        ), (
+            f"legacy 'block' value present in payload — Claude Code's "
+            f"permissionDecision enum is allow|deny|ask|defer, NOT 'block': "
+            f"{payload}"
+        )
 
 
 def test_decision_payload_truncates_long_reason() -> None:
-    """A 12K-char reason must be truncated so ``systemMessage`` stays
-    under Claude Code's 10K-char cap. The chat banner is the whole
-    point of this feature — if it gets silently replaced with a
-    "see file path" stub, the user loses visibility. See M2 in the
-    adversarial review of PR #29."""
+    """A 12K-char reason must be truncated so ``permissionDecisionReason``
+    stays under Claude Code's 10K-char cap. The chat banner is the whole
+    point of this feature — if it gets silently replaced with a "see file
+    path" stub, the user loses visibility. See M2 in the adversarial
+    review of PR #29."""
     import importlib.util
 
     helper = _helper_path_for_test()
@@ -162,18 +280,17 @@ def test_decision_payload_truncates_long_reason() -> None:
     long_reason = "PR#1/foo.py — conflict: " + ("x" * 12_000)
     payload = module._decision_payload("deny", long_reason)
 
-    # The two chat-visible fields must stay under the 10K cap and
-    # carry the same (truncated) text.
-    assert len(payload["systemMessage"]) < 10_000, (
-        f"systemMessage over the 10K cap: len={len(payload['systemMessage'])}"
+    reason = payload["hookSpecificOutput"]["permissionDecisionReason"]
+    # PermissionDecisionReason must stay under the 10K cap.
+    assert len(reason) < 10_000, (
+        f"permissionDecisionReason over the 10K cap: len={len(reason)}"
     )
-    assert "truncated" in payload["systemMessage"], (
-        f"expected ' (truncated)' suffix after cut; got tail: {payload['systemMessage'][-80:]!r}"
+    assert "truncated" in reason, (
+        f"expected ' (truncated)' suffix after cut; got tail: {reason[-80:]!r}"
     )
-    assert payload["systemMessage"] == payload["hookSpecificOutput"]["permissionDecisionReason"]
     # And the original 12K payload must NOT have been passed through
-    # verbatim (the cut was applied before fanning out to both fields).
-    assert len(payload["systemMessage"]) < len(long_reason)
+    # verbatim (the cut was applied before fanning out).
+    assert len(reason) < len(long_reason)
 
 
 def test_decision_payload_short_reason_unchanged() -> None:
@@ -189,8 +306,9 @@ def test_decision_payload_short_reason_unchanged() -> None:
 
     short = "merge_train: hello — no conflicts."
     payload = module._decision_payload("allow", short)
-    assert payload["systemMessage"] == short
-    assert "truncated" not in payload["systemMessage"]
+    reason = payload["hookSpecificOutput"]["permissionDecisionReason"]
+    assert reason == short
+    assert "truncated" not in reason
 
 
 def _make_fake_gh(tmp_path: Path, stdout_json: str) -> Path:
@@ -244,12 +362,18 @@ def test_no_conflict_silent_approve(tmp_path: Path) -> None:
     assert stdout_text == "", f"expected empty stdout for implicit allow; got {stdout_text!r}"
 
 
-def test_warn_only_conflict_exits_zero_with_context(tmp_path: Path) -> None:
+def test_warn_only_conflict_emits_allow_payload(tmp_path: Path) -> None:
     """Warn-only conflicts must not make the hook itself look failed.
 
-    Regression for: warn-only conflicts emitted legacy ``decision:"approve"``
-    and non-zero exit noise. Current runtimes accept ``systemMessage`` plus
-    hook-specific additional context for non-blocking warnings.
+    Regression for: warn-only conflicts used to emit legacy
+    ``decision:"approve"`` (and before this fix used
+    ``hookSpecificOutput.additionalContext`` for non-blocking) and either
+    triggered the Claude Code schema-validation error or wasted the chance
+    to surface the warning. Current runtimes expect a strict-enum
+    ``permissionDecision: "allow"`` with a chat-visible
+    ``permissionDecisionReason``. The tool still runs — the
+    ``permissionDecision: "allow"`` skips the conflict-related prompt but
+    lets the warning reason reach the user.
     """
     import os
     helper = _helper_path_for_test()
@@ -309,6 +433,12 @@ def test_warn_only_conflict_exits_zero_with_context(tmp_path: Path) -> None:
     stdout_text = result.stdout.decode().strip()
     assert stdout_text, "expected non-empty stdout warning context"
     payload = json.loads(stdout_text.splitlines()[-1])
+    # Canonical schema: permissionDecision in the strict enum, no legacy
+    # top-level fields.
     assert "decision" not in payload
-    assert "systemMessage" in payload
-    assert payload["hookSpecificOutput"]["additionalContext"] == payload["systemMessage"]
+    assert "systemMessage" not in payload
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "allow"
+    assert "warn-only" in payload["hookSpecificOutput"]["permissionDecisionReason"], (
+        f"warning message must travel as permissionDecisionReason; got "
+        f"{payload['hookSpecificOutput']['permissionDecisionReason']!r}"
+    )

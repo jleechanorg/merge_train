@@ -90,15 +90,17 @@ except ImportError:  # pragma: no cover — fall back to legacy hardcoded enforc
 #   2  → block (tool prevented, stderr shown as reason)
 _EXIT_SILENT_APPROVE = 0
 
-# Map internal decision names to current PreToolUse hook output values.
-# Codex rejects legacy top-level ``decision: "approve"``. For non-blocking
-# cases, emit no permission decision at all; for blocking cases, use the
-# hook-specific ``permissionDecision: "deny"`` shape accepted by both Codex and
-# current Claude Code.
+# Map internal decision names to ``hookSpecificOutput.permissionDecision``
+# values. The Claude Code hooks schema strictly accepts ``allow | deny | ask |
+# defer`` (see https://code.claude.com/docs/en/hooks — deprecated legacy value
+# ``approve`` is rejected with ``Hook JSON output validation failed —
+# (root): Invalid input`` on every Write/Edit). Non-blocking internal names
+# translate to ``allow``; blocking names translate to ``deny``. ``ask`` and
+# ``defer`` are also valid (see docs) but we don't use them yet.
 _DECISION_MAP: dict = {
-    "allow": None,
-    "warn": None,
-    "approve": None,
+    "allow": "allow",
+    "warn": "allow",
+    "approve": "allow",
     "deny": "deny",
     "block": "deny",
 }
@@ -124,26 +126,33 @@ def _truncate_reason(reason: str) -> str:
 def _decision_payload(decision: str, reason: str) -> dict:
     """Build a PreToolUse hook output payload with a chat-visible reason.
 
-    Non-blocking notices intentionally do not include a permission decision:
-    current Codex rejects legacy ``decision: "approve"`` and treats it as a
-    failed hook. Blocking notices use the hook-specific ``permissionDecision``
-    shape accepted by Codex and Claude Code.
+    Output shape (single, canonical form for both blocking and non-blocking):
+
+        {
+          "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow" | "deny",
+            "permissionDecisionReason": "..."
+          }
+        }
+
+    ``permissionDecisionReason`` is shown to the user (not Claude) for
+    ``allow``, and shown to Claude for ``deny`` — see Claude Code hooks
+    docs. ``systemMessage`` is intentionally omitted: ``permissionDecision``
+    already carries the decision, the legacy ``{"decision": "approve"}``
+    top-level is rejected by current runtimes, and the docs link a system
+    message + permissionDecision combination to "structured concurrency"
+    semantics we don't need.
     """
     safe_reason = _truncate_reason(reason)
-    permission_decision = _DECISION_MAP.get(decision)
-    payload = {"systemMessage": safe_reason}
-    if permission_decision == "deny":
-        payload["hookSpecificOutput"] = {
+    permission_decision = _DECISION_MAP.get(decision, "allow")
+    return {
+        "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
+            "permissionDecision": permission_decision,
             "permissionDecisionReason": safe_reason,
         }
-    else:
-        payload["hookSpecificOutput"] = {
-            "hookEventName": "PreToolUse",
-            "additionalContext": safe_reason,
-        }
-    return payload
+    }
 
 
 def _emit(decision: str, reason: str) -> None:
