@@ -86,14 +86,13 @@ _TEE_TARGET="$LOG_FILE"
 if [[ ! -d "$LOG_DIR" ]]; then
   _TEE_TARGET="/dev/null"
 fi
-# Resolve the helper path. Prefer the installed copy at ~/.local/bin/;
-# fall back to the in-tree sibling (merge_train/hooks/conflict_check_helper.py)
-# so the script works in CI / fresh checkouts where install-hooks has
-# not been run.
-HELPER_PATH="$HOME/.local/bin/conflict_check_helper.py"
+# Resolve the helper path. Prefer the sibling copied next to this wrapper so
+# in-tree tests and installed hooks cannot accidentally execute a stale helper
+# from another location.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HELPER_PATH="${SCRIPT_DIR}/conflict_check_helper.py"
 if [[ ! -f "$HELPER_PATH" ]]; then
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  HELPER_PATH="${SCRIPT_DIR}/conflict_check_helper.py"
+  HELPER_PATH="$HOME/.local/bin/conflict_check_helper.py"
 fi
 STDOUT="$(echo "$INPUT" | python3 "$HELPER_PATH" 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
 
