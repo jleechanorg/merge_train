@@ -33,7 +33,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -298,27 +297,28 @@ def _install_codex(target: Path) -> dict:
 
         # Remove any stale entries that still reference the old source-repo path.
         _strip_stale_source_entries({"PreToolUse": pre_tool}, src_root)
-        # And any prior install that wired predict-spawn-check.sh into the
-        # Edit matcher — that script needs MERGE_TRAIN_FILES, so it never
-        # fires on normal Edits and would just mask the per-edit one.
+        # And any prior merge_train-owned PreToolUse hook, regardless of
+        # matcher. Older installs used a broad "*" matcher, which makes Codex
+        # run the conflict hook twice after the newer Edit matcher is added.
+        # ``predict-spawn-check.sh`` also needs MERGE_TRAIN_FILES, so it never
+        # fires usefully on normal Edits and would mask the per-edit one.
         #
-        # STRIP SEMANTICS: this removes ANY Edit hook whose command string
-        # contains the substring ``predict-spawn-check`` (the basename of
-        # the spawn-time script). The match is substring-based, not path-
-        # aware, so a user who customized the hook (different flags, env
-        # vars, wrappers) will see their custom command removed too. This
-        # is intentional: the codex installer is migrating to
-        # ``conflict-warn-pre-tool.sh`` and we want exactly one per-edit
-        # hook wired in. See CHANGELOG.md "Unreleased" for the breaking
-        # change note and the re-run instructions. Behavior is unchanged
-        # from the prior PR; this comment is documentation only.
+        # STRIP SEMANTICS: this removes ANY hook whose command string contains
+        # either owned script basename. The match is substring-based, not
+        # path-aware, so customized wrappers using those basenames are removed
+        # too. This is intentional: the codex installer owns exactly one
+        # per-edit conflict-warn hook.
+        cleaned_pre_tool = []
         for matcher in pre_tool:
-            if matcher.get("matcher") == "Edit":
-                matcher["hooks"] = [
-                    h
-                    for h in matcher.get("hooks", [])
-                    if "predict-spawn-check" not in h.get("command", "")
-                ]
+            matcher["hooks"] = [
+                h
+                for h in matcher.get("hooks", [])
+                if "predict-spawn-check" not in h.get("command", "")
+                and "conflict-warn-pre-tool" not in h.get("command", "")
+            ]
+            if matcher.get("hooks") or matcher.get("matcher") == "Edit":
+                cleaned_pre_tool.append(matcher)
+        data["hooks"]["PreToolUse"] = cleaned_pre_tool
         pre_tool = data["hooks"]["PreToolUse"]
 
         edit_entry = next((m for m in pre_tool if m.get("matcher") == "Edit"), None)

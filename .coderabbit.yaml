@@ -1,0 +1,15 @@
+reviews:
+  # Auto-approve PRs when CodeRabbit finds no blocking issues.
+  # Required for the merge-gate green condition (APPROVED, not just COMMENTED).
+  approve: true
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+    drafts: false
