@@ -443,11 +443,6 @@ def main() -> None:
     if repo_remote and repo_alias == repo_name:
         repo_alias = repo_remote.split("/")[-1]
 
-    print(
-        f"merge_train: checking conflicts for {paths_label} (branch '{current_branch}') in '{repo_alias}'...",
-        file=sys.stderr,
-    )
-
     # Read from cache (45s TTL).
     cache_file = Path(f"/tmp/merge_train_cache_{repo_name}.json")
     prs_data: dict = {}
@@ -526,20 +521,28 @@ def main() -> None:
             f"PR#{pr_num} (branch '{branch}') is also modifying {detail}"
             for pr_num, branch, detail in conflicts
         ]
-        msg = f"merge_train: Conflict detected in {paths_label}!\n  " + "\n  ".join(conflict_details)
+        # Build the FIRST-LINE banner message — Claude Code shows the first
+        # line of stderr as the "hook error" TUI notification. Make it short
+        # and recognizable so the user actually sees "conflict" in the banner.
+        first_line = f"merge_train: CONFLICT in {paths_label} ({len(conflicts)} PR{'' if len(conflicts)==1 else 's'}); first: PR#{conflicts[0][0]}/{conflicts[0][2]} — check before merging"
+        full_msg = first_line + "\n  " + "\n  ".join(conflict_details)
         reason = f"merge_train: {paths_label} — conflict: " + "; ".join(
             f"PR#{pr_num}/{detail}" for pr_num, _, detail in conflicts
         )
 
         if enforcement_bool:
             # Block: deny — the tool is prevented. User sees reason in chat.
-            print(msg, file=sys.stderr)
+            # First line of stderr is the short banner; full details follow.
+            print(full_msg, file=sys.stderr)
             _emit("deny", reason)
             return
         else:
             # Warn-only: tool runs. ``systemMessage`` surfaces the warning
             # without making Codex treat the hook itself as failed.
-            print(msg, file=sys.stderr)
+            # That first line of stderr MUST be the short conflict banner
+            # (not a generic status message) so that Claude Code surfaces it
+            # cleanly in the TUI when exit status / events are logged.
+            print(full_msg, file=sys.stderr)
             _emit("allow", f"{reason} (warn-only for {repo_alias}; check the other PR before merging).")
             return
 
