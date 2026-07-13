@@ -110,15 +110,11 @@ def test_hook_script_writes_logfile(clean_log_dir: None) -> None:
 
 
 def test_hook_script_still_emits_valid_json(clean_log_dir: None) -> None:
-    """Stdout of the script must be parseable JSON with a canonical ``decision``
-    field. For no-conflict edits the output is intentionally minimal
-    (``{"decision":"approve"}`` with no ``systemMessage``) so Claude Code shows
-    nothing on routine edits — spamming the user with "no conflicts found" on
-    every file write is the anti-pattern this test was introduced to prevent.
+    """No-conflict stdout must be empty/whitespace for implicit allow.
 
-    If a CONFLICT is detected the payload does contain ``systemMessage`` and
-    ``hookSpecificOutput`` — those fields are tested via
-    ``test_conflict_helper.py::test_warn_only_conflict_exits_nonzero``.
+    Codex rejects legacy ``decision:"approve"``. Conflict warnings still emit
+    JSON context and are covered in
+    ``test_conflict_helper.py::test_warn_only_conflict_exits_zero_with_context``.
     """
     repo = Path(__file__).resolve().parents[1]
     payload = json.dumps(
@@ -137,16 +133,8 @@ def test_hook_script_still_emits_valid_json(clean_log_dir: None) -> None:
         cwd=repo,
         timeout=30,
     )
-    # The script's stdout is the JSON envelope (last non-empty line).
-    last = [ln for ln in result.stdout.decode().splitlines() if ln.strip()][-1]
-    parsed = json.loads(last)
-    # Top-level canonical field (Claude Code hook spec): "approve" or "block".
-    # "allow"/"deny"/"ask" were the old values — now rejected by Claude Code.
-    assert parsed["decision"] in {"approve", "block"}, (
-        f"expected canonical decision approve/block; got {parsed.get('decision')!r}"
-    )
-    # No-conflict path: minimal silent approve — no systemMessage, no hookSpecificOutput.
-    # Conflict path: full payload with systemMessage (tested separately).
+    assert result.returncode == 0
+    assert result.stdout.decode().strip() == ""
 
 
 def test_hook_script_mirrors_stderr(clean_log_dir: None) -> None:
@@ -169,15 +157,12 @@ def test_hook_script_mirrors_stderr(clean_log_dir: None) -> None:
         timeout=30,
     )
     err = result.stderr.decode()
-    # The helper now emits either the "checking conflicts" banner (full path)
-    # OR the "checked ... no conflicts" summary (early-return / cache-hit path).
-    # Both are valid terminal-visible status lines; the test was written before
-    # PR #35 refactored the helper to early-return when no other open PRs exist.
-    # Assert at least one of the two is present so the TUI is never silent.
-    assert (
-        "merge_train: checking conflicts" in err
-        or "merge_train: checked" in err
-    ), f"stderr lost; the CLI TUI would see no status line. Got: {err!r}"
+    # The "checking conflicts" status line was removed so the FIRST line of
+    # stderr remains available for the actual conflict banner when one fires.
+    # No-conflict stderr still includes a status line ("merge_train: checked").
+    assert "merge_train: checked" in err, (
+        f"stderr lost; the CLI TUI would see no status line. Got: {err!r}"
+    )
 
 
 def test_hook_script_handles_non_git_cwd(clean_log_dir: None, tmp_path: Path) -> None:

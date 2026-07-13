@@ -33,7 +33,20 @@ from pathlib import Path
 # Add merge_train source locations to sys.path so we can import the
 # package. The helper is normally called from ~/.local/bin/, where
 # merge_train itself is NOT on sys.path.
-for _p in (Path.home() / "merge_train", Path("/Users/jleechan/projects/merge_train")):
+for _p in (
+    Path.home() / "merge_train",
+    Path.home() / "projects_other" / "merge_train",
+    Path.home() / "projects" / "merge_train",
+    Path("/Users/jleechan/projects/merge_train"),
+    # uv tool install location (Linux/macOS) — used when merge_train
+    # was installed via `uv tool install` and the source-repo path
+    # above is absent (e.g. on a fresh Linux box where the source
+    # lives in ~/projects_other/merge_train, not the macOS path).
+    Path.home() / ".local/share/uv/tools/merge-train/lib/python3.13/site-packages",
+    Path.home() / ".local/share/uv/tools/merge-train/lib/python3.12/site-packages",
+    Path.home() / ".local/share/uv/tools/merge-train/lib/python3.11/site-packages",
+    Path.home() / ".local/share/uv/tools/merge-train/lib/python3.10/site-packages",
+):
     if _p.exists():
         sys.path.insert(0, str(_p))
 
@@ -42,15 +55,16 @@ try:
     from merge_train.symbol_discovery import symbols_from_files_in_pr
     from merge_train.symbols import extract_symbols, is_python_path
 except ImportError:  # pragma: no cover — fail-safe fallback
-    # NOTE: _decision_payload is defined further down, so it is NOT available
-    # here. Emit a hand-built allow envelope (same shape) to avoid a NameError
-    # masking the real ImportError.
     _reason = "merge_train: package import failed; allowing"
-    print(json.dumps({
-        "decision": "approve",
-        "reason": _reason,
-        "systemMessage": _reason,
-    }))
+    print(
+        json.dumps({
+            "systemMessage": _reason,
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "additionalContext": _reason,
+            },
+        })
+    )
     sys.exit(0)
 
 try:
@@ -71,23 +85,22 @@ except ImportError:  # pragma: no cover — fall back to legacy hardcoded enforc
 # Output helpers
 # --------------------------------------------------------------------------- #
 
-# Exit codes used for Claude Code TUI visibility:
-#   0  → silent approve (tool runs, no notification)
-#   1  → non-blocking warn (tool runs, TUI shows first line of stderr)
+# Exit codes used for hook behavior:
+#   0  → success; tool continues unless the JSON explicitly denies
 #   2  → block (tool prevented, stderr shown as reason)
 _EXIT_SILENT_APPROVE = 0
-_EXIT_WARN_NOTIFY = 1  # triggers "hook error" TUI notice — first stderr line shown
 
-# Map internal decision names to Claude Code's canonical hook output values.
-# Claude Code uses "approve" (not "allow") and "block" (not "deny").
-# "allow"/"warn" both mean "let the tool proceed". "deny" is an old alias for "block".
-# always_approve.sh (the reference implementation) outputs {"decision":"approve"}.
+# Map internal decision names to current PreToolUse hook output values.
+# Codex rejects legacy top-level ``decision: "approve"``. For non-blocking
+# cases, emit no permission decision at all; for blocking cases, use the
+# hook-specific ``permissionDecision: "deny"`` shape accepted by both Codex and
+# current Claude Code.
 _DECISION_MAP: dict = {
-    "allow": "approve",
-    "warn": "approve",
-    "deny": "block",
-    "block": "block",
-    "approve": "approve",
+    "allow": None,
+    "warn": None,
+    "approve": None,
+    "deny": "deny",
+    "block": "deny",
 }
 
 # Claude Code's hook schema caps ``systemMessage`` and ``stdout`` at
@@ -111,25 +124,26 @@ def _truncate_reason(reason: str) -> str:
 def _decision_payload(decision: str, reason: str) -> dict:
     """Build a PreToolUse hook output payload with a chat-visible reason.
 
-    Output format uses the canonical Claude Code top-level fields:
-      {"decision": "approve"|"block", "reason": "...", "systemMessage": "..."}
-    The old ``hookSpecificOutput.permissionDecision`` wrapper is kept as a
-    parallel field so codex/cursor/gemini runtimes that may still read it
-    continue to work. Internal decision names ("allow", "warn", "deny") are
-    mapped via :data:`_DECISION_MAP` to the canonical values before output.
+    Non-blocking notices intentionally do not include a permission decision:
+    current Codex rejects legacy ``decision: "approve"`` and treats it as a
+    failed hook. Blocking notices use the hook-specific ``permissionDecision``
+    shape accepted by Codex and Claude Code.
     """
     safe_reason = _truncate_reason(reason)
-    cc_decision = _DECISION_MAP.get(decision, "approve")
-    return {
-        "decision": cc_decision,
-        "reason": safe_reason,
-        "systemMessage": safe_reason,
-        "hookSpecificOutput": {
+    permission_decision = _DECISION_MAP.get(decision)
+    payload = {"systemMessage": safe_reason}
+    if permission_decision == "deny":
+        payload["hookSpecificOutput"] = {
             "hookEventName": "PreToolUse",
-            "permissionDecision": cc_decision,
+            "permissionDecision": "deny",
             "permissionDecisionReason": safe_reason,
-        },
-    }
+        }
+    else:
+        payload["hookSpecificOutput"] = {
+            "hookEventName": "PreToolUse",
+            "additionalContext": safe_reason,
+        }
+    return payload
 
 
 def _emit(decision: str, reason: str) -> None:
@@ -138,13 +152,14 @@ def _emit(decision: str, reason: str) -> None:
 
 
 def _silent_approve() -> None:
-    """Emit a minimal approve with no systemMessage.
+    """Emit no stdout for the implicit allow path.
 
     Used for the no-conflict case so routine edits are completely silent.
-    Claude Code shows nothing for exit 0 + ``{"decision":"approve"}`` with
-    no ``systemMessage`` — the user is not spammed on every file write.
+    Current hook runtimes treat exit 0 with empty stdout as "no decision";
+    emitting legacy ``{"decision":"approve"}`` makes Codex report
+    ``unsupported decision:approve``.
     """
-    print(json.dumps({"decision": "approve"}))
+    return
 
 
 # --------------------------------------------------------------------------- #
@@ -428,11 +443,6 @@ def main() -> None:
     if repo_remote and repo_alias == repo_name:
         repo_alias = repo_remote.split("/")[-1]
 
-    print(
-        f"merge_train: checking conflicts for {paths_label} (branch '{current_branch}') in '{repo_alias}'...",
-        file=sys.stderr,
-    )
-
     # Read from cache (45s TTL).
     cache_file = Path(f"/tmp/merge_train_cache_{repo_name}.json")
     prs_data: dict = {}
@@ -511,23 +521,30 @@ def main() -> None:
             f"PR#{pr_num} (branch '{branch}') is also modifying {detail}"
             for pr_num, branch, detail in conflicts
         ]
-        msg = f"merge_train: Conflict detected in {paths_label}!\n  " + "\n  ".join(conflict_details)
+        # Build the FIRST-LINE banner message — Claude Code shows the first
+        # line of stderr as the "hook error" TUI notification. Make it short
+        # and recognizable so the user actually sees "conflict" in the banner.
+        first_line = f"merge_train: CONFLICT in {paths_label} ({len(conflicts)} PR{'' if len(conflicts)==1 else 's'}); first: PR#{conflicts[0][0]}/{conflicts[0][2]} — check before merging"
+        full_msg = first_line + "\n  " + "\n  ".join(conflict_details)
         reason = f"merge_train: {paths_label} — conflict: " + "; ".join(
             f"PR#{pr_num}/{detail}" for pr_num, _, detail in conflicts
         )
 
         if enforcement_bool:
             # Block: deny — the tool is prevented. User sees reason in chat.
-            print(msg, file=sys.stderr)
+            # First line of stderr is the short banner; full details follow.
+            print(full_msg, file=sys.stderr)
             _emit("deny", reason)
             return
         else:
-            # Warn-only: tool runs, but exit 1 makes Claude Code surface the
-            # first line of stderr as a TUI notification ("hook error" notice).
-            # systemMessage also reaches Claude's context for relaying to user.
-            print(msg, file=sys.stderr)
+            # Warn-only: tool runs. ``systemMessage`` surfaces the warning
+            # without making Codex treat the hook itself as failed.
+            # That first line of stderr MUST be the short conflict banner
+            # (not a generic status message) so that Claude Code surfaces it
+            # cleanly in the TUI when exit status / events are logged.
+            print(full_msg, file=sys.stderr)
             _emit("allow", f"{reason} (warn-only for {repo_alias}; check the other PR before merging).")
-            sys.exit(_EXIT_WARN_NOTIFY)
+            return
 
     # No conflicts — silent approve. No systemMessage to avoid noise on every edit.
     print(

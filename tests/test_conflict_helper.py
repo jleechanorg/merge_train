@@ -30,13 +30,11 @@ def _helper_path_for_test() -> Path:
 
 
 def test_decision_payload_includes_system_message() -> None:
-    """``_decision_payload`` outputs the canonical Claude Code hook format.
+    """``_decision_payload`` outputs a current-runtime hook format.
 
-    - Top-level ``decision`` uses "approve"/"block" (NOT "allow"/"deny").
-    - Top-level ``reason`` and ``systemMessage`` carry the same text.
-    - Legacy ``hookSpecificOutput.permissionDecision`` is kept for backward
-      compat with codex/cursor/gemini runtimes — it also uses "approve".
-    always_approve.sh (the reference implementation) uses {"decision":"approve"}.
+    Non-blocking payloads must not emit legacy ``decision:"approve"`` because
+    Codex rejects that field value. They carry a chat-visible ``systemMessage``
+    and model-visible additional context instead.
     """
     import importlib.util
 
@@ -46,20 +44,12 @@ def test_decision_payload_includes_system_message() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     payload = module._decision_payload("allow", "merge_train: hello — no conflicts.")
-    # Top-level canonical fields (Claude Code PreToolUse hook spec).
-    assert payload["decision"] == "approve", (
-        f"'allow' must map to 'approve' (not 'allow'); got {payload['decision']!r}. "
-        "Claude Code rejects 'allow' as unsupported (see always_approve.sh)."
-    )
+    assert "decision" not in payload, f"legacy top-level decision is unsupported: {payload}"
     assert "systemMessage" in payload, "systemMessage must be at top level"
     assert payload["systemMessage"] == "merge_train: hello — no conflicts."
-    assert payload["reason"] == "merge_train: hello — no conflicts."
-    # Legacy field preserved for codex/cursor/gemini backward compat.
-    assert payload["hookSpecificOutput"]["permissionDecision"] == "approve"
-    assert (
-        payload["hookSpecificOutput"]["permissionDecisionReason"]
-        == "merge_train: hello — no conflicts."
-    )
+    assert payload["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
+    assert payload["hookSpecificOutput"]["additionalContext"] == "merge_train: hello — no conflicts."
+    assert "permissionDecision" not in payload["hookSpecificOutput"]
 
 
 def test_system_message_matches_permission_decision_reason() -> None:
@@ -72,13 +62,14 @@ def test_system_message_matches_permission_decision_reason() -> None:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    for decision, reason in [
-        ("allow", "ok"),
-        ("deny", "blocked by config"),
-        ("ask", "needs human review"),
-    ]:
+    for decision, reason in [("allow", "ok"), ("deny", "blocked by config")]:
         p = module._decision_payload(decision, reason)
-        assert p["systemMessage"] == p["hookSpecificOutput"]["permissionDecisionReason"]
+        hook_output = p["hookSpecificOutput"]
+        visible_reason = (
+            hook_output.get("permissionDecisionReason")
+            or hook_output.get("additionalContext")
+        )
+        assert p["systemMessage"] == visible_reason
 
 
 def test_non_mutation_tool_emits_no_stdout(tmp_path: Path) -> None:
@@ -107,10 +98,11 @@ def test_non_mutation_tool_emits_no_stdout(tmp_path: Path) -> None:
 
 
 def test_decision_map_canonical_values() -> None:
-    """_DECISION_MAP must translate every internal name to Claude Code's values.
+    """_DECISION_MAP must avoid unsupported non-blocking decisions.
 
-    Claude Code only accepts "approve" and "block" as permissionDecision values.
-    "allow"/"warn" → "approve", "deny"/"block" → "block".
+    Codex rejects legacy ``decision:"approve"``. Non-blocking internal names
+    should produce no permission decision; blocking names should produce
+    ``permissionDecision:"deny"``.
     """
     import importlib.util
 
@@ -121,19 +113,20 @@ def test_decision_map_canonical_values() -> None:
     spec.loader.exec_module(module)
 
     expected = {
-        "allow": "approve",
-        "warn": "approve",
-        "approve": "approve",
-        "deny": "block",
-        "block": "block",
+        "allow": None,
+        "warn": None,
+        "approve": None,
+        "deny": "deny",
+        "block": "deny",
     }
     for internal, canonical in expected.items():
         p = module._decision_payload(internal, "test reason")
-        assert p["decision"] == canonical, (
-            f"_DECISION_MAP[{internal!r}] should map to {canonical!r}; "
-            f"got {p['decision']!r}"
-        )
-        assert p["hookSpecificOutput"]["permissionDecision"] == canonical
+        assert "decision" not in p
+        if canonical is None:
+            assert "permissionDecision" not in p["hookSpecificOutput"]
+            assert p["hookSpecificOutput"]["additionalContext"] == "test reason"
+        else:
+            assert p["hookSpecificOutput"]["permissionDecision"] == canonical
 
 
 def test_emit_empty_payload_includes_system_message() -> None:
@@ -209,12 +202,11 @@ def _make_fake_gh(tmp_path: Path, stdout_json: str) -> Path:
 
 
 def test_no_conflict_silent_approve(tmp_path: Path) -> None:
-    """When no open PRs exist, the helper must exit 0 with a minimal
-    ``{"decision":"approve"}`` containing NO ``systemMessage`` — the
+    """When no open PRs exist, the helper must exit 0 with NO stdout — the
     user should not be notified on every routine edit.
 
-    Regression for: every Edit was emitting an allow+systemMessage payload
-    that the TUI showed as a "no conflicts" banner on every file write.
+    Regression for: every Edit emitted legacy ``decision:"approve"``, which
+    Codex reports as ``unsupported decision:approve``.
     """
     import os
     helper = _helper_path_for_test()
@@ -225,7 +217,7 @@ def test_no_conflict_silent_approve(tmp_path: Path) -> None:
     Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
 
     # Fake gh returns an empty list (no open PRs).
-    fake_gh = _make_fake_gh(tmp_path, "[]")
+    _make_fake_gh(tmp_path, "[]")
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
 
     # Create a minimal git repo so the helper can find repo root.
@@ -249,25 +241,104 @@ def test_no_conflict_silent_approve(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, f"expected exit 0; got {result.returncode}\nstderr: {result.stderr.decode()}"
     stdout_text = result.stdout.decode().strip()
-    assert stdout_text, "expected non-empty stdout (approve JSON)"
-    payload = json.loads(stdout_text.splitlines()[-1])
-    assert payload.get("decision") == "approve", f"expected decision:approve; got {payload}"
-    assert "systemMessage" not in payload, (
-        f"no-conflict path must NOT emit systemMessage (causes TUI banner on every edit); "
-        f"got: {payload.get('systemMessage')!r}"
+    assert stdout_text == "", f"expected empty stdout for implicit allow; got {stdout_text!r}"
+
+
+def test_issue42_mutation_tool_outside_git_repo_emits_no_approve(tmp_path: Path) -> None:
+    """Regression for GitHub issue #42.
+
+    The exact repro from the bug report:
+      echo '{"tool_name":"Write","tool_input":{"file_path":"/tmp/x.txt","content":"hi"}}' \\
+        | python conflict_check_helper.py
+
+    Before the fix (origin/main): emitted ``permissionDecision: "approve"`` which fails
+    Claude Code 2.1+ schema validation (enum must be "allow" | "deny" | "ask").
+    After the fix: must emit empty stdout (silent approve, exit 0).
+
+    Additionally validates that no valid hook output payload ever contains
+    ``permissionDecision: "approve"`` anywhere in the JSON tree.
+    """
+    helper = _helper_path_for_test()
+    # Use a tmp_path that is NOT inside any git repo so the helper
+    # hits the "not inside a git repo; allowing" branch — the exact path
+    # the issue reporter exercised. We ensure it is not accidentally inside
+    # one by testing a path under /tmp directly (same as the issue's /tmp/x.txt).
+    outside_git = "/tmp/issue42_regression_test.txt"
+
+    tool_input = json.dumps({
+        "tool_name": "Write",
+        "tool_input": {"file_path": outside_git, "content": "hi"},
+    })
+    result = subprocess.run(
+        [sys.executable, str(helper)],
+        input=tool_input.encode(),
+        capture_output=True,
+        cwd="/tmp",  # run from /tmp — definitely not a git repo
     )
+    assert result.returncode == 0, (
+        f"expected exit 0 (allow); got {result.returncode}\n"
+        f"stderr: {result.stderr.decode()}"
+    )
+    stdout_text = result.stdout.decode().strip()
+    if stdout_text:
+        # If any JSON was emitted, verify it never contains permissionDecision:"approve"
+        # (the invalid value that triggered the Claude Code schema error in issue #42)
+        for line in stdout_text.splitlines():
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            hook_out = payload.get("hookSpecificOutput", {})
+            perm_decision = hook_out.get("permissionDecision")
+            assert perm_decision != "approve", (
+                f"permissionDecision='approve' emitted — this is the issue #42 bug.\n"
+                f"Claude Code 2.1+ schema only accepts 'allow'|'deny'|'ask'.\n"
+                f"Full payload: {payload}"
+            )
+            # Also assert no legacy top-level "decision" field
+            assert "decision" not in payload, (
+                f"Legacy top-level 'decision' field found — unsupported by Codex/modern runtimes.\n"
+                f"Full payload: {payload}"
+            )
 
 
-def test_warn_only_conflict_exits_nonzero(tmp_path: Path) -> None:
-    """When a warn-only conflict is found, the helper must exit 1 so
-    Claude Code surfaces a TUI notification (non-blocking "hook error"
-    banner showing the first stderr line).
+def test_issue42_decision_payload_never_emits_approve_as_permission_decision() -> None:
+    """Unit-level regression for issue #42: _decision_payload must never set
+    hookSpecificOutput.permissionDecision to 'approve'.
 
-    The stdout payload must still be ``decision:approve`` so the tool
-    is NOT blocked.
+    Claude Code 2.1+ validates permissionDecision strictly as 'allow'|'deny'|'ask'.
+    The old _DECISION_MAP mapped 'allow'/'warn' → 'approve' which caused:
+      'Hook JSON output validation failed — (root): Invalid input'
+    on every file write in sessions with merge_train hooks installed.
+    """
+    import importlib.util
 
-    Regression for: warn-only conflicts silently returned exit 0 + allow,
-    which Claude Code showed as nothing — the user never saw the conflict.
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    VALID_PERMISSION_DECISIONS = {"allow", "deny", "ask", None}
+
+    for internal_decision in ("allow", "warn", "approve", "deny", "block"):
+        p = module._decision_payload(internal_decision, f"test for {internal_decision!r}")
+        hook_out = p.get("hookSpecificOutput", {})
+        perm_decision = hook_out.get("permissionDecision")
+        assert perm_decision in VALID_PERMISSION_DECISIONS, (
+            f"_decision_payload('{internal_decision}', ...) emitted "
+            f"permissionDecision={perm_decision!r} which is not in the "
+            f"Claude Code 2.1+ schema enum {{allow|deny|ask}}.\n"
+            f"This is the issue #42 bug. Full payload: {p}"
+        )
+
+
+def test_warn_only_conflict_exits_zero_with_context(tmp_path: Path) -> None:
+    """Warn-only conflicts must not make the hook itself look failed.
+
+    Regression for: warn-only conflicts emitted legacy ``decision:"approve"``
+    and non-zero exit noise. Current runtimes accept ``systemMessage`` plus
+    hook-specific additional context for non-blocking warnings.
     """
     import os
     helper = _helper_path_for_test()
@@ -320,19 +391,25 @@ def test_warn_only_conflict_exits_nonzero(tmp_path: Path) -> None:
         env=env,
     )
 
-    # Exit 1 = TUI notification (non-blocking).
-    assert result.returncode == 1, (
-        f"warn-only conflict must exit 1 for TUI visibility; got {result.returncode}\n"
+    assert result.returncode == 0, (
+        f"warn-only conflict must exit 0; got {result.returncode}\n"
         f"stdout: {result.stdout.decode()}\nstderr: {result.stderr.decode()}"
     )
     stdout_text = result.stdout.decode().strip()
-    assert stdout_text, "expected non-empty stdout (approve JSON even for warn-only)"
-    last_line = stdout_text.splitlines()[-1]
-    # May fail JSON parse if debug output is mixed — verify separately.
-    try:
-        payload = json.loads(last_line)
-        assert payload.get("decision") == "approve", (
-            f"warn-only must still approve (tool not blocked); got {payload.get('decision')!r}"
-        )
-    except json.JSONDecodeError:
-        pytest.fail(f"stdout last line is not valid JSON: {last_line!r}")
+    assert stdout_text, "expected non-empty stdout warning context"
+    payload = json.loads(stdout_text.splitlines()[-1])
+    assert "decision" not in payload
+    assert "systemMessage" in payload
+    assert payload["hookSpecificOutput"]["additionalContext"] == payload["systemMessage"]
+
+    # CRITICAL: the FIRST line of stderr is what Claude Code surfaces in the
+    # TUI "hook error" banner. It MUST contain "CONFLICT" — not a generic
+    # "checking conflicts..." status message — otherwise the user sees noise
+    # instead of the actual warning.
+    stderr_lines = [ln for ln in result.stderr.decode().splitlines() if ln.strip()]
+    assert stderr_lines, "expected non-empty stderr (conflict banner)"
+    first_line = stderr_lines[0]
+    assert "CONFLICT" in first_line, (
+        f"first stderr line must contain 'CONFLICT' (this is the TUI banner); "
+        f"got: {first_line!r}\nfull stderr: {result.stderr.decode()!r}"
+    )
