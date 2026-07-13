@@ -110,18 +110,12 @@ echo
 
 echo "[1/5] Installing merge_train CLI (predict-conflicts)..."
 _PC_BIN="$(command -v predict-conflicts 2>/dev/null || true)"
-_PC_SHEBANG="$(head -1 "$_PC_BIN" 2>/dev/null || true)"
-if [[ -n "$_PC_BIN" && "$_PC_SHEBANG" == *"uv/tools"* ]]; then
-    echo "  skip: already installed via uv at $_PC_BIN"
-    echo "  note: run 'uv tool install $MERGE_TRAIN_ROOT --reinstall' to upgrade"
-else
-    if [[ -n "$_PC_BIN" ]]; then
-        echo "  found stale binary at $_PC_BIN (not uv tool env) — reinstalling"
-    fi
-    uv tool install "$MERGE_TRAIN_ROOT" --reinstall --quiet
-    _PC_BIN="$(command -v predict-conflicts 2>/dev/null || true)"
-    echo "  installed: $_PC_BIN"
+if [[ -n "$_PC_BIN" ]]; then
+    echo "  updating existing install at $_PC_BIN"
 fi
+uv tool install "$MERGE_TRAIN_ROOT" --reinstall --quiet
+_PC_BIN="$(command -v predict-conflicts 2>/dev/null || true)"
+echo "  installed: $_PC_BIN"
 
 # Verify the binary is functional
 if [[ -z "$(command -v predict-conflicts 2>/dev/null)" ]]; then
@@ -225,36 +219,35 @@ else
 fi
 
 # ------------------------------------------------------------------------- #
-# 4a. Codex per-repo hooks.json
+# 4a. Remove legacy Codex per-repo hook
 # ------------------------------------------------------------------------- #
 
 CODEX_DIR="$TARGET/.codex"
 CODEX_HOOKS="$CODEX_DIR/hooks.json"
 
-echo "[3a/5] Codex per-repo hooks.json..."
-mkdir -p "$CODEX_DIR"
-# Codex's real edit tool is apply_patch (NOT Edit) — matcher "*" + the helper's
-# own tool-name filter is what actually catches edits. The wiring helper is
-# idempotent and upgrades stale predict-spawn-check entries from older installs.
+echo "[3a/5] Codex per-repo hooks.json migration cleanup..."
+# Codex loads matching hooks from every config layer instead of overriding the
+# global hook. Remove the legacy project copy so edits run the user-scope hook
+# exactly once.
 "$PYTHON_BIN" "$WIRE_HELPER" \
-    --config "$CODEX_HOOKS" --event PreToolUse --command "$WIRE_CMD" --style claude \
+    --config "$CODEX_HOOKS" --event PreToolUse --command "$WIRE_CMD --runtime codex" --style claude \
+    --remove-only \
     || echo "  WARN: codex per-repo wiring failed (non-fatal)"
 echo
 
 # ------------------------------------------------------------------------- #
-# 4b. Antigravity (.gemini) per-repo guard
+# 4b. Remove legacy Gemini per-repo hook
 # ------------------------------------------------------------------------- #
 
 GEMINI_DIR="$TARGET/.gemini"
 GEMINI_SETTINGS="$GEMINI_DIR/settings.json"
 
-echo "[3b/5] Gemini (.gemini) per-repo hooks..."
-mkdir -p "$GEMINI_DIR"
-# Gemini CLI uses the BeforeTool event (NOT PreToolUse — gemini rejects
-# PreToolUse as an invalid event name) and its write_file/replace tools carry
-# tool_input.file_path (Claude-compatible), so the same wrapper works.
+echo "[3b/5] Gemini (.gemini) per-repo hook migration cleanup..."
+# Gemini merges user and project hooks. Keep the user-scope hook below and
+# remove the legacy project copy to prevent duplicate checks.
 "$PYTHON_BIN" "$WIRE_HELPER" \
-    --config "$GEMINI_SETTINGS" --event BeforeTool --command "$WIRE_CMD" --style claude \
+    --config "$GEMINI_SETTINGS" --event BeforeTool --command "$WIRE_CMD --runtime gemini" --style claude \
+    --remove-only \
     || echo "  WARN: gemini per-repo wiring failed (non-fatal)"
 echo
 
@@ -275,7 +268,8 @@ CURSOR_HOOKS="$CURSOR_DIR/hooks.json"
 echo "[3b/5] Cursor per-repo .cursor/hooks.json (CLI loads project-level hooks only)..."
 mkdir -p "$CURSOR_DIR"
 "$PYTHON_BIN" "$WIRE_HELPER" \
-    --config "$CURSOR_HOOKS" --event preToolUse --command "$WIRE_CMD" --style cursor \
+    --config "$CURSOR_HOOKS" --event preToolUse --command "$WIRE_CMD --runtime cursor" --style cursor \
+    --matcher "Edit|Write|StrReplace|Delete|EditNotebook" \
     || echo "  WARN: cursor per-repo preToolUse wiring failed (non-fatal)"
 "$PYTHON_BIN" "$WIRE_HELPER" \
     --config "$CURSOR_HOOKS" --event subagentStart \
@@ -373,47 +367,44 @@ print("  ok: patched ~/.claude/settings.json with conflict-warn PreToolUse hooks
 echo
 
 # ------------------------------------------------------------------------- #
-# 4d-2. Global (all-repos) wiring for the OTHER fanout runtimes
-#       Parity with the global Claude block above so codex / gemini / cursor /
-#       opencode fanout subagents fire the SAME conflict-warn hook in EVERY repo.
-#       Each helper call SKIPs cleanly if that runtime isn't installed (its
-#       config dir won't exist), and is idempotent + upgrades stale wiring.
+# 4d-2. Global wiring for runtimes that load user-scope hooks
+#       Codex and Gemini use only the global layer. Cursor CLI requires the
+#       project layer above, so its legacy global entries are removed.
 # ------------------------------------------------------------------------- #
 
-echo "[3d/5] Codex global ~/.codex/hooks.json (matcher '*' — codex edits via apply_patch)..."
+echo "[3d/5] Codex global ~/.codex/hooks.json (apply_patch only)..."
 "$PYTHON_BIN" "$WIRE_HELPER" \
-    --config "$CODEX_GLOBAL_HOOKS" --event PreToolUse --command "$WIRE_CMD" --style claude \
+    --config "$CODEX_GLOBAL_HOOKS" --event PreToolUse --command "$WIRE_CMD --runtime codex" --style claude \
+    --matcher "^apply_patch$" \
     || echo "  WARN: codex global wiring failed (non-fatal)"
 echo
 
 echo "[3d/5] Gemini global ~/.gemini/settings.json (BeforeTool event)..."
 "$PYTHON_BIN" "$WIRE_HELPER" \
-    --config "$GEMINI_GLOBAL_SETTINGS" --event BeforeTool --command "$WIRE_CMD" --style claude \
+    --config "$GEMINI_GLOBAL_SETTINGS" --event BeforeTool --command "$WIRE_CMD --runtime gemini" --style claude \
+    --matcher "write_file|replace" --timeout 15000 \
     || echo "  WARN: gemini global wiring failed (non-fatal)"
 echo
 
-echo "[3d/5] Cursor global ~/.cursor/hooks.json (preToolUse + subagentStart fanout signal)..."
+echo "[3d/5] Cursor global ~/.cursor/hooks.json migration cleanup..."
 "$PYTHON_BIN" "$WIRE_HELPER" \
-    --config "$CURSOR_GLOBAL_HOOKS" --event preToolUse --command "$WIRE_CMD" --style cursor \
-    || echo "  WARN: cursor preToolUse wiring failed (non-fatal)"
-# subagentStart: the one runtime exposing a fanout-start signal -> make fanout visible.
+    --config "$CURSOR_GLOBAL_HOOKS" --event preToolUse --command "$WIRE_CMD --runtime cursor" --style cursor \
+    --remove-only \
+    || echo "  WARN: cursor preToolUse cleanup failed (non-fatal)"
 "$PYTHON_BIN" "$WIRE_HELPER" \
     --config "$CURSOR_GLOBAL_HOOKS" --event subagentStart \
     --command "bash -c 'echo \"merge_train: cursor subagent (fanout) starting — conflict hook active\" >&2'" \
-    --style cursor \
-    || echo "  WARN: cursor subagentStart wiring failed (non-fatal)"
+    --style cursor --remove-only \
+    || echo "  WARN: cursor subagentStart cleanup failed (non-fatal)"
 echo
 
 echo "[3d/5] OpenCode global plugin ~/.config/opencode/plugins/..."
-if [[ -d "$OPENCODE_PLUGIN_DIR" ]]; then
-    if [[ -f "$OPENCODE_PLUGIN_SRC" ]]; then
-        cp "$OPENCODE_PLUGIN_SRC" "$OPENCODE_PLUGIN_DST"
-        echo "  ok: installed $OPENCODE_PLUGIN_DST"
-    else
-        echo "  WARN: $OPENCODE_PLUGIN_SRC missing; opencode plugin not installed."
-    fi
+if [[ -f "$OPENCODE_PLUGIN_SRC" ]]; then
+    mkdir -p "$OPENCODE_PLUGIN_DIR"
+    cp "$OPENCODE_PLUGIN_SRC" "$OPENCODE_PLUGIN_DST"
+    echo "  ok: installed $OPENCODE_PLUGIN_DST"
 else
-    echo "  SKIP: $OPENCODE_PLUGIN_DIR not present; opencode plugin not installed."
+    echo "  WARN: $OPENCODE_PLUGIN_SRC missing; opencode plugin not installed."
 fi
 echo
 

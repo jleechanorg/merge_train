@@ -23,6 +23,7 @@ existing installs keep working.
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import subprocess
@@ -121,7 +122,7 @@ def _truncate_reason(reason: str) -> str:
     return reason[:_REASON_HARD_CAP] + " (truncated)"
 
 
-def _decision_payload(decision: str, reason: str) -> dict:
+def _decision_payload(decision: str, reason: str, runtime: str = "claude") -> dict:
     """Build a PreToolUse hook output payload with a chat-visible reason.
 
     Non-blocking notices intentionally do not include a permission decision:
@@ -131,6 +132,19 @@ def _decision_payload(decision: str, reason: str) -> dict:
     """
     safe_reason = _truncate_reason(reason)
     permission_decision = _DECISION_MAP.get(decision)
+
+    if runtime == "gemini":
+        if permission_decision == "deny":
+            return {"decision": "deny", "reason": safe_reason}
+        return {"systemMessage": safe_reason}
+
+    if runtime == "cursor":
+        payload = {"permission": permission_decision or "allow"}
+        if reason:
+            payload["user_message"] = safe_reason
+            payload["agent_message"] = safe_reason
+        return payload
+
     payload = {"systemMessage": safe_reason}
     if permission_decision == "deny":
         payload["hookSpecificOutput"] = {
@@ -146,20 +160,22 @@ def _decision_payload(decision: str, reason: str) -> dict:
     return payload
 
 
-def _emit(decision: str, reason: str) -> None:
+def _emit(decision: str, reason: str, runtime: str = "claude") -> None:
     """Print the decision JSON to stdout (Claude Code reads this)."""
-    print(json.dumps(_decision_payload(decision, reason)))
+    print(json.dumps(_decision_payload(decision, reason, runtime)))
 
 
-def _silent_approve() -> None:
-    """Emit no stdout for the implicit allow path.
+def _silent_approve(runtime: str = "claude") -> None:
+    """Emit the runtime's quiet implicit-allow response.
 
-    Used for the no-conflict case so routine edits are completely silent.
-    Current hook runtimes treat exit 0 with empty stdout as "no decision";
-    emitting legacy ``{"decision":"approve"}`` makes Codex report
-    ``unsupported decision:approve``.
+    Claude and Codex use empty stdout. Gemini requires valid JSON and Cursor
+    requires its permission envelope; neither response adds a user-visible
+    status message.
     """
-    return
+    if runtime == "gemini":
+        print("{}")
+    elif runtime == "cursor":
+        print(json.dumps({"permission": "allow"}))
 
 
 # --------------------------------------------------------------------------- #
@@ -212,9 +228,10 @@ def _resolve_enforcement(repo_root: str) -> tuple[str, str]:
 #   Windsurf : replace_file_content, multi_replace_file_content (legacy)
 _MUTATION_TOOLS = frozenset({
     "Edit", "Write", "MultiEdit", "NotebookEdit",
+    "StrReplace", "Delete", "EditNotebook",
     "write_file", "replace",
     "apply_patch",
-    "edit", "write",
+    "edit", "write", "multiedit", "patch",
     "replace_file_content", "multi_replace_file_content",
 })
 
@@ -244,7 +261,8 @@ def _extract_paths(tool_name: str, tool_input: dict, payload: dict) -> list:
             p = p.strip()
             if p and p not in seen:
                 seen.append(p)
-        return seen
+        if seen:
+            return seen
 
     single = (
         tool_input.get("file_path")
@@ -343,16 +361,16 @@ def _collect_conflicts_for_path(
 # --------------------------------------------------------------------------- #
 
 
-def main() -> None:
+def main(runtime: str = "claude") -> None:
     try:
         raw_input = sys.stdin.read()
         if not raw_input.strip():
-            _emit("allow", "merge_train: empty payload; allowing.")
+            _emit("allow", "merge_train: empty payload; allowing.", runtime)
             return
 
         payload = json.loads(raw_input)
     except Exception:
-        _emit("allow", "merge_train: payload parse failed; allowing.")
+        _emit("allow", "merge_train: payload parse failed; allowing.", runtime)
         return
 
     # Check tool name — only file-mutation tools get the conflict check.
@@ -368,10 +386,6 @@ def main() -> None:
         # implicit approve. Emitting a decision payload here triggered
         # "unsupported permissionDecision:allow" when tools like Bash fired
         # through a hook with a broad (*) matcher.
-        print(
-            f"merge_train: tool {tool_name!r} not a file mutation; skipping conflict check.",
-            file=sys.stderr,
-        )
         return
 
     # Extract target file path(s). Most runtimes give a single file_path;
@@ -379,7 +393,7 @@ def main() -> None:
     tool_input = payload.get("input") or payload.get("tool_input") or {}
     raw_paths = _extract_paths(tool_name, tool_input, payload)
     if not raw_paths:
-        _emit("allow", "merge_train: no file_path in tool input; allowing.")
+        _emit("allow", "merge_train: no file_path in tool input; allowing.", runtime)
         return
 
     # Extract start and end lines (for symbol-level locking).
@@ -393,7 +407,7 @@ def main() -> None:
             capture_output=True, text=True, check=True,
         ).stdout.strip()
     except subprocess.CalledProcessError:
-        _emit("allow", "merge_train: not inside a git repo; allowing.")
+        _emit("allow", "merge_train: not inside a git repo; allowing.", runtime)
         return
 
     repo_path = Path(repo_root)
@@ -491,15 +505,12 @@ def main() -> None:
             _emit(
                 "allow",
                 f"merge_train: {paths_label} — conflict check skipped (gh CLI error); allowing.",
+                runtime,
             )
             return
 
     if not prs_data:
-        print(
-            f"merge_train: checked {paths_label} — no conflicts found (no other open PRs).",
-            file=sys.stderr,
-        )
-        _silent_approve()
+        _silent_approve(runtime)
         return
 
     # Check every target path against other open PRs. Symbol-level line ranges
@@ -534,7 +545,7 @@ def main() -> None:
             # Block: deny — the tool is prevented. User sees reason in chat.
             # First line of stderr is the short banner; full details follow.
             print(full_msg, file=sys.stderr)
-            _emit("deny", reason)
+            _emit("deny", reason, runtime)
             return
         else:
             # Warn-only: tool runs. ``systemMessage`` surfaces the warning
@@ -543,16 +554,23 @@ def main() -> None:
             # (not a generic status message) so that Claude Code surfaces it
             # cleanly in the TUI when exit status / events are logged.
             print(full_msg, file=sys.stderr)
-            _emit("allow", f"{reason} (warn-only for {repo_alias}; check the other PR before merging).")
+            _emit(
+                "allow",
+                f"{reason} (warn-only for {repo_alias}; check the other PR before merging).",
+                runtime,
+            )
             return
 
     # No conflicts — silent approve. No systemMessage to avoid noise on every edit.
-    print(
-        f"merge_train: checked {paths_label} — no conflicts found.",
-        file=sys.stderr,
-    )
-    _silent_approve()
+    _silent_approve(runtime)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--runtime",
+        choices=("claude", "codex", "gemini", "cursor", "agy", "opencode"),
+        default="claude",
+    )
+    args, _ = parser.parse_known_args()
+    main(args.runtime)

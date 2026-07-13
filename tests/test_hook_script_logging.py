@@ -137,8 +137,8 @@ def test_hook_script_still_emits_valid_json(clean_log_dir: None) -> None:
     assert result.stdout.decode().strip() == ""
 
 
-def test_hook_script_mirrors_stderr(clean_log_dir: None) -> None:
-    """Stderr is preserved (not swallowed) so Codex/Agy TUI can show it."""
+def test_hook_script_is_silent_without_conflicts(clean_log_dir: None) -> None:
+    """Routine successful checks must not interrupt the coding CLI's TUI."""
     repo = Path(__file__).resolve().parents[1]
     payload = json.dumps(
         {
@@ -157,12 +157,7 @@ def test_hook_script_mirrors_stderr(clean_log_dir: None) -> None:
         timeout=30,
     )
     err = result.stderr.decode()
-    # The "checking conflicts" status line was removed so the FIRST line of
-    # stderr remains available for the actual conflict banner when one fires.
-    # No-conflict stderr still includes a status line ("merge_train: checked").
-    assert "merge_train: checked" in err, (
-        f"stderr lost; the CLI TUI would see no status line. Got: {err!r}"
-    )
+    assert err == "", f"routine check polluted the CLI TUI: {err!r}"
 
 
 def test_hook_script_handles_non_git_cwd(clean_log_dir: None, tmp_path: Path) -> None:

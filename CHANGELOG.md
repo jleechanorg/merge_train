@@ -9,7 +9,8 @@ Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **Codex hook installer**: `merge_train install-hooks --agent codex` now wires `conflict-warn-pre-tool.sh` into the `Edit` PreToolUse matcher instead of `predict-spawn-check.sh`. The per-edit hook gives Codex users the same chat-visible `permissionDecisionReason` Claude Code gets, and the existing `predict-spawn-check.sh` (for AO spawn-time checks via `MERGE_TRAIN_FILES`) is unchanged. **Breaking change for existing codex users:** re-run `merge_train install-hooks --agent codex` to migrate. The installer strips any prior Edit hook whose command contains the substring `predict-spawn-check` (see `merge_train/hook_install.py` `_install_codex`); custom variations of that command will be removed too, so re-add them after the migration if you need them. See [docs/AGENTS.md](./docs/AGENTS.md) for the per-edit log location.
+- **Coding CLI hook wiring**: `install.sh` updates an existing uv tool instead of leaving its package stale, installs one effective scope per runtime, and filters Codex (`apply_patch`), Gemini (`write_file|replace`), and Cursor mutation hooks. The shared wrapper emits each runtime's supported output schema. Routine successful checks are silent; only conflicts and failures surface in the terminal. Re-running the installer removes legacy merge_train-owned hooks from duplicate scopes while preserving unrelated sibling hooks.
+- **Codex hook installer**: `merge_train install-hooks --agent codex` uses the real `apply_patch` payload and matcher, omits the unconditional status message, and uses Codex's documented `timeout` field.
 
 ### Removed
 

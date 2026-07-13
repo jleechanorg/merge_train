@@ -18,6 +18,11 @@
 #     so the CLI TUI stays clean.
 set -euo pipefail
 
+RUNTIME="claude"
+if [[ "${1:-}" == "--runtime" ]] && [[ -n "${2:-}" ]]; then
+  RUNTIME="$2"
+fi
+
 # Restrict new files/dirs to owner-only. Set before any mkdir / redirect.
 umask 077
 
@@ -94,7 +99,7 @@ HELPER_PATH="${SCRIPT_DIR}/conflict_check_helper.py"
 if [[ ! -f "$HELPER_PATH" ]]; then
   HELPER_PATH="$HOME/.local/bin/conflict_check_helper.py"
 fi
-STDOUT="$(echo "$INPUT" | python3 "$HELPER_PATH" 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
+STDOUT="$(echo "$INPUT" | python3 "$HELPER_PATH" --runtime "$RUNTIME" 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
 
 if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   TS="$(date '+%Y-%m-%dT%H:%M:%S%z')"
