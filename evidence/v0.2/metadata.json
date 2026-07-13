@@ -32,8 +32,8 @@
     "evidence_reviewer": "PASS (minor NEEDS-WORK on bundle shape, addressed in this revision)",
     "codex_consultant": "PASS post-fix (initial: 0 BLOCKER, 2 MAJOR, 2 MINOR \u2014 all 4 addressed)"
   },
-  "merge_train_sha": "5c0e1c6d41d18557368ca11b965eef049f751041",
+  "merge_train_sha": "8136fd33846321d6bfc3649a2a4ec5839b1027c5",
   "provenance": {
-    "merge_train_sha": "5c0e1c6d41d18557368ca11b965eef049f751041"
+    "merge_train_sha": "8136fd33846321d6bfc3649a2a4ec5839b1027c5"
   }
 }
