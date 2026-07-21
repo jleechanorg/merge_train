@@ -3,9 +3,9 @@
 Given a declared set of PRs (each with files and optional touched symbols),
 this module:
 
-1. Computes pairwise **symbol-domain conflicts** by reusing the same
-   logic the `check` subcommand uses against the live registry, just
-   against an in-memory "would-reserve" state instead of the lock log.
+1. Computes pairwise **symbol-level conflicts** by mapping each PR's files
+   and symbols into an in-memory domain-grouped structure, then checking
+   for overlap. No lock log or external lock registry is required.
 2. Optionally augments that with **textual conflicts** detected by
    running ``git merge-tree`` between each pair of PR branches.
 3. Builds a conflict graph and emits:
@@ -31,6 +31,7 @@ References:
 from __future__ import annotations
 
 import dataclasses
+import fnmatch
 import json
 import subprocess
 from dataclasses import dataclass, field
@@ -39,12 +40,88 @@ from typing import Iterable, Optional
 
 import yaml
 
-from merge_train.domain_lock import (
-    LockEntry,
-    LockLog,
-    Registry,
-    check,
-)
+
+# --------------------------------------------------------------------------- #
+# Domain registry — minimal in-memory model (no lock log, no YAML registry)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class Domain:
+    """A named group of file patterns with optional conflict-mode flags."""
+
+    name: str
+    paths: tuple[str, ...]
+    owners: tuple[str, ...] = ()
+    per_pr_unique: bool = False  # files are per-PR unique; never block each other
+    advisory: bool = False       # conflict is informational only (won't block)
+
+
+@dataclass
+class Registry:
+    """Declarative file -> domain mapping loaded from a dict or YAML file."""
+
+    domains: dict[str, Domain] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Registry":
+        domains: dict[str, Domain] = {}
+        for name, body in (data.get("domains") or {}).items():
+            paths = tuple(body.get("paths") or ())
+            owners = tuple(body.get("owners") or ())
+            per_pr_unique = bool(body.get("per_pr_unique", False))
+            advisory = bool(body.get("advisory", False))
+            domains[name] = Domain(
+                name=name, paths=paths, owners=owners,
+                per_pr_unique=per_pr_unique, advisory=advisory,
+            )
+        return cls(domains=domains)
+
+    @classmethod
+    def from_yaml(cls, path: "str | Path") -> "Registry":
+        with open(path, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+        return cls.from_dict(data)
+
+    @classmethod
+    def empty(cls) -> "Registry":
+        """Return an empty registry (all files map to __unmapped__)."""
+        return cls(domains={})
+
+    def domain_for_path(self, path: str) -> Optional[str]:
+        """Return the domain name that owns *path*, or None."""
+        norm = path.lstrip("./")
+        for domain in self.domains.values():
+            for pattern in domain.paths:
+                if fnmatch.fnmatch(norm, pattern.lstrip("./")):
+                    return domain.name
+        return None
+
+    def domains_for_paths(self, paths: Iterable[str]) -> dict[str, list[str]]:
+        """Group *paths* by their resolved domain. Unmapped paths appear under
+        ``__unmapped__``."""
+        grouped: dict[str, list[str]] = {}
+        for path in paths:
+            name = self.domain_for_path(path) or "__unmapped__"
+            grouped.setdefault(name, []).append(path)
+        return grouped
+
+
+@dataclass(frozen=True)
+class LockEntry:
+    """Minimal in-memory representation of a PR's would-be domain reservation.
+
+    Used only for conflict detection within predict.py — no persistence,
+    no lock log, no JSONL serialization.
+    """
+
+    domain: str
+    pr: Optional[int]
+    agent: str
+    branch: str
+    opened_at: str
+    status: str  # always "active" for predicted entries
+    symbols: tuple[str, ...] = ()
 
 
 DISCLAIMER = (
@@ -549,7 +626,7 @@ def predict_conflicts(
 
 
 # --------------------------------------------------------------------------- #
-# CLI entry-point (wired in domain_lock._build_parser)
+# CLI entry-point
 # --------------------------------------------------------------------------- #
 
 
@@ -634,7 +711,7 @@ def cli_predict_conflicts(
     repo: Optional[str] = None,
     enrich_symbols: bool = True,
 ) -> int:
-    """Implementation of ``domain_lock predict-conflicts``.
+    """Implementation of ``predict-conflicts``.
 
     Symbol enrichment (``enrich_symbols``) defaults to ``True``. When
     using ``--from-prs`` via the CLI this is the standard path; callers
@@ -740,3 +817,103 @@ def _print_human(plan: Plan) -> None:
     print(f"\nParallel batches: {plan.parallel_batches}")
     print(f"Recommended order: {plan.recommended_order}")
     print(f"\n{plan.disclaimer}")
+
+
+# --------------------------------------------------------------------------- #
+# Standalone CLI (console_scripts entry point: predict_conflicts)
+# --------------------------------------------------------------------------- #
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    """Entry point for the ``predict-conflicts`` CLI command."""
+    import argparse
+    import sys as _sys
+
+    parser = argparse.ArgumentParser(
+        prog="predict-conflicts",
+        description="Predict pairwise PR merge conflicts using file/symbol scopes.",
+    )
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "--plan", metavar="FILE",
+        help="YAML/JSON file declaring the set of PRs to analyze.",
+    )
+    source.add_argument(
+        "--from-prs", metavar="N,N,...",
+        help="Comma-separated PR numbers to fetch from GitHub.",
+    )
+    parser.add_argument(
+        "--registry", metavar="FILE", default=None,
+        help="Optional YAML domain registry (file -> domain mapping). "
+             "Omit to use file-level conflict detection only.",
+    )
+    parser.add_argument(
+        "--repo", metavar="OWNER/REPO", default=None,
+        help="GitHub repo for --from-prs and symbol enrichment.",
+    )
+    parser.add_argument(
+        "--no-textual", action="store_true",
+        help="Skip git merge-tree textual conflict detection.",
+    )
+    parser.add_argument(
+        "--git-base", default="origin/main",
+        help="Merge base ref for git merge-tree (default: origin/main).",
+    )
+    parser.add_argument(
+        "--git-cwd", metavar="DIR", default=None,
+        help="Working directory for git commands.",
+    )
+    parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Emit JSON output instead of human-readable text.",
+    )
+    parser.add_argument(
+        "--enrich-symbols", action="store_true",
+        help="Enrich plan-file specs with symbols from GitHub (default for --from-prs).",
+    )
+    parser.add_argument(
+        "--no-enrich-symbols", action="store_true",
+        help="Disable symbol enrichment even for --from-prs.",
+    )
+
+    args = parser.parse_args(argv)
+
+    if not args.plan and not args.from_prs:
+        parser.error("one of --plan or --from-prs is required")
+
+    # Load registry: optional YAML file; fall back to empty (file-level only).
+    if args.registry:
+        try:
+            registry = Registry.from_yaml(args.registry)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=_sys.stderr)
+            return 2
+    else:
+        registry = Registry.empty()
+
+    cwd = Path(args.git_cwd) if args.git_cwd else None
+
+    # Symbol enrichment defaults:
+    #   --from-prs: ON unless --no-enrich-symbols
+    #   --plan:     OFF unless --enrich-symbols explicitly set
+    if args.from_prs:
+        enrich = not args.no_enrich_symbols
+    else:
+        enrich = args.enrich_symbols
+
+    return cli_predict_conflicts(
+        plan_path=args.plan,
+        registry=registry,
+        include_textual=not args.no_textual,
+        git_base=args.git_base,
+        git_cwd=cwd,
+        json_output=args.json_output,
+        from_prs=args.from_prs,
+        repo=args.repo,
+        enrich_symbols=enrich,
+    )
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

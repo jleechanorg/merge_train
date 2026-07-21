@@ -15,12 +15,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from merge_train.domain_lock import Registry
 from merge_train.predict import (
     DISCLAIMER,
     DomainConflict,
     PRSpec,
     Plan,
+    Registry,
     _git_merge_tree_conflicts,
     _greedy_maximal_independent_set,
     _pair_domain_conflicts,
@@ -317,7 +317,7 @@ def test_plan_to_json_dict_shape(reg: Registry):
 # --------------------------------------------------------------------------- #
 
 
-def _write_plan_and_reg(tmp_path: Path) -> tuple[Path, Path, Path]:
+def _write_plan_and_reg(tmp_path: Path) -> tuple[Path, Path]:
     reg = tmp_path / "reg.yaml"
     reg.write_text(yaml.safe_dump({
         "domains": {
@@ -333,16 +333,15 @@ def _write_plan_and_reg(tmp_path: Path) -> tuple[Path, Path, Path]:
             {"pr": 3, "branch": "b3", "files": ["mvp_site/agents.py"]},
         ]
     }))
-    log = tmp_path / "log.jsonl"
-    return reg, plan, log
+    return reg, plan
 
 
 def test_cli_predict_conflicts_human(tmp_path: Path):
-    reg, plan, log = _write_plan_and_reg(tmp_path)
+    reg, plan = _write_plan_and_reg(tmp_path)
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
-        "--registry", str(reg), "--log", str(log),
-        "predict-conflicts", "--plan", str(plan), "--no-textual",
+        sys.executable, "-m", "merge_train.predict",
+        "--registry", str(reg),
+        "--plan", str(plan), "--no-textual",
     ], capture_output=True, text=True)
     # PR 1 vs 2 conflict on world domain -> exit 1
     assert r.returncode == 1, r.stderr
@@ -352,11 +351,11 @@ def test_cli_predict_conflicts_human(tmp_path: Path):
 
 
 def test_cli_predict_conflicts_json(tmp_path: Path):
-    reg, plan, log = _write_plan_and_reg(tmp_path)
+    reg, plan = _write_plan_and_reg(tmp_path)
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
-        "--registry", str(reg), "--log", str(log),
-        "predict-conflicts", "--plan", str(plan), "--no-textual", "--json",
+        sys.executable, "-m", "merge_train.predict",
+        "--registry", str(reg),
+        "--plan", str(plan), "--no-textual", "--json",
     ], capture_output=True, text=True)
     assert r.returncode == 1, r.stderr
     payload = json.loads(r.stdout)
@@ -382,11 +381,10 @@ def test_cli_predict_conflicts_all_disjoint_exit0(tmp_path: Path):
             {"pr": 2, "branch": "b2", "files": ["mvp_site/agents.py"]},
         ]
     }))
-    log = tmp_path / "log.jsonl"
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
-        "--registry", str(reg), "--log", str(log),
-        "predict-conflicts", "--plan", str(plan), "--no-textual", "--json",
+        sys.executable, "-m", "merge_train.predict",
+        "--registry", str(reg),
+        "--plan", str(plan), "--no-textual", "--json",
     ], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     payload = json.loads(r.stdout)
@@ -397,23 +395,22 @@ def test_cli_predict_conflicts_all_disjoint_exit0(tmp_path: Path):
 def test_cli_predict_conflicts_missing_plan_exit2(tmp_path: Path):
     reg = tmp_path / "reg.yaml"
     reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
-    log = tmp_path / "log.jsonl"
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
-        "--registry", str(reg), "--log", str(log),
-        "predict-conflicts", "--plan", str(tmp_path / "missing.yaml"),
+        sys.executable, "-m", "merge_train.predict",
+        "--registry", str(reg),
+        "--plan", str(tmp_path / "missing.yaml"),
         "--no-textual",
     ], capture_output=True, text=True)
     assert r.returncode == 2
 
 
-def test_cli_predict_conflicts_accepts_global_opts_after_subcommand(tmp_path: Path):
-    """Backward-compat sanity: global flags after the subcommand parse fine."""
-    reg, plan, log = _write_plan_and_reg(tmp_path)
+def test_cli_predict_conflicts_accepts_flags_in_any_order(tmp_path: Path):
+    """Flags can appear in any order; argparse must not reject."""
+    reg, plan = _write_plan_and_reg(tmp_path)
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
-        "predict-conflicts", "--plan", str(plan), "--no-textual",
-        "--registry", str(reg), "--log", str(log),
+        sys.executable, "-m", "merge_train.predict",
+        "--plan", str(plan), "--no-textual",
+        "--registry", str(reg),
     ], capture_output=True, text=True)
     assert r.returncode in (0, 1), r.stderr  # parser must not reject
 
@@ -669,11 +666,10 @@ def test_cli_predict_conflicts_malformed_yaml_exit2(tmp_path: Path):
     reg.write_text(yaml.safe_dump({"domains": {"d1": {"paths": ["a.py"]}}}))
     plan = tmp_path / "plan.yaml"
     plan.write_text("prs: [\nbroken yaml: : :\n")  # bogus
-    log = tmp_path / "log.jsonl"
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
-        "--registry", str(reg), "--log", str(log),
-        "predict-conflicts", "--plan", str(plan), "--no-textual",
+        sys.executable, "-m", "merge_train.predict",
+        "--registry", str(reg),
+        "--plan", str(plan), "--no-textual",
     ], capture_output=True, text=True)
     assert r.returncode == 2
     assert "malformed plan" in r.stderr
@@ -688,7 +684,6 @@ def test_cli_predict_conflicts_exit_codes_pin_contract(tmp_path: Path):
             "d2": {"paths": ["b.py"]},
         }
     }))
-    log = tmp_path / "log.jsonl"
     # 0: all disjoint
     plan0 = tmp_path / "p0.yaml"
     plan0.write_text(yaml.safe_dump({
@@ -698,9 +693,9 @@ def test_cli_predict_conflicts_exit_codes_pin_contract(tmp_path: Path):
         ]
     }))
     r0 = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
-        "--registry", str(reg), "--log", str(log),
-        "predict-conflicts", "--plan", str(plan0), "--no-textual",
+        sys.executable, "-m", "merge_train.predict",
+        "--registry", str(reg),
+        "--plan", str(plan0), "--no-textual",
     ], capture_output=True, text=True)
     assert r0.returncode == 0, r0.stderr
     # 1: conflict
@@ -712,16 +707,16 @@ def test_cli_predict_conflicts_exit_codes_pin_contract(tmp_path: Path):
         ]
     }))
     r1 = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
-        "--registry", str(reg), "--log", str(log),
-        "predict-conflicts", "--plan", str(plan1), "--no-textual",
+        sys.executable, "-m", "merge_train.predict",
+        "--registry", str(reg),
+        "--plan", str(plan1), "--no-textual",
     ], capture_output=True, text=True)
     assert r1.returncode == 1, r1.stderr
     # 2: missing plan
     r2 = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
-        "--registry", str(reg), "--log", str(log),
-        "predict-conflicts", "--plan", str(tmp_path / "nope.yaml"),
+        sys.executable, "-m", "merge_train.predict",
+        "--registry", str(reg),
+        "--plan", str(tmp_path / "nope.yaml"),
         "--no-textual",
     ], capture_output=True, text=True)
     assert r2.returncode == 2
@@ -860,7 +855,7 @@ def test_pair_domain_conflicts_skips_per_pr_unique():
     """_pair_domain_conflicts skips conflicts in per_pr_unique domains."""
     reg = _make_registry_with_flags(per_pr_unique=True)
     # Build fake entries for the 'docs' domain
-    from merge_train.domain_lock import LockEntry
+    from merge_train.predict import LockEntry
     a_entries = [
         LockEntry(domain="docs", pr=1, agent="a", branch="b1",
                   opened_at="t", status="active")
@@ -876,7 +871,7 @@ def test_pair_domain_conflicts_skips_per_pr_unique():
 def test_pair_domain_conflicts_marks_advisory():
     """_pair_domain_conflicts marks advisory flag correctly."""
     reg = _make_registry_with_flags(advisory=True)
-    from merge_train.domain_lock import LockEntry
+    from merge_train.predict import LockEntry
     a_entries = [
         LockEntry(domain="docs", pr=1, agent="a", branch="b1",
                   opened_at="t", status="active")
@@ -1037,9 +1032,9 @@ def test_enrich_symbols_errors_without_repo_or_remote(tmp_path, monkeypatch):
     monkeypatch.setattr(_sp, "run", fake_run)
 
     r = subprocess.run([
-        _sys.executable, "-m", "merge_train.domain_lock",
+        _sys.executable, "-m", "merge_train.predict",
         "--registry", str(reg),
-        "predict-conflicts", "--plan", str(plan), "--no-textual",
+        "--plan", str(plan), "--no-textual",
         "--enrich-symbols", "--git-cwd", str(tmp_path),
     ], capture_output=True, text=True)
     assert r.returncode == 2, r.stderr
@@ -1079,9 +1074,9 @@ exit 1
     # No --repo → enrichment cannot proceed → exit 2
     # Use --git-cwd pointing to tmp_path (not a git repo) so auto-detection also fails.
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
+        sys.executable, "-m", "merge_train.predict",
         "--registry", str(reg),
-        "predict-conflicts", "--from-prs", "1,2",
+        "--from-prs", "1,2",
         "--no-textual", "--json", "--git-cwd", str(tmp_path),
     ], capture_output=True, text=True, env=env)
     assert r.returncode == 2, f"Expected exit 2, got {r.returncode}. stderr={r.stderr!r}"
@@ -1116,9 +1111,9 @@ exit 1
 
     # --no-enrich-symbols → file-level only → no --repo needed → succeeds
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
+        sys.executable, "-m", "merge_train.predict",
         "--registry", str(reg),
-        "predict-conflicts", "--from-prs", "1,2",
+        "--from-prs", "1,2",
         "--no-enrich-symbols", "--no-textual", "--json",
     ], capture_output=True, text=True, env=env)
     # Exit 0 (no domain conflicts) or 1 (domain conflict) — NOT 2 (error)
@@ -1159,9 +1154,9 @@ exit 1
     env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
 
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
+        sys.executable, "-m", "merge_train.predict",
         "--registry", str(reg),
-        "predict-conflicts", "--from-prs", "1,2", "--repo", "owner/repo",
+        "--from-prs", "1,2", "--repo", "owner/repo",
         "--no-textual", "--json",
     ], capture_output=True, text=True, env=env)
     assert r.returncode == 2
@@ -1288,9 +1283,9 @@ exit 1
     env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
 
     r = subprocess.run([
-        sys.executable, "-m", "merge_train.domain_lock",
+        sys.executable, "-m", "merge_train.predict",
         "--registry", str(reg),
-        "predict-conflicts", "--from-prs", "1,2",
+        "--from-prs", "1,2",
         "--no-enrich-symbols", "--no-textual", "--json",
     ], capture_output=True, text=True, env=env)
 

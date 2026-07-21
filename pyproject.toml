@@ -1,7 +1,7 @@
 [project]
 name = "merge_train"
 version = "0.1.0"
-description = "Spawn-time domain and symbol lock registry for AI-agent PR pipelines"
+description = "Symbol-level PR conflict prediction for AI-agent merge pipelines"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -14,7 +14,6 @@ keywords = [
     "ai-agents",
     "pr-automation",
     "conflict-prediction",
-    "domain-locks",
     "symbol-locks",
     "file-locks",
 ]
@@ -56,7 +55,7 @@ Issues        = "https://github.com/jleechanorg/merge_train/issues"
 Documentation = "https://github.com/jleechanorg/merge_train/blob/main/README.md"
 
 [project.scripts]
-domain_lock = "merge_train.domain_lock:main"
+predict-conflicts = "merge_train.predict:main"
 
 [build-system]
 requires = ["setuptools>=61"]
