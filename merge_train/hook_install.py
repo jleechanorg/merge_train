@@ -886,7 +886,7 @@ def _build_argparser() -> "argparse.ArgumentParser":
         prog="merge_train",
         description=(
             "merge_train: install/test per-agent conflict-warn hooks. "
-            "After PR #18, all hooks are warn-only."
+            "Per-repo enforcement controls whether conflicts warn or block."
         ),
     )
     sub = parser.add_subparsers(dest="cmd", required=True)

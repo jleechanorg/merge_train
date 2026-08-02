@@ -27,6 +27,7 @@ from pathlib import Path
 
 import pytest
 
+import merge_train.__main__ as merge_train_main
 import merge_train.hook_install as hook_install
 from merge_train.hook_install import (
     AGENT_CHOICES,
@@ -114,6 +115,15 @@ def test_hooks_install_dir_is_under_home_local_bin() -> None:
     d = hooks_install_dir()
     assert d.name == "bin"
     assert d.parent.name == ".local"
+
+
+def test_cli_help_describes_per_repo_enforcement() -> None:
+    for parser in (hook_install._build_argparser(), merge_train_main._build_parser()):
+        help_text = " ".join(parser.format_help().split())
+        assert (
+            "Per-repo enforcement controls whether conflicts warn or block" in help_text
+        )
+        assert "all hooks are warn-only" not in help_text.lower()
 
 
 # --------------------------------------------------------------------------- #
