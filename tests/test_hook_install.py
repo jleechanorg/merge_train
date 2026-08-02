@@ -22,10 +22,12 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
+import merge_train.hook_install as hook_install
 from merge_train.hook_install import (
     AGENT_CHOICES,
     ALL_HOOK_SCRIPTS,
@@ -248,6 +250,51 @@ def test_install_hooks_codex_patches_hooks_json(
     hook = edit_matchers[0]["hooks"][0]
     assert hook["timeout"] == 15
     assert "statusMessage" not in hook
+
+
+def test_install_hooks_codex_rejects_unsupported_version(
+    fake_home: Path,
+    fake_codex_hooks: Path,
+    fake_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Codex before apply_patch hook support must not be reported active."""
+    monkeypatch.setattr(hook_install, "_installed_codex_version", lambda: (0, 123, 9))
+
+    result = install_hooks_for_agent("codex", target=fake_repo)
+
+    assert result["installed"] is False
+    assert "requires Codex >= 0.124.0" in result["error"]
+    assert json.loads(fake_codex_hooks.read_text()) == {"hooks": {}}
+
+
+def test_install_hooks_codex_accepts_minimum_supported_version(
+    fake_home: Path,
+    fake_codex_hooks: Path,
+    fake_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hook_install, "_installed_codex_version", lambda: (0, 124, 0))
+
+    result = install_hooks_for_agent("codex", target=fake_repo)
+
+    assert result["installed"] is True
+    assert result["codex_version"] == "0.124.0"
+
+
+def test_installed_codex_version_parses_cli_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hook_install.shutil, "which", lambda _: "/usr/bin/codex")
+    monkeypatch.setattr(
+        hook_install.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, stdout="codex-cli 0.146.0\n", stderr=""
+        ),
+    )
+
+    assert hook_install._installed_codex_version() == (0, 146, 0)
 
 
 def test_install_hooks_codex_is_idempotent(

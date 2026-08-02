@@ -15,9 +15,9 @@ that:
 - Writes a ``.opencode.json`` instruction block to the target repo
   telling OpenCode agents to run ``predict-conflicts`` before editing.
 
-After PR #18, all hooks are **warn-only** — no hook wired by this
-module blocks the underlying tool. Idempotency is enforced by
-inspecting existing config and either skipping or in-place updating.
+Hooks are warn-only by default. Repositories configured for blocking
+enforcement preserve the helper's deny response. Idempotency is enforced
+by inspecting existing config and either skipping or in-place updating.
 
 The test harness (``test_hooks_for_agent``) installs a hook, then
 synthetically feeds it a PreToolUse Edit payload and asserts that the
@@ -70,6 +70,8 @@ HOOKS_INSTALL_DIR_NAME: str = ".local/bin"
 CLAUDE_SETTINGS_REL: str = ".claude/settings.json"
 CODEX_HOOKS_REL: str = ".codex/hooks.json"
 AGY_HOOKS_REL: str = ".gemini/config/hooks.json"
+# Codex 0.124.0 release changelog: openai/codex#18391.
+MIN_CODEX_APPLY_PATCH_HOOK_VERSION: tuple[int, int, int] = (0, 124, 0)
 
 
 def hooks_install_dir() -> Path:
@@ -111,6 +113,29 @@ AGY_HOOKS_PATH = agy_hooks_path
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
+
+
+def _installed_codex_version() -> Optional[tuple[int, int, int]]:
+    """Return the installed Codex semantic version, if it can be determined."""
+    executable = shutil.which("codex")
+    if not executable:
+        return None
+    try:
+        result = subprocess.run(
+            [executable, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    for token in (result.stdout + " " + result.stderr).split():
+        parts = token.removeprefix("v").split("-", 1)[0].split(".")
+        if len(parts) >= 3 and all(part.isdigit() for part in parts[:3]):
+            return tuple(int(part) for part in parts[:3])
+    return None
 
 
 def _find_hooks_dir(base_dir: Optional[Path] = None) -> Path:
@@ -276,6 +301,24 @@ def _install_codex(target: Path) -> dict:
     ``MERGE_TRAIN_FILES`` env var and is not wired here).
     """
     try:
+        codex_version = _installed_codex_version()
+        if (
+            codex_version is not None
+            and codex_version < MIN_CODEX_APPLY_PATCH_HOOK_VERSION
+        ):
+            found = ".".join(str(part) for part in codex_version)
+            required = ".".join(
+                str(part) for part in MIN_CODEX_APPLY_PATCH_HOOK_VERSION
+            )
+            return {
+                "agent": "codex",
+                "installed": False,
+                "error": (
+                    f"apply_patch PreToolUse requires Codex >= {required}; "
+                    f"found {found}"
+                ),
+            }
+
         _install_hook_scripts()
         try:
             src_root = str(_repo_root())
@@ -341,12 +384,20 @@ def _install_codex(target: Path) -> dict:
 
         hooks_path.parent.mkdir(parents=True, exist_ok=True)
         hooks_path.write_text(json.dumps(data, indent=2))
-        return {
+        result = {
             "agent": "codex",
             "installed": True,
             "hooks_path": str(hooks_path),
             "command": cmd,
         }
+        if codex_version is None:
+            result["warning"] = (
+                "Codex version could not be determined; hook configuration was "
+                "installed, but apply_patch activation is unverified"
+            )
+        else:
+            result["codex_version"] = ".".join(str(part) for part in codex_version)
+        return result
     except Exception as exc:
         return {
             "agent": "codex",

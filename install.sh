@@ -373,10 +373,13 @@ echo
 # ------------------------------------------------------------------------- #
 
 echo "[3d/5] Codex global ~/.codex/hooks.json (apply_patch only)..."
-"$PYTHON_BIN" "$WIRE_HELPER" \
-    --config "$CODEX_GLOBAL_HOOKS" --event PreToolUse --command "$WIRE_CMD --runtime codex" --style claude \
-    --matcher "^apply_patch$" \
-    || echo "  WARN: codex global wiring failed (non-fatal)"
+if PYTHONPATH="$MERGE_TRAIN_ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+    "$PYTHON_BIN" -m merge_train.hook_install install-hooks \
+    --agent codex --target "$TARGET"; then
+    echo "  ok: codex global wiring installed"
+else
+    echo "  WARN: codex global wiring failed (non-fatal)"
+fi
 echo
 
 echo "[3d/5] Gemini global ~/.gemini/settings.json (BeforeTool event)..."
@@ -400,9 +403,11 @@ echo
 
 echo "[3d/5] OpenCode global plugin ~/.config/opencode/plugins/..."
 if [[ -f "$OPENCODE_PLUGIN_SRC" ]]; then
-    mkdir -p "$OPENCODE_PLUGIN_DIR"
-    cp "$OPENCODE_PLUGIN_SRC" "$OPENCODE_PLUGIN_DST"
-    echo "  ok: installed $OPENCODE_PLUGIN_DST"
+    if mkdir -p "$OPENCODE_PLUGIN_DIR" && cp "$OPENCODE_PLUGIN_SRC" "$OPENCODE_PLUGIN_DST"; then
+        echo "  ok: installed $OPENCODE_PLUGIN_DST"
+    else
+        echo "  WARN: failed to install $OPENCODE_PLUGIN_DST"
+    fi
 else
     echo "  WARN: $OPENCODE_PLUGIN_SRC missing; opencode plugin not installed."
 fi

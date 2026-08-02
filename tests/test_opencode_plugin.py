@@ -49,3 +49,40 @@ def test_opencode_apply_patch_forwards_patch_text_without_startup_noise() -> Non
         "tool_name": "apply_patch",
         "tool_input": {"command": patch_text},
     }
+
+
+def test_opencode_propagates_deny_decision() -> None:
+    deny = {
+        "hookSpecificOutput": {
+            "permissionDecision": "deny",
+            "permissionDecisionReason": "merge_train: conflicting edit",
+        }
+    }
+    script = f"""
+      import {{ MergeTrainConflictPlugin }} from {json.dumps(PLUGIN.as_uri())};
+      const shell = () => ({{
+        quiet() {{ return this; }},
+        async nothrow() {{
+          return {{ stdout: Buffer.from({json.dumps(json.dumps(deny))}) }};
+        }},
+      }});
+      const hooks = await MergeTrainConflictPlugin({{ $: shell }});
+      try {{
+        await hooks["tool.execute.before"](
+          {{ tool: "edit" }},
+          {{ args: {{ filePath: "src/example.py" }} }},
+        );
+        console.log("allowed");
+      }} catch (err) {{
+        console.log(`denied:${{err.message}}`);
+      }}
+    """
+
+    result = subprocess.run(
+        ["node", "--input-type=module", "--eval", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.strip() == "denied:merge_train: conflicting edit"
