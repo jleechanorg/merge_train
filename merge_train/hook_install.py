@@ -10,14 +10,14 @@ that:
   install location, matching ``install.sh``'s pattern).
 - Patches ``~/.claude/settings.json`` (Claude Code) PreToolUse matchers
   for Edit + Write to invoke ``conflict-warn-pre-tool.sh``.
-- Patches ``~/.codex/hooks.json`` (Codex CLI) PreToolUse Edit matcher
-  to invoke ``predict-spawn-check.sh``.
+- Patches ``~/.codex/hooks.json`` (Codex CLI) PreToolUse apply_patch matcher
+  to invoke ``conflict-warn-pre-tool.sh``.
 - Writes a ``.opencode.json`` instruction block to the target repo
   telling OpenCode agents to run ``predict-conflicts`` before editing.
 
-After PR #18, all hooks are **warn-only** — no hook wired by this
-module blocks the underlying tool. Idempotency is enforced by
-inspecting existing config and either skipping or in-place updating.
+Hooks are warn-only by default. Repositories configured for blocking
+enforcement preserve the helper's deny response. Idempotency is enforced
+by inspecting existing config and either skipping or in-place updating.
 
 The test harness (``test_hooks_for_agent``) installs a hook, then
 synthetically feeds it a PreToolUse Edit payload and asserts that the
@@ -70,6 +70,8 @@ HOOKS_INSTALL_DIR_NAME: str = ".local/bin"
 CLAUDE_SETTINGS_REL: str = ".claude/settings.json"
 CODEX_HOOKS_REL: str = ".codex/hooks.json"
 AGY_HOOKS_REL: str = ".gemini/config/hooks.json"
+# Codex 0.124.0 release changelog: openai/codex#18391.
+MIN_CODEX_APPLY_PATCH_HOOK_VERSION: tuple[int, int, int] = (0, 124, 0)
 
 
 def hooks_install_dir() -> Path:
@@ -111,6 +113,29 @@ AGY_HOOKS_PATH = agy_hooks_path
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
+
+
+def _installed_codex_version() -> Optional[tuple[int, int, int]]:
+    """Return the installed Codex semantic version, if it can be determined."""
+    executable = shutil.which("codex")
+    if not executable:
+        return None
+    try:
+        result = subprocess.run(
+            [executable, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    for token in (result.stdout + " " + result.stderr).split():
+        parts = token.removeprefix("v").split("-", 1)[0].split(".")
+        if len(parts) >= 3 and all(part.isdigit() for part in parts[:3]):
+            return tuple(int(part) for part in parts[:3])
+    return None
 
 
 def _find_hooks_dir(base_dir: Optional[Path] = None) -> Path:
@@ -266,7 +291,7 @@ def _install_claude(target: Path) -> dict:
 
 
 def _install_codex(target: Path) -> dict:
-    """Patch ``~/.codex/hooks.json`` PreToolUse Edit matcher.
+    """Patch ``~/.codex/hooks.json`` PreToolUse apply_patch matcher.
 
     Hook: ``bash ~/.local/bin/conflict-warn-pre-tool.sh`` (warn-only).
     Mirrors the Claude per-edit symbol-level conflict check, so Codex
@@ -276,12 +301,33 @@ def _install_codex(target: Path) -> dict:
     ``MERGE_TRAIN_FILES`` env var and is not wired here).
     """
     try:
+        codex_version = _installed_codex_version()
+        if (
+            codex_version is not None
+            and codex_version < MIN_CODEX_APPLY_PATCH_HOOK_VERSION
+        ):
+            found = ".".join(str(part) for part in codex_version)
+            required = ".".join(
+                str(part) for part in MIN_CODEX_APPLY_PATCH_HOOK_VERSION
+            )
+            return {
+                "agent": "codex",
+                "installed": False,
+                "error": (
+                    f"apply_patch PreToolUse requires Codex >= {required}; "
+                    f"found {found}"
+                ),
+            }
+
         _install_hook_scripts()
         try:
             src_root = str(_repo_root())
         except FileNotFoundError:
             src_root = ""
-        cmd = f"bash {HOOKS_INSTALL_DIR() / 'conflict-warn-pre-tool.sh'}"
+        cmd = (
+            f"bash {HOOKS_INSTALL_DIR() / 'conflict-warn-pre-tool.sh'} "
+            "--runtime codex"
+        )
 
         hooks_path = CODEX_HOOKS_PATH()
         if hooks_path.exists():
@@ -299,7 +345,7 @@ def _install_codex(target: Path) -> dict:
         _strip_stale_source_entries({"PreToolUse": pre_tool}, src_root)
         # And any prior merge_train-owned PreToolUse hook, regardless of
         # matcher. Older installs used a broad "*" matcher, which makes Codex
-        # run the conflict hook twice after the newer Edit matcher is added.
+        # run the conflict hook twice after the apply_patch matcher is added.
         # ``predict-spawn-check.sh`` also needs MERGE_TRAIN_FILES, so it never
         # fires usefully on normal Edits and would mask the per-edit one.
         #
@@ -316,33 +362,42 @@ def _install_codex(target: Path) -> dict:
                 if "predict-spawn-check" not in h.get("command", "")
                 and "conflict-warn-pre-tool" not in h.get("command", "")
             ]
-            if matcher.get("hooks") or matcher.get("matcher") == "Edit":
+            if matcher.get("hooks"):
                 cleaned_pre_tool.append(matcher)
         data["hooks"]["PreToolUse"] = cleaned_pre_tool
         pre_tool = data["hooks"]["PreToolUse"]
 
-        edit_entry = next((m for m in pre_tool if m.get("matcher") == "Edit"), None)
+        edit_entry = next(
+            (m for m in pre_tool if m.get("matcher") == "^apply_patch$"), None
+        )
         if edit_entry is None:
-            edit_entry = {"matcher": "Edit", "hooks": []}
+            edit_entry = {"matcher": "^apply_patch$", "hooks": []}
             pre_tool.append(edit_entry)
         if not any(h.get("command") == cmd for h in edit_entry.get("hooks", [])):
             edit_entry.setdefault("hooks", []).append(
                 {
                     "type": "command",
                     "command": cmd,
-                    "timeoutSec": 15,
-                    "statusMessage": "merge_train: checking conflicts...",
+                    "timeout": 15,
                 }
             )
 
         hooks_path.parent.mkdir(parents=True, exist_ok=True)
         hooks_path.write_text(json.dumps(data, indent=2))
-        return {
+        result = {
             "agent": "codex",
             "installed": True,
             "hooks_path": str(hooks_path),
             "command": cmd,
         }
+        if codex_version is None:
+            result["warning"] = (
+                "Codex version could not be determined; hook configuration was "
+                "installed, but apply_patch activation is unverified"
+            )
+        else:
+            result["codex_version"] = ".".join(str(part) for part in codex_version)
+        return result
     except Exception as exc:
         return {
             "agent": "codex",
@@ -361,6 +416,11 @@ def _install_opencode(target: Path) -> dict:
     """
     try:
         _install_hook_scripts()
+        plugin_src = _find_hooks_dir() / "opencode-conflict-plugin.js"
+        plugin_dir = Path.home() / ".config" / "opencode" / "plugins"
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        plugin_dst = plugin_dir / "merge-train-conflict.js"
+        shutil.copy2(plugin_src, plugin_dst)
         cfg_path = target / ".opencode.json"
         if cfg_path.exists():
             try:
@@ -389,6 +449,7 @@ def _install_opencode(target: Path) -> dict:
             "agent": "opencode",
             "installed": True,
             "config_path": str(cfg_path),
+            "plugin_path": str(plugin_dst),
         }
     except Exception as exc:
         return {
@@ -417,11 +478,8 @@ def _install_agy(target: Path) -> dict:
     ``strings ~/.local/bin/agy | grep -E '^(PreToolUse|BeforeTool)$'``
     for the proof.
 
-    The schema is intentionally simpler than Codex's: a single
-    ``PreToolUse`` event with no per-tool matcher (it fires on every
-    tool call). Filtering to Edit / Write happens inside
-    ``conflict_check_helper.py`` itself — non-file-mutation tool calls
-    short-circuit to a no-op allow.
+    The ``PreToolUse`` matcher is restricted to Edit / Write so routine tool
+    calls never launch the conflict checker.
 
     The per-edit wiring (rather than the project-scope session guard
     ``gemini-conflict-warn.sh``) gives the user real symbol-level
@@ -452,15 +510,27 @@ def _install_agy(target: Path) -> dict:
         _strip_stale_source_entries({"PreToolUse": pre_tool_use}, src_root)
         pre_tool_use = data["hooks"]["PreToolUse"]
 
-        # Agy schema mirrors Codex: ``PreToolUse[]`` is a list of wrapper
-        # objects, each carrying a nested ``hooks[]`` list. No per-tool
-        # matcher — the script itself filters Edit/Write. If a wrapper
-        # already exists with our command, skip appending.
-        def _has_cmd(wrapper: dict) -> bool:
-            return any(h.get("command") == cmd for h in wrapper.get("hooks", []))
-
-        if not any(_has_cmd(w) for w in pre_tool_use):
-            pre_tool_use.append({"hooks": [{"type": "command", "command": cmd}]})
+        # Replace legacy wildcard copies while preserving unrelated sibling
+        # hooks that share their wrapper.
+        cleaned_pre_tool_use = []
+        for wrapper in pre_tool_use:
+            kept_hooks = [
+                hook
+                for hook in wrapper.get("hooks", [])
+                if "conflict-warn-pre-tool" not in hook.get("command", "")
+                and "predict-spawn-check" not in hook.get("command", "")
+            ]
+            if kept_hooks:
+                kept_wrapper = dict(wrapper)
+                kept_wrapper["hooks"] = kept_hooks
+                cleaned_pre_tool_use.append(kept_wrapper)
+        cleaned_pre_tool_use.append(
+            {
+                "matcher": "Edit|Write",
+                "hooks": [{"type": "command", "command": cmd}],
+            }
+        )
+        data["hooks"]["PreToolUse"] = cleaned_pre_tool_use
 
         hooks_path.parent.mkdir(parents=True, exist_ok=True)
         hooks_path.write_text(json.dumps(data, indent=2))
@@ -516,7 +586,11 @@ def install_hooks_for_agent(agent: str, target: Optional[Path] = None) -> list |
 # --------------------------------------------------------------------------- #
 
 
-def _run_hook_binary(bin_path: Path, payload: Optional[dict] = None) -> dict:
+def _run_hook_binary(
+    bin_path: Path,
+    payload: Optional[dict] = None,
+    args: tuple[str, ...] = (),
+) -> dict:
     """Run a hook shell script with a JSON payload on stdin.
 
     Returns ``{"exit_code", "stdout", "stderr"}``. Caller decides
@@ -525,7 +599,7 @@ def _run_hook_binary(bin_path: Path, payload: Optional[dict] = None) -> dict:
     payload_s = json.dumps(payload or {})
     try:
         proc = subprocess.run(
-            ["bash", str(bin_path)],
+            ["bash", str(bin_path), *args],
             input=payload_s,
             capture_output=True,
             text=True,
@@ -601,7 +675,7 @@ def _test_claude(target: Path) -> dict:
 
 
 def _test_codex(target: Path) -> dict:
-    """Synthesize a Codex PreToolUse Edit payload; assert hook exits 0.
+    """Synthesize a Codex PreToolUse apply_patch payload; assert hook exits 0.
 
     Mirrors ``_test_claude`` / ``_test_agy``: the per-edit
     ``conflict-warn-pre-tool.sh`` script fires on every Edit and emits
@@ -625,7 +699,7 @@ def _test_codex(target: Path) -> dict:
             "reason": f"Codex hooks.json malformed: {exc}",
         }
     pre_tool = data.get("hooks", {}).get("PreToolUse", [])
-    edit_matchers = [m for m in pre_tool if m.get("matcher") == "Edit"]
+    edit_matchers = [m for m in pre_tool if m.get("matcher") == "^apply_patch$"]
     if not edit_matchers or not any(
         "conflict-warn-pre-tool" in h.get("command", "")
         for m in edit_matchers
@@ -635,7 +709,7 @@ def _test_codex(target: Path) -> dict:
             "agent": "codex",
             "ok": False,
             "exit_code": -1,
-            "reason": "conflict-warn-pre-tool hook not wired into Edit matcher",
+            "reason": "conflict-warn-pre-tool hook not wired into apply_patch matcher",
         }
     bin_path = HOOKS_INSTALL_DIR() / "conflict-warn-pre-tool.sh"
     if not bin_path.is_file():
@@ -645,15 +719,16 @@ def _test_codex(target: Path) -> dict:
             "exit_code": -1,
             "reason": f"hook script missing: {bin_path}",
         }
-    # The script's own tool-name filter handles the dispatch; we send
-    # the Claude-style payload (tool_name + tool_input) and it ignores
-    # non-Edit/Write tool names internally.
+    # Use Codex's real tool name and patch-body path schema.
     res = _run_hook_binary(
         bin_path,
         {
-            "tool_name": "Edit",
-            "tool_input": {"file_path": "/tmp/example.py", "new_string": "x = 1"},
+            "tool_name": "apply_patch",
+            "tool_input": {
+                "patch": "*** Begin Patch\n*** Update File: example.py\n@@\n-x = 0\n+x = 1\n*** End Patch"
+            },
         },
+        ("--runtime", "codex"),
     )
     ok = res["exit_code"] == 0
     return {
@@ -703,7 +778,7 @@ def _test_agy(target: Path) -> dict:
     """Synthesize a PreToolUse Edit payload; assert hook exits 0 + allows.
 
     Mirrors ``_test_claude`` but for the agy / Antigravity schema: a
-    single ``PreToolUse`` event (no matcher) wired to
+    mutation-scoped ``PreToolUse`` event wired to
     ``conflict-warn-pre-tool.sh``. Antigravity uses the
     Claude-Code-style schema, NOT the legacy Gemini ``BeforeTool``
     event.
@@ -727,7 +802,8 @@ def _test_agy(target: Path) -> dict:
         }
     pre_tool_use = data.get("hooks", {}).get("PreToolUse", [])
     if not any(
-        "conflict-warn-pre-tool" in h.get("command", "")
+        wrapper.get("matcher") == "Edit|Write"
+        and "conflict-warn-pre-tool" in h.get("command", "")
         for wrapper in pre_tool_use
         for h in wrapper.get("hooks", [])
     ):
@@ -810,7 +886,7 @@ def _build_argparser() -> "argparse.ArgumentParser":
         prog="merge_train",
         description=(
             "merge_train: install/test per-agent conflict-warn hooks. "
-            "After PR #18, all hooks are warn-only."
+            "Per-repo enforcement controls whether conflicts warn or block."
         ),
     )
     sub = parser.add_subparsers(dest="cmd", required=True)

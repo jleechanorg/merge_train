@@ -18,6 +18,11 @@
 #     so the CLI TUI stays clean.
 set -euo pipefail
 
+RUNTIME="claude"
+if [[ "${1:-}" == "--runtime" ]] && [[ -n "${2:-}" ]]; then
+  RUNTIME="$2"
+fi
+
 # Restrict new files/dirs to owner-only. Set before any mkdir / redirect.
 umask 077
 
@@ -29,7 +34,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo "detached")"
 REPO_NAME="$(basename "$REPO_ROOT" 2>/dev/null || echo "no-repo")"
 LOG_DATE="$(date +%Y-%m-%d)"
-LOG_DIR="/tmp/merge_train/${REPO_NAME:-no-repo}/${BRANCH}"
+MERGE_TRAIN_LOG_ROOT="${MERGE_TRAIN_LOG_ROOT:-/tmp/merge_train}"
+LOG_DIR="${MERGE_TRAIN_LOG_ROOT}/${REPO_NAME:-no-repo}/${BRANCH}"
 LOG_FILE="${LOG_DIR}/hook-${LOG_DATE}.log"
 
 # Redact the Edit body. The literal new_string / new_text / content is
@@ -94,7 +100,7 @@ HELPER_PATH="${SCRIPT_DIR}/conflict_check_helper.py"
 if [[ ! -f "$HELPER_PATH" ]]; then
   HELPER_PATH="$HOME/.local/bin/conflict_check_helper.py"
 fi
-STDOUT="$(echo "$INPUT" | python3 "$HELPER_PATH" 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
+STDOUT="$(echo "$INPUT" | python3 "$HELPER_PATH" --runtime "$RUNTIME" 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
 
 if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   TS="$(date '+%Y-%m-%dT%H:%M:%S%z')"
@@ -105,5 +111,7 @@ if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   } >> "$LOG_FILE" 2>/dev/null || true
 fi
 
-echo "$STDOUT"
+if [[ -n "$STDOUT" ]]; then
+  printf '%s\n' "$STDOUT"
+fi
 exit "$EXIT"

@@ -44,9 +44,9 @@ cd /path/to/your/repo
 
 `install.sh` is idempotent and does the following:
 
-1. Runs `uv tool install` to install the `merge_train` package and place the `acquire` and `predict-conflicts` binaries on your `PATH` (shared across all repos — no virtualenv per repo).
+1. Runs `uv tool install --reinstall` to install or update the `merge_train` package and place the `acquire` and `predict-conflicts` binaries on your `PATH` (shared across all repos — no virtualenv per repo).
 2. Drops a starter `file_domains.yaml` skeleton in the target repo if one doesn't already exist.
-3. Wires git hooks and per-agent session hooks (pre-commit, Codex, Antigravity/Gemini, OpenCode, Claude Code) so all agents call `acquire` or `predict-conflicts` at session start/stop.
+3. Wires one effective hook scope per coding CLI: user scope for Claude, Codex, and Gemini; project scope for Cursor; and the OpenCode plugin/instructions. Tool hooks match file mutations only and stay silent unless a conflict or error needs attention.
 4. Smoke-tests the CLI.
 
 **Dev install (working on `merge_train` itself):**
@@ -186,7 +186,7 @@ prs:
 All hooks are configured as warnings or validation gates:
 
 - `hooks/predict-spawn-check.sh` — pre-spawn gate check.
-- `hooks/conflict-warn-pre-tool.sh` — Claude Code `PreToolUse` hook.
+- `hooks/conflict-warn-pre-tool.sh` — shared mutation hook for Claude, Codex, Gemini/Antigravity, and Cursor.
 - `hooks/gemini-conflict-warn.sh` — Gemini / Antigravity session guard.
 - `hooks/pre-commit.sh` — Git pre-commit hook (runs `predict-conflicts`).
 

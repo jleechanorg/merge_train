@@ -8,7 +8,7 @@ The installer must:
 - Never produce blocking (deny) config — all hooks are warn-only per PR #18.
 - Write hook scripts to ``~/.local/bin/`` (mirroring install.sh).
 - For Claude: patch ``~/.claude/settings.json`` PreToolUse matchers Edit+Write.
-- For Codex: patch ``~/.codex/hooks.json`` PreToolUse matcher Edit.
+- For Codex: patch ``~/.codex/hooks.json`` PreToolUse matcher apply_patch.
 - For OpenCode: write predict-conflicts instructions to ``.opencode.json``
   at the target repo root (matches the repo's own config).
 - For Agy: patch ``~/.gemini/config/hooks.json`` ``PreToolUse`` event
@@ -22,10 +22,13 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
+import merge_train.__main__ as merge_train_main
+import merge_train.hook_install as hook_install
 from merge_train.hook_install import (
     AGENT_CHOICES,
     ALL_HOOK_SCRIPTS,
@@ -112,6 +115,15 @@ def test_hooks_install_dir_is_under_home_local_bin() -> None:
     d = hooks_install_dir()
     assert d.name == "bin"
     assert d.parent.name == ".local"
+
+
+def test_cli_help_describes_per_repo_enforcement() -> None:
+    for parser in (hook_install._build_argparser(), merge_train_main._build_parser()):
+        help_text = " ".join(parser.format_help().split())
+        assert (
+            "Per-repo enforcement controls whether conflicts warn or block" in help_text
+        )
+        assert "all hooks are warn-only" not in help_text.lower()
 
 
 # --------------------------------------------------------------------------- #
@@ -235,16 +247,64 @@ def test_install_hooks_codex_patches_hooks_json(
     fake_codex_hooks: Path,
     fake_repo: Path,
 ) -> None:
-    """Codex install adds conflict-warn-pre-tool to PreToolUse Edit matcher."""
+    """Codex install adds conflict-warn-pre-tool to apply_patch only."""
     install_hooks_for_agent("codex", target=fake_repo)
     data = json.loads(fake_codex_hooks.read_text())
     pre = data.get("hooks", {}).get("PreToolUse", [])
-    edit_matchers = [m for m in pre if m.get("matcher") == "Edit"]
-    assert edit_matchers, "Edit matcher must be added"
+    edit_matchers = [m for m in pre if m.get("matcher") == "^apply_patch$"]
+    assert edit_matchers, "apply_patch matcher must be added"
     cmds = " ".join(
         h.get("command", "") for m in edit_matchers for h in m.get("hooks", [])
     )
     assert "conflict-warn-pre-tool" in cmds
+    hook = edit_matchers[0]["hooks"][0]
+    assert hook["timeout"] == 15
+    assert "statusMessage" not in hook
+
+
+def test_install_hooks_codex_rejects_unsupported_version(
+    fake_home: Path,
+    fake_codex_hooks: Path,
+    fake_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Codex before apply_patch hook support must not be reported active."""
+    monkeypatch.setattr(hook_install, "_installed_codex_version", lambda: (0, 123, 9))
+
+    result = install_hooks_for_agent("codex", target=fake_repo)
+
+    assert result["installed"] is False
+    assert "requires Codex >= 0.124.0" in result["error"]
+    assert json.loads(fake_codex_hooks.read_text()) == {"hooks": {}}
+
+
+def test_install_hooks_codex_accepts_minimum_supported_version(
+    fake_home: Path,
+    fake_codex_hooks: Path,
+    fake_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hook_install, "_installed_codex_version", lambda: (0, 124, 0))
+
+    result = install_hooks_for_agent("codex", target=fake_repo)
+
+    assert result["installed"] is True
+    assert result["codex_version"] == "0.124.0"
+
+
+def test_installed_codex_version_parses_cli_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hook_install.shutil, "which", lambda _: "/usr/bin/codex")
+    monkeypatch.setattr(
+        hook_install.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, stdout="codex-cli 0.146.0\n", stderr=""
+        ),
+    )
+
+    assert hook_install._installed_codex_version() == (0, 146, 0)
 
 
 def test_install_hooks_codex_is_idempotent(
@@ -258,7 +318,7 @@ def test_install_hooks_codex_is_idempotent(
 
     data = json.loads(fake_codex_hooks.read_text())
     pre = data.get("hooks", {}).get("PreToolUse", [])
-    edit = [m for m in pre if m.get("matcher") == "Edit"]
+    edit = [m for m in pre if m.get("matcher") == "^apply_patch$"]
     assert len(edit) == 1
     assert len(edit[0]["hooks"]) == 1
 
@@ -310,7 +370,9 @@ def test_install_hooks_codex_strips_legacy_predict_spawn_check(
     )
     install_hooks_for_agent("codex", target=fake_repo)
     data = json.loads(fake_codex_hooks.read_text())
-    edit = next(m for m in data["hooks"]["PreToolUse"] if m["matcher"] == "Edit")
+    edit = next(
+        m for m in data["hooks"]["PreToolUse"] if m["matcher"] == "^apply_patch$"
+    )
     cmds = [h.get("command", "") for h in edit["hooks"]]
     assert not any("predict-spawn-check" in c for c in cmds), (
         f"legacy predict-spawn-check not stripped: {cmds}"
@@ -323,9 +385,9 @@ def test_install_hooks_codex_strips_wildcard_conflict_warn(
     fake_codex_hooks: Path,
     fake_repo: Path,
 ) -> None:
-    """A prior broad "*" conflict hook must not survive beside Edit.
+    """A prior broad "*" conflict hook must not survive beside apply_patch.
 
-    Codex loads all matching hook groups, so keeping both "*" and "Edit"
+    Codex loads all matching hook groups, so keeping both groups
     runs ``conflict-warn-pre-tool.sh`` twice for every edit.
     """
     fake_codex_hooks.write_text(
@@ -361,7 +423,7 @@ def test_install_hooks_codex_strips_wildcard_conflict_warn(
         if "conflict-warn-pre-tool" in h.get("command", "")
     ]
     assert len(conflict_cmds) == 1
-    edit = next(m for m in pre_tool if m["matcher"] == "Edit")
+    edit = next(m for m in pre_tool if m["matcher"] == "^apply_patch$")
     assert edit["hooks"][0]["command"] == conflict_cmds[0]
     star = next(m for m in pre_tool if m["matcher"] == "*")
     assert [h["command"] for h in star["hooks"]] == ["python3 /tmp/other-policy.py"]
@@ -383,6 +445,12 @@ def test_install_hooks_opencode_writes_target_opencode_json(
     data = json.loads(p.read_text())
     instructions = data.get("instructions", "")
     assert "predict-conflicts" in instructions
+    plugin = fake_home / ".config" / "opencode" / "plugins" / "merge-train-conflict.js"
+    assert plugin.is_file()
+    plugin_body = plugin.read_text()
+    assert "--runtime opencode" in plugin_body
+    assert "args.patchText" in plugin_body
+    assert "plugin loaded" not in plugin_body
 
 
 def test_install_hooks_opencode_is_idempotent(
@@ -457,12 +525,58 @@ def test_install_hooks_agy_patches_hooks_json(
     data = json.loads(fake_agy_hooks.read_text())
     pre_tool_use = data.get("hooks", {}).get("PreToolUse", [])
     assert pre_tool_use, "PreToolUse event must be populated"
+    assert pre_tool_use[0]["matcher"] == "Edit|Write"
     cmds = " ".join(
         h.get("command", "")
         for wrapper in pre_tool_use
         for h in wrapper.get("hooks", [])
     )
     assert "conflict-warn-pre-tool" in cmds
+
+
+def test_install_hooks_agy_replaces_wildcard_and_preserves_sibling(
+    fake_home: Path,
+    fake_agy_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    fake_agy_hooks.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "bash /old/conflict-warn-pre-tool.sh",
+                                },
+                                {
+                                    "type": "command",
+                                    "command": "python3 /opt/policy.py",
+                                },
+                            ]
+                        }
+                    ]
+                }
+            }
+        )
+    )
+
+    install_hooks_for_agent("agy", target=fake_repo)
+
+    pre_tool_use = json.loads(fake_agy_hooks.read_text())["hooks"]["PreToolUse"]
+    assert pre_tool_use == [
+        {"hooks": [{"type": "command", "command": "python3 /opt/policy.py"}]},
+        {
+            "matcher": "Edit|Write",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"bash {hooks_install_dir() / 'conflict-warn-pre-tool.sh'}",
+                }
+            ],
+        },
+    ]
 
 
 def test_install_hooks_agy_is_idempotent(
@@ -668,7 +782,7 @@ def test_test_hooks_codex_exits_zero(
     fake_codex_hooks: Path,
     fake_repo: Path,
 ) -> None:
-    """test-hooks codex runs synthetic Edit, asserts exit 0 + warn behavior."""
+    """test-hooks codex runs synthetic apply_patch and exits successfully."""
     install_hooks_for_agent("codex", target=fake_repo)
     result = test_hooks_for_agent("codex", target=fake_repo)
     assert result["agent"] == "codex"
@@ -786,7 +900,9 @@ def test_install_hooks_codex_removes_stale_source_repo_entries(
     )
     install_hooks_for_agent("codex", target=fake_repo)
     data = json.loads(hooks_file.read_text())
-    edit = next(m for m in data["hooks"]["PreToolUse"] if m["matcher"] == "Edit")
+    edit = next(
+        m for m in data["hooks"]["PreToolUse"] if m["matcher"] == "^apply_patch$"
+    )
     for h in edit["hooks"]:
         assert (
             "merge_train/hooks/" not in h["command"]
