@@ -250,10 +250,17 @@ def _extract_paths(tool_name: str, tool_input: dict, payload: dict) -> list:
 
     Most runtimes expose a single ``file_path`` (Claude / Cursor / Gemini /
     OpenCode). Codex's ``apply_patch`` embeds one-or-more paths in the patch
-    text under its ``command`` field, so it can touch several files at once.
+    text under ``patch`` (Codex) or ``command`` (OpenCode), so it can touch
+    several files at once.
     """
     if tool_name == "apply_patch":
-        command = tool_input.get("command") or payload.get("command") or ""
+        command = (
+            tool_input.get("patch")
+            or tool_input.get("command")
+            or payload.get("patch")
+            or payload.get("command")
+            or ""
+        )
         if isinstance(command, list):
             command = "\n".join(str(c) for c in command)
         seen: list = []

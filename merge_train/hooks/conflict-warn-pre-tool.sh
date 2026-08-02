@@ -110,5 +110,7 @@ if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   } >> "$LOG_FILE" 2>/dev/null || true
 fi
 
-echo "$STDOUT"
+if [[ -n "$STDOUT" ]]; then
+  printf '%s\n' "$STDOUT"
+fi
 exit "$EXIT"

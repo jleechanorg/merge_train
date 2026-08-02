@@ -468,12 +468,58 @@ def test_install_hooks_agy_patches_hooks_json(
     data = json.loads(fake_agy_hooks.read_text())
     pre_tool_use = data.get("hooks", {}).get("PreToolUse", [])
     assert pre_tool_use, "PreToolUse event must be populated"
+    assert pre_tool_use[0]["matcher"] == "Edit|Write"
     cmds = " ".join(
         h.get("command", "")
         for wrapper in pre_tool_use
         for h in wrapper.get("hooks", [])
     )
     assert "conflict-warn-pre-tool" in cmds
+
+
+def test_install_hooks_agy_replaces_wildcard_and_preserves_sibling(
+    fake_home: Path,
+    fake_agy_hooks: Path,
+    fake_repo: Path,
+) -> None:
+    fake_agy_hooks.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "bash /old/conflict-warn-pre-tool.sh",
+                                },
+                                {
+                                    "type": "command",
+                                    "command": "python3 /opt/policy.py",
+                                },
+                            ]
+                        }
+                    ]
+                }
+            }
+        )
+    )
+
+    install_hooks_for_agent("agy", target=fake_repo)
+
+    pre_tool_use = json.loads(fake_agy_hooks.read_text())["hooks"]["PreToolUse"]
+    assert pre_tool_use == [
+        {"hooks": [{"type": "command", "command": "python3 /opt/policy.py"}]},
+        {
+            "matcher": "Edit|Write",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"bash {hooks_install_dir() / 'conflict-warn-pre-tool.sh'}",
+                }
+            ],
+        },
+    ]
 
 
 def test_install_hooks_agy_is_idempotent(

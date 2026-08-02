@@ -134,7 +134,7 @@ def test_hook_script_still_emits_valid_json(clean_log_dir: None) -> None:
         timeout=30,
     )
     assert result.returncode == 0
-    assert result.stdout.decode().strip() == ""
+    assert result.stdout == b""
 
 
 def test_hook_script_is_silent_without_conflicts(clean_log_dir: None) -> None:

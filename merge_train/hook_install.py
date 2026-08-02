@@ -427,11 +427,8 @@ def _install_agy(target: Path) -> dict:
     ``strings ~/.local/bin/agy | grep -E '^(PreToolUse|BeforeTool)$'``
     for the proof.
 
-    The schema is intentionally simpler than Codex's: a single
-    ``PreToolUse`` event with no per-tool matcher (it fires on every
-    tool call). Filtering to Edit / Write happens inside
-    ``conflict_check_helper.py`` itself — non-file-mutation tool calls
-    short-circuit to a no-op allow.
+    The ``PreToolUse`` matcher is restricted to Edit / Write so routine tool
+    calls never launch the conflict checker.
 
     The per-edit wiring (rather than the project-scope session guard
     ``gemini-conflict-warn.sh``) gives the user real symbol-level
@@ -462,15 +459,27 @@ def _install_agy(target: Path) -> dict:
         _strip_stale_source_entries({"PreToolUse": pre_tool_use}, src_root)
         pre_tool_use = data["hooks"]["PreToolUse"]
 
-        # Agy schema mirrors Codex: ``PreToolUse[]`` is a list of wrapper
-        # objects, each carrying a nested ``hooks[]`` list. No per-tool
-        # matcher — the script itself filters Edit/Write. If a wrapper
-        # already exists with our command, skip appending.
-        def _has_cmd(wrapper: dict) -> bool:
-            return any(h.get("command") == cmd for h in wrapper.get("hooks", []))
-
-        if not any(_has_cmd(w) for w in pre_tool_use):
-            pre_tool_use.append({"hooks": [{"type": "command", "command": cmd}]})
+        # Replace legacy wildcard copies while preserving unrelated sibling
+        # hooks that share their wrapper.
+        cleaned_pre_tool_use = []
+        for wrapper in pre_tool_use:
+            kept_hooks = [
+                hook
+                for hook in wrapper.get("hooks", [])
+                if "conflict-warn-pre-tool" not in hook.get("command", "")
+                and "predict-spawn-check" not in hook.get("command", "")
+            ]
+            if kept_hooks:
+                kept_wrapper = dict(wrapper)
+                kept_wrapper["hooks"] = kept_hooks
+                cleaned_pre_tool_use.append(kept_wrapper)
+        cleaned_pre_tool_use.append(
+            {
+                "matcher": "Edit|Write",
+                "hooks": [{"type": "command", "command": cmd}],
+            }
+        )
+        data["hooks"]["PreToolUse"] = cleaned_pre_tool_use
 
         hooks_path.parent.mkdir(parents=True, exist_ok=True)
         hooks_path.write_text(json.dumps(data, indent=2))
@@ -665,7 +674,7 @@ def _test_codex(target: Path) -> dict:
         {
             "tool_name": "apply_patch",
             "tool_input": {
-                "command": "*** Begin Patch\n*** Update File: example.py\n@@\n-x = 0\n+x = 1\n*** End Patch"
+                "patch": "*** Begin Patch\n*** Update File: example.py\n@@\n-x = 0\n+x = 1\n*** End Patch"
             },
         },
         ("--runtime", "codex"),
@@ -718,7 +727,7 @@ def _test_agy(target: Path) -> dict:
     """Synthesize a PreToolUse Edit payload; assert hook exits 0 + allows.
 
     Mirrors ``_test_claude`` but for the agy / Antigravity schema: a
-    single ``PreToolUse`` event (no matcher) wired to
+    mutation-scoped ``PreToolUse`` event wired to
     ``conflict-warn-pre-tool.sh``. Antigravity uses the
     Claude-Code-style schema, NOT the legacy Gemini ``BeforeTool``
     event.
@@ -742,7 +751,8 @@ def _test_agy(target: Path) -> dict:
         }
     pre_tool_use = data.get("hooks", {}).get("PreToolUse", [])
     if not any(
-        "conflict-warn-pre-tool" in h.get("command", "")
+        wrapper.get("matcher") == "Edit|Write"
+        and "conflict-warn-pre-tool" in h.get("command", "")
         for wrapper in pre_tool_use
         for h in wrapper.get("hooks", [])
     ):

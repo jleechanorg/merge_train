@@ -191,6 +191,22 @@ def test_opencode_edit_family_paths_are_normalized() -> None:
         ) == ["src/example.py"]
 
 
+def test_codex_apply_patch_uses_patch_field() -> None:
+    """Codex 0.146 sends patch text in ``tool_input.patch``."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    patch = "*** Begin Patch\n*** Update File: src/example.py\n*** End Patch"
+    assert module._extract_paths("apply_patch", {"patch": patch}, {}) == [
+        "src/example.py"
+    ]
+
+
 def test_cursor_mutation_tools_are_recognized() -> None:
     import importlib.util
 
