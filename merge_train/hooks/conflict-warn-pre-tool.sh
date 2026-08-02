@@ -34,7 +34,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo "detached")"
 REPO_NAME="$(basename "$REPO_ROOT" 2>/dev/null || echo "no-repo")"
 LOG_DATE="$(date +%Y-%m-%d)"
-LOG_DIR="/tmp/merge_train/${REPO_NAME:-no-repo}/${BRANCH}"
+MERGE_TRAIN_LOG_ROOT="${MERGE_TRAIN_LOG_ROOT:-/tmp/merge_train}"
+LOG_DIR="${MERGE_TRAIN_LOG_ROOT}/${REPO_NAME:-no-repo}/${BRANCH}"
 LOG_FILE="${LOG_DIR}/hook-${LOG_DATE}.log"
 
 # Redact the Edit body. The literal new_string / new_text / content is
