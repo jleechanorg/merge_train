@@ -6,7 +6,7 @@
 
 Spawn-time conflict prediction and atomic file-list acquisition for AI-agent PR pipelines.
 
-Stops two agents from grabbing the same files or symbol scopes when they're spawned in parallel — before either writes a line of code. Symbol-level locks let two agents edit disjoint functions inside the same file.
+Stops two agents from grabbing the same files or symbol scopes when they're spawned in parallel — before either writes a line of code. Symbol-level locks (Python, TypeScript, JavaScript, Go, Rust, Java, C, C++, C#) let two agents edit disjoint functions inside the same file.
 
 ## Why
 
@@ -55,7 +55,13 @@ cd /path/to/your/repo
 git clone https://github.com/jleechanorg/merge_train.git
 cd merge_train
 uv pip install -e '.[dev]'
-pytest   # 239 passed
+pytest
+```
+
+For multi-language symbol extraction (TypeScript, JavaScript, Go, Rust, Java, C, C++, C#) install the optional extra:
+
+```bash
+uv pip install -e '.[dev,multilang]'
 ```
 
 Requires Python ≥ 3.10, `uv`, and `git` on `PATH`.
@@ -123,7 +129,7 @@ acquire --plan pr_domain_locks.yaml --registry file_domains.yaml --branch feat/l
 
 ## Symbol-Level Locks (Sub-File Granularity)
 
-Two PRs can co-edit the *same file* if they touch *disjoint Python, TypeScript, or Go symbols*. Lock only the symbols you modify, not the whole file.
+Two PRs can co-edit the *same file* if they touch *disjoint symbols in a supported language*. Lock only the symbols you modify, not the whole file.
 
 At commit time, `predict-conflicts` resolves the *staged diff* down to AST symbols actually touched and matches them against active reservations:
 
@@ -133,6 +139,38 @@ predict-conflicts --plan pr_domain_locks.yaml --registry file_domains.yaml
 # Only refuses if your staged diff touches symbols reserved by another PR.
 # Non-AST files (like Markdown or JSON) fall back to whole-file locking.
 ```
+
+### Supported languages
+
+Symbol resolution uses tree-sitter AST parsing when the `multilang` extra is installed, with a regex fallback that ships by default (so the package works on minimal installs).
+
+| Language | File extensions | Extractor | AST via `multilang` extra |
+|---|---|---|---|
+| Python | `.py` | `merge_train/symbols.py` (stdlib `ast`) | built-in |
+| TypeScript | `.ts`, `.tsx` | `merge_train/lang_extractors.py` | yes (tree-sitter-typescript) |
+| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs` | `merge_train/lang_extractors.py` | yes (tree-sitter-languages) |
+| Go | `.go` | `merge_train/lang_extractors.py` | yes (tree-sitter-go) |
+| Rust | `.rs` | `merge_train/lang_extractors.py` | yes (tree-sitter-rust) |
+| Java | `.java` | `merge_train/lang_extractors.py` | yes (tree-sitter-java) |
+| C | `.c`, `.h` | `merge_train/lang_extractors.py` | yes (tree-sitter-c) |
+| C++ | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh` | `merge_train/lang_extractors.py` | yes (tree-sitter-cpp) |
+| C# | `.cs` | `merge_train/lang_extractors.py` | yes (tree-sitter-c-sharp) |
+| Anything else | — | whole-file lock | n/a |
+
+Regex fallback is intentional: `predict-conflicts` and `acquire` never crash on an unsupported file — they degrade to whole-file locking. Install `[multilang]` for higher precision.
+
+### Auto symbol discovery
+
+Agents don't have to hand-author the `symbols:` field in `pr_domain_locks.yaml`. `merge_train/symbol_discovery.py` ships two entry points that extract touched symbols directly from git:
+
+```python
+from merge_train.symbol_discovery import (
+    symbols_from_staged_diff,   # git index → dict[path, set[symbols]]
+    symbols_from_pr_diff,       # gh pr diff <N> → dict[path, set[symbols]]
+)
+```
+
+A pre-spawn or pre-commit agent can call these, then merge the result into the `PRSpec.symbols_by_file` field of its reservation. Non-Python files and files that fail to parse are silently omitted — callers fall back to whole-file locking for them, which is the safe default.
 
 ## Registry YAML: `file_domains.yaml`
 
@@ -170,7 +208,7 @@ prs:
 ## What is Protected
 
 - Spawn-time collisions when two agents try to reserve the same domain/symbol scope.
-- Same-file Python, TypeScript, and Go edits when agents reserve disjoint symbols.
+- Same-file edits in any supported language (Python, TypeScript, JavaScript, Go, Rust, Java, C, C++, C#) when agents reserve disjoint symbols.
 - Local commits touching domains held by another PR, when the pre-commit hook is installed.
 - Concurrent checks, because checks are serialized with `flock(2)` on the advisory lock file.
 
@@ -190,11 +228,43 @@ All hooks are configured as warnings or validation gates:
 - `hooks/gemini-conflict-warn.sh` — Gemini / Antigravity session guard.
 - `hooks/pre-commit.sh` — Git pre-commit hook (runs `predict-conflicts`).
 
+`install.sh` wires all of the above for Codex, Antigravity/Gemini, OpenCode, and Claude Code in a single run.
+
 ## Tests
 
 ```bash
-pytest     # must stay green, currently 239 passed
+pytest                       # unit + integration tests
+./scripts/refresh_evidence.sh   # regenerate + checksum evidence artifacts
 ```
+
+Tests must stay green. The current pass count is shown on the badge at the top of this README.
+
+## Docs & Evidence
+
+| Path | What it is |
+|---|---|
+| [`docs/AGENTS.md`](docs/AGENTS.md) | Agent integration recipes (spawn-time and commit-time patterns for Aider / OpenHands / Devin / Claude / Codex / AO workers) |
+| [`docs/CLAUDE.md`](docs/CLAUDE.md) | Claude Code repo-local policy for working *on* `merge_train` |
+| [`docs/acquire_files_spec.md`](docs/acquire_files_spec.md) | Behavioral spec for the `acquire` CLI |
+| [`docs/ao-live-deployment.md`](docs/ao-live-deployment.md) | Live Agent-Orchestrator deployment story (v0.6) |
+| [`docs/e2e_area_lock_proof.md`](docs/e2e_area_lock_proof.md) | End-to-end proof of area locking under real merge pressure |
+| [`evidence/`](evidence/) | Per-release reproducible evidence bundles (v0.2 → v0.6) with sha256 checksums |
+| [`scripts/refresh_evidence.sh`](scripts/refresh_evidence.sh) | Regenerate the `evidence/v*/` artifacts and re-checksum them |
+| [`examples/file_domains.yaml`](examples/file_domains.yaml) | Minimal starter registry |
+| [`roadmap/`](roadmap/) | Roadmap notes and the one-big-PR consolidation plan |
+| [`CHANGELOG.md`](CHANGELOG.md) | Keep-a-Changelog history |
+
+### Verified evidence
+
+Each `evidence/v*/` directory bundles:
+
+- `run.json` + sha256 — what was run
+- `prs.json` + sha256 — the input PR plan
+- `lock_log.jsonl` + sha256 — the resulting lock state
+- `*.cast` / `*.gif` / `*.mp4` + sha256 — human-verifiable recordings (e.g. `evidence/v0.6-ao/v0.6_verify.cast`)
+- `checksums.txt` + `checksums.txt.sha256` — manifest of the above
+
+Re-run `scripts/refresh_evidence.sh` to regenerate any of these and verify the checksums. The integrity pattern (every artifact next to its own sha256 + a manifest of those) is the same shape as in-toto / SLSA provenance — it lets a reviewer prove that the recorded run is the one the README claims.
 
 ## License
 
