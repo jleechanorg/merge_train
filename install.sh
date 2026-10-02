@@ -165,7 +165,13 @@ GEMINI_HOOK_INSTALLED="$HOOKS_INSTALL_DIR/gemini-conflict-warn.sh"
 # reads the tool payload on stdin and calls conflict_check_helper.py, which now
 # recognizes every runtime's edit-tool schema (Edit/Write, write_file/replace,
 # apply_patch, edit/write). Same command for Claude, Codex, Gemini, Cursor.
-WIRE_CMD="bash $CLAUDE_PRE_TOOL"
+# Keep a literal $HOME in wired configs: per-repo configs are committed and
+# shared across hosts, so an expanded /home/<user> or /Users/<user> breaks
+# (exit 127) on the other machine.
+case "$CLAUDE_PRE_TOOL" in
+    "$HOME"/*) WIRE_CMD="bash \$HOME/${CLAUDE_PRE_TOOL#"$HOME"/}" ;;
+    *) WIRE_CMD="bash $CLAUDE_PRE_TOOL" ;;
+esac
 # Idempotent JSON wiring helper (claude/cursor entry shapes; strips stale
 # predict-spawn-check / mt_capture entries so re-runs upgrade instead of skip).
 WIRE_HELPER="$MERGE_TRAIN_ROOT/merge_train/hooks/wire_hook_config.py"

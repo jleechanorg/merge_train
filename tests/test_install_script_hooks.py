@@ -73,3 +73,20 @@ def test_install_script_creates_opencode_plugin_directory() -> None:
     ) in body
     assert 'echo "  ok: installed $OPENCODE_PLUGIN_DST"' in body
     assert 'echo "  WARN: failed to install $OPENCODE_PLUGIN_DST"' in body
+
+
+def test_install_script_wires_portable_home_path() -> None:
+    """Per-repo configs are committed and shared across hosts; never bake an
+    expanded home directory into the wired command."""
+    import subprocess
+
+    body = INSTALL_SH.read_text()
+    case_block = body[body.index('case "$CLAUDE_PRE_TOOL" in') :]
+    case_block = case_block[: case_block.index("esac") + len("esac")]
+    for home in ("/Users/alice", "/home/alice"):
+        script = (
+            f'HOME={home}; CLAUDE_PRE_TOOL="$HOME/.local/bin/conflict-warn-pre-tool.sh"\n'
+            f'{case_block}\nprintf %s "$WIRE_CMD"'
+        )
+        out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
+        assert out == "bash $HOME/.local/bin/conflict-warn-pre-tool.sh"
