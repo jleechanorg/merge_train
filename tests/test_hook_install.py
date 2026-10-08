@@ -30,6 +30,7 @@ import pytest
 import merge_train.__main__ as merge_train_main
 import merge_train.hook_install as hook_install
 from merge_train.hook_install import (
+    AGY_EDIT_MATCHER,
     AGENT_CHOICES,
     ALL_HOOK_SCRIPTS,
     TEST_HOOKS,
@@ -525,7 +526,7 @@ def test_install_hooks_agy_patches_hooks_json(
     data = json.loads(fake_agy_hooks.read_text())
     pre_tool_use = data.get("hooks", {}).get("PreToolUse", [])
     assert pre_tool_use, "PreToolUse event must be populated"
-    assert pre_tool_use[0]["matcher"] == "Edit|Write"
+    assert pre_tool_use[0]["matcher"] == AGY_EDIT_MATCHER
     cmds = " ".join(
         h.get("command", "")
         for wrapper in pre_tool_use
@@ -568,11 +569,11 @@ def test_install_hooks_agy_replaces_wildcard_and_preserves_sibling(
     assert pre_tool_use == [
         {"hooks": [{"type": "command", "command": "python3 /opt/policy.py"}]},
         {
-            "matcher": "Edit|Write",
+            "matcher": AGY_EDIT_MATCHER,
             "hooks": [
                 {
                     "type": "command",
-                    "command": f"bash {hooks_install_dir() / 'conflict-warn-pre-tool.sh'}",
+                    "command": f"bash {hooks_install_dir() / 'conflict-warn-pre-tool.sh'} --runtime agy",
                 }
             ],
         },
@@ -974,3 +975,20 @@ def test_find_hooks_dir_installed_vs_source(tmp_path: Path) -> None:
     missing_dir.mkdir()
     with pytest.raises(FileNotFoundError):
         _find_hooks_dir(base_dir=missing_dir)
+
+
+def test_regression_agy_install_matches_agy_edit_tools(
+    fake_home: Path, fake_agy_hooks: Path, fake_repo: Path
+) -> None:
+    install_hooks_for_agent("agy", target=fake_repo)
+    pre_tool_use = json.loads(fake_agy_hooks.read_text())["hooks"]["PreToolUse"]
+    ours = [
+        w
+        for w in pre_tool_use
+        for h in w["hooks"]
+        if "conflict-warn-pre-tool" in h["command"]
+    ]
+    assert len(ours) == 1
+    assert "write_to_file" in ours[0]["matcher"].split("|")
+    assert "replace_file_content" in ours[0]["matcher"].split("|")
+    assert ours[0]["hooks"][0]["command"].endswith("--runtime agy")

@@ -70,6 +70,8 @@ HOOKS_INSTALL_DIR_NAME: str = ".local/bin"
 CLAUDE_SETTINGS_REL: str = ".claude/settings.json"
 CODEX_HOOKS_REL: str = ".codex/hooks.json"
 AGY_HOOKS_REL: str = ".gemini/config/hooks.json"
+# agy tool names are lowercased CORTEX_STEP_TYPE_* step types.
+AGY_EDIT_MATCHER: str = "write_to_file|replace_file_content|multi_replace_file_content"
 # Codex 0.124.0 release changelog: openai/codex#18391.
 MIN_CODEX_APPLY_PATCH_HOOK_VERSION: tuple[int, int, int] = (0, 124, 0)
 
@@ -492,7 +494,7 @@ def _install_agy(target: Path) -> dict:
             src_root = str(_repo_root())
         except FileNotFoundError:
             src_root = ""
-        cmd = f"bash {HOOKS_INSTALL_DIR() / 'conflict-warn-pre-tool.sh'}"
+        cmd = f"bash {HOOKS_INSTALL_DIR() / 'conflict-warn-pre-tool.sh'} --runtime agy"
 
         hooks_path = AGY_HOOKS_PATH()
         if hooks_path.exists():
@@ -526,7 +528,7 @@ def _install_agy(target: Path) -> dict:
                 cleaned_pre_tool_use.append(kept_wrapper)
         cleaned_pre_tool_use.append(
             {
-                "matcher": "Edit|Write",
+                "matcher": AGY_EDIT_MATCHER,
                 "hooks": [{"type": "command", "command": cmd}],
             }
         )
@@ -802,7 +804,7 @@ def _test_agy(target: Path) -> dict:
         }
     pre_tool_use = data.get("hooks", {}).get("PreToolUse", [])
     if not any(
-        wrapper.get("matcher") == "Edit|Write"
+        wrapper.get("matcher") == AGY_EDIT_MATCHER
         and "conflict-warn-pre-tool" in h.get("command", "")
         for wrapper in pre_tool_use
         for h in wrapper.get("hooks", [])
@@ -821,16 +823,20 @@ def _test_agy(target: Path) -> dict:
             "exit_code": -1,
             "reason": f"hook script missing: {bin_path}",
         }
-    # The agy PreToolUse payload uses the Claude-style nested shape
-    # (the script's own tool-name filter handles the dispatch).
+    # agy denies the tool unless stdout carries a decision.
     payload = {
-        "session_id": "synthetic",
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Edit",
-        "tool_input": {"file_path": "/tmp/example.py"},
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {"TargetFile": "/tmp/example.py", "CodeContent": ""},
+        },
+        "workspacePaths": ["/tmp"],
     }
-    res = _run_hook_binary(bin_path, payload)
-    ok = res["exit_code"] == 0
+    res = _run_hook_binary(bin_path, payload, args=("--runtime", "agy"))
+    try:
+        decision = json.loads(res["stdout"]).get("decision")
+    except (json.JSONDecodeError, AttributeError):
+        decision = None
+    ok = res["exit_code"] == 0 and decision in ("ask", "allow")
     return {
         "agent": "agy",
         "ok": ok,

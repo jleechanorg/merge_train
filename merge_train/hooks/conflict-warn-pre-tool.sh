@@ -28,6 +28,24 @@ umask 077
 
 INPUT="$(cat)"
 
+# agy runs hooks from the directory holding hooks.json, not the workspace.
+# Resolve repo/branch from the edited file's directory instead.
+if [[ "$RUNTIME" == "agy" ]]; then
+  AGY_DIR="$(printf '%s' "$INPUT" | python3 -c '
+import json, os, sys
+try:
+    d = json.loads(sys.stdin.read())
+    target = ((d.get("toolCall") or {}).get("args") or {}).get("TargetFile") or ""
+    dirs = [os.path.dirname(target)] + list(d.get("workspacePaths") or [])
+    print(next((p for p in dirs if p and os.path.isdir(p)), ""))
+except Exception:
+    print("")
+')"
+  if [[ -n "$AGY_DIR" ]]; then
+    cd "$AGY_DIR"
+  fi
+fi
+
 # Resolve log path. Best-effort: if we can't determine repo/branch, we still
 # run the conflict check — we just skip logging entirely (no mkdir, no tee).
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
@@ -58,9 +76,10 @@ PAYLOAD_SUMMARY="$(printf '%s' "$INPUT" | python3 -c '
 import json, sys
 try:
     d = json.loads(sys.stdin.read())
-    tool = d.get("tool_name", "?")
-    inp = d.get("tool_input", {})
-    path = inp.get("file_path", "?")
+    call = d.get("toolCall") or {}
+    tool = call.get("name") or d.get("tool_name", "?")
+    inp = call.get("args") or d.get("tool_input", {})
+    path = inp.get("file_path") or inp.get("TargetFile") or "?"
     # Truncate path to basename — keeps log readable, drops user/customer names.
     import os
     path = os.path.basename(path) if path and path != "?" else "?"
