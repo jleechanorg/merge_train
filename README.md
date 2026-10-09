@@ -136,7 +136,7 @@ Two PRs can co-edit the *same file* if they touch *disjoint symbols in a support
 ```bash
 git add mvp_site/world_logic.py
 acquire --plan pr_domain_locks.yaml --registry file_domains.yaml --branch <your-branch> --agent <agent> mvp_site/world_logic.py
-# Only refuses if your staged diff touches symbols reserved by another PR.
+# Refuses when your staged diff touches symbols reserved by another PR; an edit outside any extracted symbol is conservatively treated as a conflict.
 # Files with no supported extractor (like JSON) fall back to whole-file locking.
 ```
 
