@@ -137,25 +137,27 @@ At commit time, `predict-conflicts` resolves the *staged diff* down to AST symbo
 git add mvp_site/world_logic.py
 predict-conflicts --plan pr_domain_locks.yaml --registry file_domains.yaml
 # Only refuses if your staged diff touches symbols reserved by another PR.
-# Non-AST files (like Markdown or JSON) fall back to whole-file locking.
+# Files with no supported extractor (like JSON) fall back to whole-file locking.
 ```
 
 ### Supported languages
 
-Symbol resolution uses tree-sitter AST parsing when the `multilang` extra is installed, with a regex fallback that ships by default (so the package works on minimal installs).
+Symbol resolution uses tree-sitter AST parsing (via `tree_sitter_languages`) when the `multilang` extra is installed, with a regex fallback that ships by default (so the package works on minimal installs).
 
-| Language | File extensions | Extractor | AST via `multilang` extra |
-|---|---|---|---|
-| Python | `.py` | `merge_train/symbols.py` (stdlib `ast`) | built-in |
-| TypeScript | `.ts`, `.tsx` | `merge_train/lang_extractors.py` | yes (tree-sitter-typescript) |
-| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs` | `merge_train/lang_extractors.py` | yes (tree-sitter-languages) |
-| Go | `.go` | `merge_train/lang_extractors.py` | yes (tree-sitter-go) |
-| Rust | `.rs` | `merge_train/lang_extractors.py` | yes (tree-sitter-rust) |
-| Java | `.java` | `merge_train/lang_extractors.py` | yes (tree-sitter-java) |
-| C | `.c`, `.h` | `merge_train/lang_extractors.py` | yes (tree-sitter-c) |
-| C++ | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh` | `merge_train/lang_extractors.py` | yes (tree-sitter-cpp) |
-| C# | `.cs` | `merge_train/lang_extractors.py` | yes (tree-sitter-c-sharp) |
-| Anything else | — | whole-file lock | n/a |
+| Language | File extensions | Extractor |
+|---|---|---|
+| Python | `.py` | `merge_train/symbols.py` (stdlib `ast`) |
+| TypeScript | `.ts`, `.tsx` | `merge_train/lang_extractors.py` |
+| JavaScript | `.js`, `.jsx`, `.mjs` | `merge_train/lang_extractors.py` |
+| Go | `.go` | `merge_train/lang_extractors.py` |
+| Rust | `.rs` | `merge_train/lang_extractors.py` |
+| Java | `.java` | `merge_train/lang_extractors.py` |
+| C | `.c`, `.h` | `merge_train/lang_extractors.py` |
+| C++ | `.cpp`, `.cc`, `.cxx`, `.hpp` | `merge_train/lang_extractors.py` |
+| C# | `.cs` | `merge_train/lang_extractors.py` |
+| Markdown | `.md` | heading-based symbols |
+
+Anything else (including JSON) gets a whole-file lock.
 
 Regex fallback is intentional: `predict-conflicts` and `acquire` never crash on an unsupported file — they degrade to whole-file locking. Install `[multilang]` for higher precision.
 
@@ -170,7 +172,7 @@ from merge_train.symbol_discovery import (
 )
 ```
 
-A pre-spawn or pre-commit agent can call these, then merge the result into the `PRSpec.symbols_by_file` field of its reservation. Non-Python files and files that fail to parse are silently omitted — callers fall back to whole-file locking for them, which is the safe default.
+A pre-spawn or pre-commit agent can call these, then merge the result into the `PRSpec.symbols_by_file` field of its reservation. Files in any language from the table above are resolved by the matching extractor; unsupported files and files that fail to parse are omitted — callers fall back to whole-file locking for them, which is the safe default.
 
 ## Registry YAML: `file_domains.yaml`
 
@@ -234,10 +236,10 @@ All hooks are configured as warnings or validation gates:
 
 ```bash
 pytest                       # unit + integration tests
-./scripts/refresh_evidence.sh   # regenerate + checksum evidence artifacts
+./scripts/refresh_evidence.sh   # refresh evidence metadata SHAs + checksums
 ```
 
-Tests must stay green. The current pass count is shown on the badge at the top of this README.
+Tests must stay green; the badge at the top shows the CI workflow status.
 
 ## Docs & Evidence
 
@@ -249,14 +251,14 @@ Tests must stay green. The current pass count is shown on the badge at the top o
 | [`docs/ao-live-deployment.md`](docs/ao-live-deployment.md) | Live Agent-Orchestrator deployment story (v0.6) |
 | [`docs/e2e_area_lock_proof.md`](docs/e2e_area_lock_proof.md) | End-to-end proof of area locking under real merge pressure |
 | [`evidence/`](evidence/) | Per-release reproducible evidence bundles (v0.2 → v0.6) with sha256 checksums |
-| [`scripts/refresh_evidence.sh`](scripts/refresh_evidence.sh) | Regenerate the `evidence/v*/` artifacts and re-checksum them |
+| [`scripts/refresh_evidence.sh`](scripts/refresh_evidence.sh) | Refresh each `evidence/v*/metadata.json` SHA and its checksum |
 | [`examples/file_domains.yaml`](examples/file_domains.yaml) | Minimal starter registry |
 | [`roadmap/`](roadmap/) | Roadmap notes and the one-big-PR consolidation plan |
 | [`CHANGELOG.md`](CHANGELOG.md) | Keep-a-Changelog history |
 
 ### Verified evidence
 
-Each `evidence/v*/` directory bundles:
+The `evidence/v*-ao/` directories (v0.4-ao, v0.5-ao, v0.6-ao) bundle the files below; older directories (v0.2, v0.2.2, v0.3, v0.4) hold only some of them (v0.2.2 has just `EVIDENCE.md`), and the recordings exist only for v0.6-ao:
 
 - `run.json` + sha256 — what was run
 - `prs.json` + sha256 — the input PR plan
@@ -264,7 +266,7 @@ Each `evidence/v*/` directory bundles:
 - `*.cast` / `*.gif` / `*.mp4` + sha256 — human-verifiable recordings (e.g. `evidence/v0.6-ao/v0.6_verify.cast`)
 - `checksums.txt` + `checksums.txt.sha256` — manifest of the above
 
-Re-run `scripts/refresh_evidence.sh` to regenerate any of these and verify the checksums. The integrity pattern (every artifact next to its own sha256 + a manifest of those) is the same shape as in-toto / SLSA provenance — it lets a reviewer prove that the recorded run is the one the README claims.
+`scripts/refresh_evidence.sh` refreshes each bundle's `metadata.json` (the recorded merge_train SHA) and its `.sha256` sidecar; it does not regenerate the other artifacts. The integrity pattern (every artifact next to its own sha256 + a manifest of those) is the same shape as in-toto / SLSA provenance — it lets a reviewer prove that the recorded run is the one the README claims.
 
 ## License
 
