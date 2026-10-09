@@ -23,6 +23,7 @@ existing installs keep working.
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import subprocess
@@ -33,17 +34,31 @@ from pathlib import Path
 # Add merge_train source locations to sys.path so we can import the
 # package. The helper is normally called from ~/.local/bin/, where
 # merge_train itself is NOT on sys.path.
-for _p in (Path.home() / "merge_train", Path("/Users/jleechan/projects/merge_train")):
+for _p in (
+    Path.home() / "merge_train",
+    Path.home() / "projects_other" / "merge_train",
+    Path.home() / "projects" / "merge_train",
+    Path("/Users/jleechan/projects/merge_train"),
+    # uv tool install location (Linux/macOS) — used when merge_train
+    # was installed via `uv tool install` and the source-repo path
+    # above is absent (e.g. on a fresh Linux box where the source
+    # lives in ~/projects_other/merge_train, not the macOS path).
+    Path.home() / ".local/share/uv/tools/merge-train/lib/python3.13/site-packages",
+    Path.home() / ".local/share/uv/tools/merge-train/lib/python3.12/site-packages",
+    Path.home() / ".local/share/uv/tools/merge-train/lib/python3.11/site-packages",
+    Path.home() / ".local/share/uv/tools/merge-train/lib/python3.10/site-packages",
+):
     if _p.exists():
         sys.path.insert(0, str(_p))
 
-# Optional imports — fail-safe if the package isn't installed.
+# Optional imports — fail-safe if the package isn't installed. main() reports
+# the failure in the active runtime's output shape.
+_IMPORT_FAILED = False
 try:
     from merge_train.symbol_discovery import symbols_from_files_in_pr
     from merge_train.symbols import extract_symbols, is_python_path
 except ImportError:  # pragma: no cover — fail-safe fallback
-    print(json.dumps(_decision_payload("allow", "merge_train: package import failed; allowing")))
-    sys.exit(0)
+    _IMPORT_FAILED = True
 
 try:
     from merge_train.config import (
@@ -60,28 +75,106 @@ except ImportError:  # pragma: no cover — fall back to legacy hardcoded enforc
 
 
 # --------------------------------------------------------------------------- #
-# Output helpers — every decision is chat-visible via permissionDecisionReason
+# Output helpers
 # --------------------------------------------------------------------------- #
 
+# Exit codes used for hook behavior:
+#   0  → success; tool continues unless the JSON explicitly denies
+#   2  → block (tool prevented, stderr shown as reason)
+_EXIT_SILENT_APPROVE = 0
 
-def _decision_payload(decision: str, reason: str) -> dict:
+# Map internal decision names to current PreToolUse hook output values.
+# Codex rejects legacy top-level ``decision: "approve"``. For non-blocking
+# cases, emit no permission decision at all; for blocking cases, use the
+# hook-specific ``permissionDecision: "deny"`` shape accepted by both Codex and
+# current Claude Code.
+_DECISION_MAP: dict = {
+    "allow": None,
+    "warn": None,
+    "approve": None,
+    "deny": "deny",
+    "block": "deny",
+}
+
+# Claude Code's hook schema caps ``systemMessage`` and ``stdout`` at
+# 10,000 characters. When the reason text exceeds 10K (e.g., a 5+ PR
+# conflict breakdown), Claude Code silently replaces it with a preview
+# + "see file path" — the chat banner this whole feature exists to
+# surface disappears. We pre-truncate at 8,000 chars (safe margin under
+# the 10K cap) and append " (truncated)" so consumers can see the cut.
+_REASON_HARD_CAP = 8_000
+
+
+def _truncate_reason(reason: str) -> str:
+    """Cap ``reason`` at :data:`_REASON_HARD_CAP` chars; append
+    " (truncated)" if we cut anything. Identical truncation is
+    applied to both chat-visible fields so they stay in sync."""
+    if len(reason) <= _REASON_HARD_CAP:
+        return reason
+    return reason[:_REASON_HARD_CAP] + " (truncated)"
+
+
+def _decision_payload(decision: str, reason: str, runtime: str = "claude") -> dict:
     """Build a PreToolUse hook output payload with a chat-visible reason.
 
-    ``permissionDecisionReason`` is rendered in the chat UI, so the
-    user sees the hook's verdict even on a silent allow.
+    Non-blocking notices intentionally do not include a permission decision:
+    current Codex rejects legacy ``decision: "approve"`` and treats it as a
+    failed hook. Blocking notices use the hook-specific ``permissionDecision``
+    shape accepted by Codex and Claude Code.
     """
-    return {
-        "hookSpecificOutput": {
+    safe_reason = _truncate_reason(reason)
+    permission_decision = _DECISION_MAP.get(decision)
+
+    if runtime == "gemini":
+        if permission_decision == "deny":
+            return {"decision": "deny", "reason": safe_reason}
+        return {"systemMessage": safe_reason}
+
+    if runtime == "agy":
+        # agy denies the tool unless stdout carries a decision; "ask" defers
+        # to agy's normal permission flow.
+        return {"decision": permission_decision or "ask", "reason": safe_reason}
+
+    if runtime == "cursor":
+        payload = {"permission": permission_decision or "allow"}
+        if reason:
+            payload["user_message"] = safe_reason
+            payload["agent_message"] = safe_reason
+        return payload
+
+    payload = {"systemMessage": safe_reason}
+    if permission_decision == "deny":
+        payload["hookSpecificOutput"] = {
             "hookEventName": "PreToolUse",
-            "permissionDecision": decision,
-            "permissionDecisionReason": reason,
-        },
-    }
+            "permissionDecision": "deny",
+            "permissionDecisionReason": safe_reason,
+        }
+    else:
+        payload["hookSpecificOutput"] = {
+            "hookEventName": "PreToolUse",
+            "additionalContext": safe_reason,
+        }
+    return payload
 
 
-def _emit(decision: str, reason: str) -> None:
+def _emit(decision: str, reason: str, runtime: str = "claude") -> None:
     """Print the decision JSON to stdout (Claude Code reads this)."""
-    print(json.dumps(_decision_payload(decision, reason)))
+    print(json.dumps(_decision_payload(decision, reason, runtime)))
+
+
+def _silent_approve(runtime: str = "claude") -> None:
+    """Emit the runtime's quiet implicit-allow response.
+
+    Claude and Codex use empty stdout. Gemini requires valid JSON and Cursor
+    requires its permission envelope; neither response adds a user-visible
+    status message.
+    """
+    if runtime == "gemini":
+        print("{}")
+    elif runtime == "agy":
+        print(json.dumps({"decision": "ask"}))
+    elif runtime == "cursor":
+        print(json.dumps({"permission": "allow"}))
 
 
 # --------------------------------------------------------------------------- #
@@ -120,44 +213,204 @@ def _resolve_enforcement(repo_root: str) -> tuple[str, str]:
 
 
 # --------------------------------------------------------------------------- #
-# Main
+# Tool-schema normalization (cross-runtime)
 # --------------------------------------------------------------------------- #
 
+# File-mutation tool names across every CLI fanout runtime we wire a hook into.
+# Each runtime names its edit tools differently; the conflict check must
+# recognize all of them or it silently no-ops ("not a file mutation; skipping").
+#   Claude   : Edit, Write, MultiEdit, NotebookEdit  (tool_input.file_path)
+#   Cursor   : Edit, Write                            (tool_input.file_path)
+#   Gemini   : write_file, replace                    (tool_input.file_path)
+#   Codex    : apply_patch                            (path(s) in patch body)
+#   OpenCode : edit, write                            (surfaced by the plugin)
+#   Agy      : write_to_file, replace_file_content,
+#              multi_replace_file_content            (toolCall.args.TargetFile)
+#   Windsurf : replace_file_content, multi_replace_file_content (legacy)
+_MUTATION_TOOLS = frozenset({
+    "Edit", "Write", "MultiEdit", "NotebookEdit",
+    "StrReplace", "Delete", "EditNotebook",
+    "write_file", "replace",
+    "apply_patch",
+    "edit", "write", "multiedit", "patch",
+    "replace_file_content", "multi_replace_file_content", "write_to_file",
+})
 
-def main() -> None:
-    try:
-        raw_input = sys.stdin.read()
-        if not raw_input.strip():
-            _emit("allow", "merge_train: empty payload; allowing.")
-            return
+# Codex's apply_patch embeds its target file(s) in the patch text under its
+# `command` field, as `*** Update File: <path>` / `*** Add File: <path>` /
+# `*** Delete File: <path>` / `*** Move to: <path>` lines. A single patch can
+# touch multiple files, so every match counts.
+_APPLY_PATCH_FILE_RE = re.compile(
+    r"^\*\*\*\s+(?:(?:Update|Add|Delete)\s+File|Move\s+to):\s*(.+?)\s*$",
+    re.MULTILINE,
+)
 
-        payload = json.loads(raw_input)
-    except Exception:
-        _emit("allow", "merge_train: payload parse failed; allowing.")
-        return
 
-    # Check tool name — only file-mutation tools get the conflict check.
-    tool_name = (
-        payload.get("name")
-        or payload.get("tool_name")
-        or payload.get("tool")
-        or ""
-    )
-    if tool_name not in ("Edit", "Write", "replace_file_content", "multi_replace_file_content"):
-        _emit("allow", f"merge_train: tool {tool_name!r} not a file mutation; skipping conflict check.")
-        return
+def _extract_paths(tool_name: str, tool_input: dict, payload: dict) -> list:
+    """Return the list of file paths a mutation tool will touch.
 
-    # Extract target file path.
-    tool_input = payload.get("input") or payload.get("tool_input") or {}
-    file_path = (
+    Most runtimes expose a single ``file_path`` (Claude / Cursor / Gemini /
+    OpenCode). Codex's ``apply_patch`` embeds one-or-more paths in the patch
+    text under ``patch`` (Codex) or ``command`` (OpenCode), so it can touch
+    several files at once.
+    """
+    if tool_name == "apply_patch":
+        command = (
+            tool_input.get("patch")
+            or tool_input.get("command")
+            or payload.get("patch")
+            or payload.get("command")
+            or ""
+        )
+        if isinstance(command, list):
+            command = "\n".join(str(c) for c in command)
+        seen: list = []
+        for p in _APPLY_PATCH_FILE_RE.findall(command or ""):
+            p = p.strip()
+            if p and p not in seen:
+                seen.append(p)
+        if seen:
+            return seen
+
+    single = (
         tool_input.get("file_path")
         or tool_input.get("TargetFile")
+        or tool_input.get("path")
         or payload.get("file_path")
         or payload.get("TargetFile")
         or ""
     )
-    if not file_path:
-        _emit("allow", "merge_train: no file_path in tool input; allowing.")
+    return [single] if single else []
+
+
+def _normalize_rel(file_path: str, repo_path: Path) -> str:
+    """Best-effort path relative to the repo root (posix); falls back to raw."""
+    try:
+        abs_path = Path(file_path).resolve()
+        if abs_path.is_relative_to(repo_path):
+            return abs_path.relative_to(repo_path).as_posix()
+    except Exception:
+        pass
+    return file_path
+
+
+def _collect_conflicts_for_path(
+    rel_path: str,
+    start_line,
+    end_line,
+    prs_data: dict,
+    repo_path: Path,
+    repo_remote: str,
+    cache_file: Path,
+) -> list:
+    """Return conflict tuples ``(pr_num, pr_branch, detail)`` for one path.
+
+    Performs symbol-level locking when line ranges are available and the file
+    is Python; otherwise falls back to whole-file locking. ``detail`` embeds
+    ``rel_path`` so callers can aggregate across multiple paths.
+    """
+    our_symbols: set = set()
+    is_python = is_python_path(rel_path)
+    whole_file_lock = True
+
+    if is_python and start_line is not None and end_line is not None:
+        try:
+            start_l = int(start_line)
+            end_l = int(end_line)
+            file_on_disk = repo_path / rel_path
+            if file_on_disk.exists():
+                source = file_on_disk.read_text()
+                symbols = extract_symbols(source)
+                for sym in symbols:
+                    if sym.overlaps(start_l, end_l):
+                        our_symbols.add(sym.name)
+                if our_symbols:
+                    whole_file_lock = False
+        except Exception:
+            pass
+
+    conflicts: list = []
+    for pr_num, pr_info in prs_data.items():
+        pr_files = pr_info.get("files", [])
+        if rel_path not in pr_files:
+            continue
+
+        pr_branch = pr_info.get("branch", f"pr-{pr_num}")
+
+        if whole_file_lock:
+            conflicts.append((pr_num, pr_branch, f"whole-file '{rel_path}'"))
+            continue
+
+        pr_symbols = pr_info.get("symbols", {}).get(rel_path)
+        if pr_symbols is None:
+            try:
+                sym_map = symbols_from_files_in_pr(int(pr_num), [rel_path], repo_remote or None)
+                pr_symbols = list(sym_map.get(rel_path, []))
+                pr_info.setdefault("symbols", {})[rel_path] = pr_symbols
+                cache_file.write_text(json.dumps({
+                    "timestamp": time.time(),
+                    "prs": prs_data,
+                }))
+            except Exception:
+                pr_symbols = []
+
+        if not pr_symbols:
+            conflicts.append((pr_num, pr_branch, f"whole-file '{rel_path}'"))
+        else:
+            overlap = our_symbols.intersection(pr_symbols)
+            if overlap:
+                conflicts.append((pr_num, pr_branch, f"symbols in '{rel_path}': {', '.join(overlap)}"))
+
+    return conflicts
+
+
+# --------------------------------------------------------------------------- #
+# Main
+# --------------------------------------------------------------------------- #
+
+
+def main(runtime: str = "claude") -> None:
+    if _IMPORT_FAILED:
+        _emit("allow", "merge_train: package import failed; allowing", runtime)
+        return
+    try:
+        raw_input = sys.stdin.read()
+        if not raw_input.strip():
+            _emit("allow", "merge_train: empty payload; allowing.", runtime)
+            return
+
+        payload = json.loads(raw_input)
+    except Exception:
+        _emit("allow", "merge_train: payload parse failed; allowing.", runtime)
+        return
+
+    # Check tool name — only file-mutation tools get the conflict check.
+    tool_call = payload.get("toolCall") or {}
+    tool_name = (
+        tool_call.get("name")
+        or payload.get("name")
+        or payload.get("tool_name")
+        or payload.get("tool")
+        or ""
+    )
+    if tool_name not in _MUTATION_TOOLS:
+        # Not a file-mutation tool — no conflict check needed. Exit 0 with no
+        # stdout: Claude Code (and all other runtimes) treat no output as
+        # implicit approve. Emitting a decision payload here triggered
+        # "unsupported permissionDecision:allow" when tools like Bash fired
+        # through a hook with a broad (*) matcher.
+        if runtime == "agy":
+            _silent_approve(runtime)
+        return
+
+    # Extract target file path(s). Most runtimes give a single file_path;
+    # codex's apply_patch can carry several paths in the patch body.
+    tool_input = (
+        tool_call.get("args") or payload.get("input") or payload.get("tool_input") or {}
+    )
+    raw_paths = _extract_paths(tool_name, tool_input, payload)
+    if not raw_paths:
+        _emit("allow", "merge_train: no file_path in tool input; allowing.", runtime)
         return
 
     # Extract start and end lines (for symbol-level locking).
@@ -171,7 +424,7 @@ def main() -> None:
             capture_output=True, text=True, check=True,
         ).stdout.strip()
     except subprocess.CalledProcessError:
-        _emit("allow", "merge_train: not inside a git repo; allowing.")
+        _emit("allow", "merge_train: not inside a git repo; allowing.", runtime)
         return
 
     repo_path = Path(repo_root)
@@ -181,15 +434,9 @@ def main() -> None:
     enforcement, repo_alias = _resolve_enforcement(repo_root)
     enforcement_bool = enforcement == "block"
 
-    # Normalize file path relative to repo root.
-    try:
-        abs_path = Path(file_path).resolve()
-        if abs_path.is_relative_to(repo_path):
-            rel_path = abs_path.relative_to(repo_path).as_posix()
-        else:
-            rel_path = file_path
-    except Exception:
-        rel_path = file_path
+    # Normalize every target path relative to repo root.
+    rel_paths = [_normalize_rel(fp, repo_path) for fp in raw_paths]
+    paths_label = ", ".join(f"'{p}'" for p in rel_paths)
 
     # Current branch.
     current_branch = subprocess.run(
@@ -197,12 +444,15 @@ def main() -> None:
         capture_output=True, text=True, check=False,
     ).stdout.strip()
 
-    print(
-        f"merge_train: checking conflicts for '{rel_path}' (branch '{current_branch}') in '{repo_alias}'...",
-        file=sys.stderr,
-    )
-
     # Detect remote OWNER/REPO for `gh --repo` scoping.
+    # NOTE: the regex below matches github.com remotes only. For non-
+    # GitHub remotes (gitlab.example.com, self-hosted Gitea, etc.) the
+    # pattern won't match and `repo_remote` stays empty — downstream
+    # `gh pr list` / `gh pr diff` calls then run WITHOUT `--repo`, which
+    # works only when the current CWD is inside the right local checkout
+    # (so `gh` can infer the repo from the git remote it sees locally).
+    # Cross-host self-hosted remotes without a local CWD match will fall
+    # through to the error-handling branch below with a `gh CLI error`.
     repo_remote = ""
     try:
         remote_url = subprocess.run(
@@ -217,6 +467,12 @@ def main() -> None:
                 repo_remote = m.group(1)
     except Exception:
         pass
+
+    # If the alias is still the raw directory name (fallback / unregistered
+    # worktree at /tmp/ or similar), use the GitHub repo name from the remote
+    # for a cleaner, recognizable label in conflict messages.
+    if repo_remote and repo_alias == repo_name:
+        repo_alias = repo_remote.split("/")[-1]
 
     # Read from cache (45s TTL).
     cache_file = Path(f"/tmp/merge_train_cache_{repo_name}.json")
@@ -260,111 +516,78 @@ def main() -> None:
                 }))
         except Exception as e:
             print(
-                f"merge_train: checked '{rel_path}' — conflict check skipped due to error: {e}",
+                f"merge_train: checked {paths_label} — conflict check skipped due to error: {e}",
                 file=sys.stderr,
             )
             _emit(
                 "allow",
-                f"merge_train: {rel_path} — conflict check skipped (gh CLI error); allowing.",
+                f"merge_train: {paths_label} — conflict check skipped (gh CLI error); allowing.",
+                runtime,
             )
             return
 
     if not prs_data:
-        print(
-            f"merge_train: checked '{rel_path}' — no conflicts found (no other open PRs).",
-            file=sys.stderr,
-        )
-        _emit(
-            "allow",
-            f"merge_train: {rel_path} — no conflicts found (no other open PRs in {repo_alias}).",
-        )
+        _silent_approve(runtime)
         return
 
-    # Identify symbols we are editing (for symbol-level locking).
-    our_symbols: set = set()
-    is_python = is_python_path(rel_path)
-    whole_file_lock = True
-
-    if is_python and start_line is not None and end_line is not None:
-        try:
-            start_l = int(start_line)
-            end_l = int(end_line)
-            file_on_disk = repo_path / rel_path
-            if file_on_disk.exists():
-                source = file_on_disk.read_text()
-                symbols = extract_symbols(source)
-                for sym in symbols:
-                    if sym.overlaps(start_l, end_l):
-                        our_symbols.add(sym.name)
-                if our_symbols:
-                    whole_file_lock = False
-        except Exception:
-            pass
-
-    # Check conflicts against other open PRs.
+    # Check every target path against other open PRs. Symbol-level line ranges
+    # are only meaningful for a single-file edit (Claude/Cursor StartLine/
+    # EndLine); a multi-file apply_patch falls back to whole-file locking.
+    single_path = len(rel_paths) == 1
     conflicts: list = []
-    for pr_num, pr_info in prs_data.items():
-        pr_files = pr_info.get("files", [])
-        if rel_path not in pr_files:
-            continue
-
-        pr_branch = pr_info.get("branch", f"pr-{pr_num}")
-
-        if whole_file_lock:
-            conflicts.append((pr_num, pr_branch, f"whole-file '{rel_path}'"))
-            continue
-
-        pr_symbols = pr_info.get("symbols", {}).get(rel_path)
-        if pr_symbols is None:
-            try:
-                sym_map = symbols_from_files_in_pr(int(pr_num), [rel_path], repo_remote or None)
-                pr_symbols = list(sym_map.get(rel_path, []))
-                pr_info.setdefault("symbols", {})[rel_path] = pr_symbols
-                cache_file.write_text(json.dumps({
-                    "timestamp": time.time(),
-                    "prs": prs_data,
-                }))
-            except Exception:
-                pr_symbols = []
-
-        if not pr_symbols:
-            conflicts.append((pr_num, pr_branch, f"whole-file '{rel_path}'"))
-        else:
-            overlap = our_symbols.intersection(pr_symbols)
-            if overlap:
-                conflicts.append((pr_num, pr_branch, f"symbols: {', '.join(overlap)}"))
+    for rel_path in rel_paths:
+        sl = start_line if single_path else None
+        el = end_line if single_path else None
+        conflicts.extend(
+            _collect_conflicts_for_path(
+                rel_path, sl, el, prs_data, repo_path, repo_remote, cache_file
+            )
+        )
 
     if conflicts:
         conflict_details = [
             f"PR#{pr_num} (branch '{branch}') is also modifying {detail}"
             for pr_num, branch, detail in conflicts
         ]
-        msg = f"merge_train: Conflict detected in '{rel_path}'!\n  " + "\n  ".join(conflict_details)
-        reason = f"merge_train: {rel_path} — conflict: " + "; ".join(
+        # Build the FIRST-LINE banner message — Claude Code shows the first
+        # line of stderr as the "hook error" TUI notification. Make it short
+        # and recognizable so the user actually sees "conflict" in the banner.
+        first_line = f"merge_train: CONFLICT in {paths_label} ({len(conflicts)} PR{'' if len(conflicts)==1 else 's'}); first: PR#{conflicts[0][0]}/{conflicts[0][2]} — check before merging"
+        full_msg = first_line + "\n  " + "\n  ".join(conflict_details)
+        reason = f"merge_train: {paths_label} — conflict: " + "; ".join(
             f"PR#{pr_num}/{detail}" for pr_num, _, detail in conflicts
         )
 
         if enforcement_bool:
-            # Block: return deny with the same reason the user sees in chat.
-            print(msg, file=sys.stderr)
-            _emit("deny", reason)
+            # Block: deny — the tool is prevented. User sees reason in chat.
+            # First line of stderr is the short banner; full details follow.
+            print(full_msg, file=sys.stderr)
+            _emit("deny", reason, runtime)
             return
         else:
-            # Warn-only: still allow, but the user sees the conflict reason in chat.
-            print(msg, file=sys.stderr)
-            _emit("allow", f"{reason} (warn-only for {repo_alias}; check the other PR before merging).")
+            # Warn-only: tool runs. ``systemMessage`` surfaces the warning
+            # without making Codex treat the hook itself as failed.
+            # That first line of stderr MUST be the short conflict banner
+            # (not a generic status message) so that Claude Code surfaces it
+            # cleanly in the TUI when exit status / events are logged.
+            print(full_msg, file=sys.stderr)
+            _emit(
+                "allow",
+                f"{reason} (warn-only for {repo_alias}; check the other PR before merging).",
+                runtime,
+            )
             return
 
-    # No conflicts.
-    print(
-        f"merge_train: checked '{rel_path}' — no conflicts found.",
-        file=sys.stderr,
-    )
-    _emit(
-        "allow",
-        f"merge_train: {rel_path} — no conflicts found in {repo_alias}.",
-    )
+    # No conflicts — silent approve. No systemMessage to avoid noise on every edit.
+    _silent_approve(runtime)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--runtime",
+        choices=("claude", "codex", "gemini", "cursor", "agy", "opencode"),
+        default="claude",
+    )
+    args, _ = parser.parse_known_args()
+    main(args.runtime)

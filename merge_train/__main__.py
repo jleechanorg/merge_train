@@ -31,7 +31,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="merge_train",
         description=(
             "merge_train: symbol-level PR conflict prediction + per-agent hook installer. "
-            "All hooks are warn-only after PR #18."
+            "Per-repo enforcement controls whether conflicts warn or block."
         ),
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -44,7 +44,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_install.add_argument(
         "--agent",
         required=True,
-        choices=["claude", "opencode", "codex", "all"],
+        choices=["claude", "opencode", "codex", "agy", "all"],
         help="Which agent to install hooks for.",
     )
     p_install.add_argument(
@@ -61,7 +61,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_test.add_argument(
         "--agent",
         required=True,
-        choices=["claude", "opencode", "codex", "all"],
+        choices=["claude", "opencode", "codex", "agy", "all"],
         help="Which agent to test hooks for.",
     )
     p_test.add_argument(

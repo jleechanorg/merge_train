@@ -30,6 +30,9 @@ _HOOK_INSTALL_EXPORTS = (
     "ALL_HOOK_SCRIPTS",
     "HOOKS_INSTALL_DIR",
     "TEST_HOOKS",
+    "agy_hooks_path",
+    "codex_hooks_path",
+    "claude_settings_path",
     "install_hooks_for_agent",
     "test_hooks_for_agent",
 )

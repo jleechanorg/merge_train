@@ -7,6 +7,11 @@ Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Coding CLI hook wiring**: `install.sh` updates an existing uv tool instead of leaving its package stale, installs one effective scope per runtime, and filters Codex (`apply_patch`), Gemini (`write_file|replace`), and Cursor mutation hooks. The shared wrapper emits each runtime's supported output schema. Routine successful checks are silent; only conflicts and failures surface in the terminal. Re-running the installer removes legacy merge_train-owned hooks from duplicate scopes while preserving unrelated sibling hooks.
+- **Codex hook installer**: `merge_train install-hooks --agent codex` uses the real `apply_patch` payload and matcher, omits the unconditional status message, and uses Codex's documented `timeout` field.
+
 ### Removed
 
 - **CLI surface** (`domain_lock`): Deleted the `domain_lock` CLI stack (`reserve`, `reserve-plan`, `release`, `check`, `list`, `audit`), replacing it with two standalone binaries: `acquire` and `predict-conflicts`.
