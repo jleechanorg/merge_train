@@ -36,7 +36,11 @@ import json, os, sys
 try:
     d = json.loads(sys.stdin.read())
     target = ((d.get("toolCall") or {}).get("args") or {}).get("TargetFile") or ""
-    dirs = [os.path.dirname(target)] + list(d.get("workspacePaths") or [])
+    # A new file may sit in directories that do not exist yet.
+    parent = os.path.dirname(target) if os.path.isabs(target) else ""
+    while parent and not os.path.isdir(parent) and parent != os.path.dirname(parent):
+        parent = os.path.dirname(parent)
+    dirs = [parent] + list(d.get("workspacePaths") or [])
     print(next((p for p in dirs if p and os.path.isdir(p)), ""))
 except Exception:
     print("")

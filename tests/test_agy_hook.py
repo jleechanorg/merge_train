@@ -97,3 +97,62 @@ def test_regression_agy_import_failure_still_emits_decision(
     helper.main("agy")
     out = json.loads(capsys.readouterr().out)
     assert out["decision"] == "ask", out
+
+
+def test_regression_agy_new_directory_resolves_target_workspace(
+    tmp_path: Path,
+) -> None:
+    first = _git_repo(tmp_path / "first_ws")
+    target_repo = _git_repo(tmp_path / "target_ws")
+    hooks_cwd = tmp_path / "gemini_config"
+    hooks_cwd.mkdir()
+    log_root = tmp_path / "logs"
+    payload = json.loads(_agy_payload(target_repo / "new" / "dir" / "f.py", first))
+    payload["workspacePaths"] = [str(first), str(target_repo)]
+
+    proc = subprocess.run(
+        ["bash", str(WRAPPER), "--runtime", "agy"],
+        input=json.dumps(payload),
+        cwd=hooks_cwd,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={**os.environ, "MERGE_TRAIN_LOG_ROOT": str(log_root)},
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert list((log_root / "target_ws").glob("*/hook-*.log"))
+    assert not (log_root / "first_ws").exists()
+
+
+def test_regression_agy_conflict_denies_through_main(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    import io
+    import sys
+    import time
+
+    repo = _git_repo(tmp_path / f"agydeny_{os.getpid()}")
+    target = repo / "shared.txt"
+    target.write_text("x\n")
+    cache = Path(f"/tmp/merge_train_cache_{repo.name}.json")
+    cache.write_text(
+        json.dumps(
+            {
+                "timestamp": time.time(),
+                "prs": {"99": {"branch": "other", "files": ["shared.txt"]}},
+            }
+        )
+    )
+    try:
+        helper = _load_helper()
+        monkeypatch.setattr(helper, "_resolve_enforcement", lambda root: ("block", "t"))
+        monkeypatch.chdir(repo)
+        monkeypatch.setattr(sys, "stdin", io.StringIO(_agy_payload(target, repo)))
+        helper.main("agy")
+    finally:
+        cache.unlink(missing_ok=True)
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["decision"] == "deny", out
+    assert "PR#99" in out["reason"]
