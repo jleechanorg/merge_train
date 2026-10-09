@@ -266,7 +266,7 @@ The `evidence/v*-ao/` directories (v0.4-ao, v0.5-ao, v0.6-ao) bundle the files b
 - `*.cast` / `*.gif` / `*.mp4` + sha256 — human-verifiable recordings (e.g. `evidence/v0.6-ao/v0.6_verify.cast`)
 - `checksums.txt` + `checksums.txt.sha256` — manifest of the above
 
-`scripts/refresh_evidence.sh` refreshes the `metadata.json` (the recorded merge_train SHA) and `.sha256` sidecar of each bundle that has one (v0.2.2 has none and is skipped); it does not regenerate the other artifacts. The v0.4-ao, v0.5-ao and v0.6-ao bundles follow the pattern of every artifact next to its own sha256 plus a manifest of those, the same shape as in-toto / SLSA provenance; the older bundles are not fully hashed.
+`scripts/refresh_evidence.sh` refreshes the `metadata.json` (the recorded merge_train SHA) and `.sha256` sidecar of each bundle that has one (v0.2.2 has none and is skipped); it does not regenerate the other artifacts. Bundles from v0.3 on pair each artifact with its own sha256 plus a manifest of those, the same shape as in-toto / SLSA provenance; v0.2 hashes only some files and has no manifest, and v0.2.2 is just `EVIDENCE.md`.
 
 ## License
 
