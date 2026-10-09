@@ -131,7 +131,7 @@ acquire --plan pr_domain_locks.yaml --registry file_domains.yaml --branch feat/l
 
 Two PRs can co-edit the *same file* if they touch *disjoint symbols in a supported language*. Lock only the symbols you modify, not the whole file.
 
-`acquire` resolves your *staged diff* down to the AST symbols actually touched and matches them against active reservations (`predict-conflicts --from-prs`, which the pre-commit hook runs, compares the scopes of open PRs instead):
+`acquire` resolves your *staged diff* down to the AST symbols actually touched and matches them against active reservations:
 
 ```bash
 git add mvp_site/world_logic.py
