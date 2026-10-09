@@ -422,14 +422,21 @@ echo
 
 # ------------------------------------------------------------------------- #
 # 4e. Per-agent hook installers (new in Phase C)
-#     Routes to the `merge_train install-hooks` CLI for the Claude agent
-#     (the agent that benefits most from the per-user PreToolUse wiring).
+#     Route to the canonical installer for agy and Claude user-scope hooks.
 #     For Codex and OpenCode, install.sh still writes the per-repo configs
 #     in step 3a-3c, but the per-user installer is the canonical entry
 #     point going forward.
 # ------------------------------------------------------------------------- #
 
-echo "[3e/5] Per-agent hook installer (Claude)..."
+echo "[3e/5] Per-agent hook installers (agy and Claude)..."
+if PYTHONPATH="$MERGE_TRAIN_ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+    "$PYTHON_BIN" -m merge_train.hook_install install-hooks \
+    --agent agy --target "$TARGET" >/dev/null 2>&1; then
+    echo "  ok: merge_train install-hooks --agent agy"
+else
+    echo "  WARN: merge_train install-hooks --agent agy failed (non-fatal)"
+fi
+
 if command -v merge_train >/dev/null 2>&1; then
     if merge_train install-hooks --agent claude >/dev/null 2>&1; then
         echo "  ok: merge_train install-hooks --agent claude"
