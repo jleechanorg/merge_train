@@ -230,7 +230,7 @@ All hooks are configured as warnings or validation gates:
 - `hooks/gemini-conflict-warn.sh` — Gemini / Antigravity session guard.
 - `hooks/pre-commit.sh` — Git pre-commit hook (runs `predict-conflicts`).
 
-`install.sh` copies these scripts to `~/.local/bin` and wires the mutation hook for Claude Code, Codex, Gemini/Antigravity, Cursor, and OpenCode in a single run. `predict-spawn-check.sh` is only copied: your spawner must call it, so spawn-time protection is not active until you wire it.
+`install.sh` copies the tool-hook scripts to `~/.local/bin` (the pre-commit hook is symlinked into the target repo's `.git/hooks` instead) and wires the mutation hook for Claude Code, Codex, Gemini/Antigravity, Cursor, and OpenCode in a single run. `predict-spawn-check.sh` is only copied: your spawner must call it, so spawn-time protection is not active until you wire it.
 
 ## Tests
 
@@ -266,7 +266,7 @@ The `evidence/v*-ao/` directories (v0.4-ao, v0.5-ao, v0.6-ao) bundle the files b
 - `*.cast` / `*.gif` / `*.mp4` + sha256 — human-verifiable recordings (e.g. `evidence/v0.6-ao/v0.6_verify.cast`)
 - `checksums.txt` + `checksums.txt.sha256` — manifest of the above
 
-`scripts/refresh_evidence.sh` refreshes the `metadata.json` (the recorded merge_train SHA) and `.sha256` sidecar of each bundle that has one (v0.2.2 has none and is skipped); it does not regenerate the other artifacts. The integrity pattern (every artifact next to its own sha256 + a manifest of those) is the same shape as in-toto / SLSA provenance — it lets a reviewer prove that the recorded run is the one the README claims.
+`scripts/refresh_evidence.sh` refreshes the `metadata.json` (the recorded merge_train SHA) and `.sha256` sidecar of each bundle that has one (v0.2.2 has none and is skipped); it does not regenerate the other artifacts. The v0.4-ao, v0.5-ao and v0.6-ao bundles follow the pattern of every artifact next to its own sha256 plus a manifest of those, the same shape as in-toto / SLSA provenance; the older bundles are not fully hashed.
 
 ## License
 
