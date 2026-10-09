@@ -131,11 +131,11 @@ acquire --plan pr_domain_locks.yaml --registry file_domains.yaml --branch feat/l
 
 Two PRs can co-edit the *same file* if they touch *disjoint symbols in a supported language*. Lock only the symbols you modify, not the whole file.
 
-At commit time, `predict-conflicts` resolves the *staged diff* down to AST symbols actually touched and matches them against active reservations:
+`acquire` resolves your *staged diff* down to the AST symbols actually touched and matches them against active reservations (`predict-conflicts --from-prs`, which the pre-commit hook runs, compares the scopes of open PRs instead):
 
 ```bash
 git add mvp_site/world_logic.py
-predict-conflicts --plan pr_domain_locks.yaml --registry file_domains.yaml
+acquire --plan pr_domain_locks.yaml --registry file_domains.yaml --branch <your-branch> --agent <agent> mvp_site/world_logic.py
 # Only refuses if your staged diff touches symbols reserved by another PR.
 # Files with no supported extractor (like JSON) fall back to whole-file locking.
 ```
@@ -266,7 +266,7 @@ The `evidence/v*-ao/` directories (v0.4-ao, v0.5-ao, v0.6-ao) bundle the files b
 - `*.cast` / `*.gif` / `*.mp4` + sha256 — human-verifiable recordings (e.g. `evidence/v0.6-ao/v0.6_verify.cast`)
 - `checksums.txt` + `checksums.txt.sha256` — manifest of the above
 
-`scripts/refresh_evidence.sh` refreshes each bundle's `metadata.json` (the recorded merge_train SHA) and its `.sha256` sidecar; it does not regenerate the other artifacts. The integrity pattern (every artifact next to its own sha256 + a manifest of those) is the same shape as in-toto / SLSA provenance — it lets a reviewer prove that the recorded run is the one the README claims.
+`scripts/refresh_evidence.sh` refreshes the `metadata.json` (the recorded merge_train SHA) and `.sha256` sidecar of each bundle that has one (v0.2.2 has none and is skipped); it does not regenerate the other artifacts. The integrity pattern (every artifact next to its own sha256 + a manifest of those) is the same shape as in-toto / SLSA provenance — it lets a reviewer prove that the recorded run is the one the README claims.
 
 ## License
 
