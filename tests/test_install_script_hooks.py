@@ -1,6 +1,10 @@
 """Contracts for the canonical shell installer wiring."""
 
 from pathlib import Path
+import json
+import os
+import subprocess
+import sys
 
 
 INSTALL_SH = Path(__file__).resolve().parents[1] / "install.sh"
@@ -73,6 +77,84 @@ def test_install_script_creates_opencode_plugin_directory() -> None:
     ) in body
     assert 'echo "  ok: installed $OPENCODE_PLUGIN_DST"' in body
     assert 'echo "  WARN: failed to install $OPENCODE_PLUGIN_DST"' in body
+
+
+def test_install_script_registers_agy_user_scope_hooks(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    bin_dir = tmp_path / "bin"
+    target = tmp_path / "target"
+    home.mkdir()
+    bin_dir.mkdir()
+    target.mkdir()
+    subprocess.run(["git", "init", "-q", str(target)], check=True)
+
+    # Keep the full installer isolated from user config and package installs.
+    uv = bin_dir / "uv"
+    uv.write_text("#!/bin/sh\nexit 0\n")
+    uv.chmod(0o755)
+    predict_conflicts = bin_dir / "predict-conflicts"
+    predict_conflicts.write_text("#!/bin/sh\nexit 0\n")
+    predict_conflicts.chmod(0o755)
+
+    agy_config = home / ".gemini" / "config" / "hooks.json"
+    agy_config.parent.mkdir(parents=True)
+    agy_config.write_text(
+        json.dumps(
+            {
+                "cmux": {"enabled": True},
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Edit|Write",
+                            "hooks": [{"type": "command", "command": "cmux hook"}],
+                        }
+                    ]
+                },
+            }
+        )
+    )
+    gemini_settings = home / ".gemini" / "settings.json"
+    gemini_settings.write_text(json.dumps({"cmux": {"enabled": True}}))
+
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+    }
+    for _ in range(2):
+        subprocess.run(
+            ["bash", str(INSTALL_SH), "--python", sys.executable, str(target)],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    agy_hooks = json.loads(agy_config.read_text())
+    assert agy_hooks["cmux"] == {"enabled": True}
+    assert any(
+        hook["command"] == "cmux hook"
+        for wrapper in agy_hooks["hooks"]["PreToolUse"]
+        for hook in wrapper["hooks"]
+    )
+    registrations = [
+        hook
+        for wrapper in agy_hooks["hooks"]["PreToolUse"]
+        for hook in wrapper["hooks"]
+        if "conflict-warn-pre-tool" in hook["command"]
+    ]
+    assert len(registrations) == 1
+    assert not agy_hooks["hooks"].get("BeforeTool")
+
+    gemini_config = json.loads(gemini_settings.read_text())
+    assert gemini_config["cmux"] == {"enabled": True}
+    gemini_hooks = gemini_config["hooks"]
+    assert gemini_hooks["BeforeTool"]
+    assert all(
+        "--runtime gemini" in hook["command"]
+        for wrapper in gemini_hooks["BeforeTool"]
+        for hook in wrapper["hooks"]
+    )
 
 
 def test_install_script_wires_portable_home_path() -> None:
