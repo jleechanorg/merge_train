@@ -51,22 +51,14 @@ for _p in (
     if _p.exists():
         sys.path.insert(0, str(_p))
 
-# Optional imports — fail-safe if the package isn't installed.
+# Optional imports — fail-safe if the package isn't installed. main() reports
+# the failure in the active runtime's output shape.
+_IMPORT_FAILED = False
 try:
     from merge_train.symbol_discovery import symbols_from_files_in_pr
     from merge_train.symbols import extract_symbols, is_python_path
 except ImportError:  # pragma: no cover — fail-safe fallback
-    _reason = "merge_train: package import failed; allowing"
-    print(
-        json.dumps({
-            "systemMessage": _reason,
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "additionalContext": _reason,
-            },
-        })
-    )
-    sys.exit(0)
+    _IMPORT_FAILED = True
 
 try:
     from merge_train.config import (
@@ -378,6 +370,9 @@ def _collect_conflicts_for_path(
 
 
 def main(runtime: str = "claude") -> None:
+    if _IMPORT_FAILED:
+        _emit("allow", "merge_train: package import failed; allowing", runtime)
+        return
     try:
         raw_input = sys.stdin.read()
         if not raw_input.strip():

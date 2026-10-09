@@ -83,3 +83,17 @@ def test_regression_agy_deny_payload_shape() -> None:
         "decision": "ask",
         "reason": "heads up",
     }
+
+
+def test_regression_agy_import_failure_still_emits_decision(
+    monkeypatch, capsys
+) -> None:
+    import io
+    import sys
+
+    monkeypatch.setitem(sys.modules, "merge_train.symbol_discovery", None)
+    helper = _load_helper()
+    monkeypatch.setattr(sys, "stdin", io.StringIO(_agy_payload(Path("/tmp/x.py"), Path("/tmp"))))
+    helper.main("agy")
+    out = json.loads(capsys.readouterr().out)
+    assert out["decision"] == "ask", out
