@@ -156,3 +156,50 @@ def test_regression_agy_conflict_denies_through_main(
     out = json.loads(capsys.readouterr().out)
     assert out["decision"] == "deny", out
     assert "PR#99" in out["reason"]
+
+
+def _run_wrapper_with_helper(tmp_path: Path, helper_source: str, runtime: str):
+    hooks = tmp_path / "hooks"
+    hooks.mkdir()
+    (hooks / "conflict-warn-pre-tool.sh").write_text(WRAPPER.read_text())
+    (hooks / "conflict_check_helper.py").write_text(helper_source)
+    repo = _git_repo(tmp_path / "repo")
+    return subprocess.run(
+        ["bash", str(hooks / "conflict-warn-pre-tool.sh"), "--runtime", runtime],
+        input=_agy_payload(repo / "f.txt", repo),
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={**os.environ, "MERGE_TRAIN_LOG_ROOT": str(tmp_path / "logs")},
+    )
+
+
+def test_regression_agy_helper_crash_defers_to_agy(tmp_path: Path) -> None:
+    proc = _run_wrapper_with_helper(tmp_path, "raise RuntimeError('boom')\n", "agy")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["decision"] == "ask"
+
+
+def test_regression_agy_helper_silent_exit_defers_to_agy(tmp_path: Path) -> None:
+    proc = _run_wrapper_with_helper(tmp_path, "import sys\nsys.exit(1)\n", "agy")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["decision"] == "ask"
+
+
+def test_helper_crash_keeps_claude_behavior(tmp_path: Path) -> None:
+    proc = _run_wrapper_with_helper(tmp_path, "raise RuntimeError('boom')\n", "claude")
+    assert proc.returncode != 0
+    assert proc.stdout == ""
+
+
+def test_regression_agy_partial_output_then_crash_emits_one_decision(
+    tmp_path: Path,
+) -> None:
+    helper = "print('{\"decision\": \"al')\nraise RuntimeError('boom')\n"
+    proc = _run_wrapper_with_helper(tmp_path, helper, "agy")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout) == {
+        "decision": "ask",
+        "reason": "merge_train: hook error; deferring to agy",
+    }
