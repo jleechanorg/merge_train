@@ -26,6 +26,13 @@ fi
 # Restrict new files/dirs to owner-only. Set before any mkdir / redirect.
 umask 077
 
+# agy denies the tool when the hook prints no decision, so any failure below
+# must still defer to agy's own permission flow.
+AGY_DECIDED=0
+if [[ "$RUNTIME" == "agy" ]]; then
+  trap '[[ "$AGY_DECIDED" == 1 ]] || printf "%s\n" "{\"decision\": \"ask\", \"reason\": \"merge_train: hook error; deferring to agy\"}"; exit 0' EXIT
+fi
+
 INPUT="$(cat)"
 
 # agy runs hooks from the directory holding hooks.json, not the workspace.
@@ -134,7 +141,11 @@ if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   } >> "$LOG_FILE" 2>/dev/null || true
 fi
 
+if [[ "$RUNTIME" == "agy" ]] && [[ "$EXIT" -ne 0 ]]; then
+  STDOUT=""
+fi
 if [[ -n "$STDOUT" ]]; then
   printf '%s\n' "$STDOUT"
+  AGY_DECIDED=1
 fi
 exit "$EXIT"
