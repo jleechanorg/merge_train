@@ -72,8 +72,8 @@ def test_system_message_matches_permission_decision_reason() -> None:
         assert p["systemMessage"] == visible_reason
 
 
-def test_non_mutation_tool_emits_no_stdout(tmp_path: Path) -> None:
-    """Non-mutation tools (Read, Bash, ...) must produce NO stdout.
+def test_non_mutation_tool_is_completely_silent(tmp_path: Path) -> None:
+    """Non-mutation tools (Read, Bash, ...) must produce no output.
 
     Exit 0 with no stdout is the correct "implicit approve" signal for
     Claude Code (and other runtimes). Previously the helper emitted a
@@ -92,8 +92,8 @@ def test_non_mutation_tool_emits_no_stdout(tmp_path: Path) -> None:
             f"tool={tool!r}: expected empty stdout (implicit approve); "
             f"got: {result.stdout!r}"
         )
-        assert b"not a file mutation" in result.stderr, (
-            f"tool={tool!r}: expected skip warning on stderr; got: {result.stderr!r}"
+        assert result.stderr == b"", (
+            f"tool={tool!r}: expected empty stderr; got: {result.stderr!r}"
         )
 
 
@@ -141,6 +141,83 @@ def test_emit_empty_payload_includes_system_message() -> None:
     payload = json.loads(result.stdout.decode().strip().splitlines()[-1])
     assert "systemMessage" in payload
     assert "empty payload" in payload["systemMessage"]
+
+
+def test_runtime_specific_output_schemas() -> None:
+    """Gemini and Cursor must not receive Claude/Codex-only fields."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module._decision_payload("deny", "blocked", "gemini") == {
+        "decision": "deny",
+        "reason": "blocked",
+    }
+    assert module._decision_payload("allow", "warning", "gemini") == {
+        "systemMessage": "warning"
+    }
+    assert module._decision_payload("deny", "blocked", "cursor") == {
+        "permission": "deny",
+        "user_message": "blocked",
+        "agent_message": "blocked",
+    }
+    assert module._decision_payload("allow", "warning", "cursor") == {
+        "permission": "allow",
+        "user_message": "warning",
+        "agent_message": "warning",
+    }
+
+
+def test_opencode_edit_family_paths_are_normalized() -> None:
+    """OpenCode's plugin payloads must reach the shared conflict checker."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    for tool in ("multiedit", "patch", "apply_patch"):
+        assert tool in module._MUTATION_TOOLS
+        assert module._extract_paths(
+            tool,
+            {"file_path": "src/example.py"},
+            {},
+        ) == ["src/example.py"]
+
+
+def test_codex_apply_patch_uses_patch_field() -> None:
+    """Codex 0.146 sends patch text in ``tool_input.patch``."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    patch = "*** Begin Patch\n*** Update File: src/example.py\n*** End Patch"
+    assert module._extract_paths("apply_patch", {"patch": patch}, {}) == [
+        "src/example.py"
+    ]
+
+
+def test_cursor_mutation_tools_are_recognized() -> None:
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    for tool in ("Edit", "Write", "StrReplace", "Delete", "EditNotebook"):
+        assert tool in module._MUTATION_TOOLS
 
 
 def test_decision_payload_truncates_long_reason() -> None:

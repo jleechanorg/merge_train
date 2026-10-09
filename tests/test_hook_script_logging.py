@@ -5,7 +5,7 @@ copies to ``~/.local/bin/``. It must:
 
 1. Still emit the JSON envelope on stdout (so the CLI's parser works).
 2. Still emit status lines on stderr (so Codex/Agy TUI see them).
-3. Write a logfile to ``/tmp/merge_train/{repo}/{branch}/hook-<date>.log``
+3. Write a logfile under the configured log root
    containing timestamp + stdin payload + exit code.
 
 We target the **in-tree** script under ``merge_train/hooks/`` so the test
@@ -19,7 +19,6 @@ with a clear message otherwise — same pattern as
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -38,30 +37,14 @@ def _hook_script() -> Path:
 
 
 @pytest.fixture
-def clean_log_dir() -> None:
-    """Best-effort cleanup of /tmp/merge_train/merge_train/<current_branch>
-    before each test. The merge_train tests run in this repo, so the
-    dir would accumulate from prior runs."""
-    # Find the branch from the merge_train checkout (the most likely
-    # test repo). Don't fail if we can't determine it.
-    repo = Path(__file__).resolve().parents[1]
-    if not (repo / ".git").exists():
-        return
-    branch_proc = subprocess.run(
-        ["git", "symbolic-ref", "--short", "HEAD"],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-    )
-    if branch_proc.returncode != 0:
-        return
-    branch = branch_proc.stdout.strip()
-    target = Path("/tmp/merge_train") / repo.name / branch
-    if target.is_dir():
-        shutil.rmtree(target, ignore_errors=True)
+def log_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Give each test a private hook log root."""
+    root = tmp_path / "merge_train-logs"
+    monkeypatch.setenv("MERGE_TRAIN_LOG_ROOT", str(root))
+    return root
 
 
-def test_hook_script_writes_logfile(clean_log_dir: None) -> None:
+def test_hook_script_writes_logfile(log_root: Path) -> None:
     """Running the bash script with a synthetic Edit produces a logfile."""
     repo = Path(__file__).resolve().parents[1]
     payload = json.dumps(
@@ -90,7 +73,7 @@ def test_hook_script_writes_logfile(clean_log_dir: None) -> None:
         text=True,
     )
     branch = branch_proc.stdout.strip() or "detached"
-    log_dir = Path("/tmp/merge_train") / repo.name / branch
+    log_dir = log_root / repo.name / branch
     assert log_dir.is_dir(), f"log dir not created: {log_dir}"
     logs = sorted(log_dir.glob("hook-*.log"))
     assert logs, f"no log file in {log_dir}"
@@ -109,7 +92,7 @@ def test_hook_script_writes_logfile(clean_log_dir: None) -> None:
     assert "stdout:" in content
 
 
-def test_hook_script_still_emits_valid_json(clean_log_dir: None) -> None:
+def test_hook_script_still_emits_valid_json(log_root: Path) -> None:
     """No-conflict stdout must be empty/whitespace for implicit allow.
 
     Codex rejects legacy ``decision:"approve"``. Conflict warnings still emit
@@ -134,11 +117,11 @@ def test_hook_script_still_emits_valid_json(clean_log_dir: None) -> None:
         timeout=30,
     )
     assert result.returncode == 0
-    assert result.stdout.decode().strip() == ""
+    assert result.stdout == b""
 
 
-def test_hook_script_mirrors_stderr(clean_log_dir: None) -> None:
-    """Stderr is preserved (not swallowed) so Codex/Agy TUI can show it."""
+def test_hook_script_is_silent_without_conflicts(log_root: Path) -> None:
+    """Routine successful checks must not interrupt the coding CLI's TUI."""
     repo = Path(__file__).resolve().parents[1]
     payload = json.dumps(
         {
@@ -157,15 +140,10 @@ def test_hook_script_mirrors_stderr(clean_log_dir: None) -> None:
         timeout=30,
     )
     err = result.stderr.decode()
-    # The "checking conflicts" status line was removed so the FIRST line of
-    # stderr remains available for the actual conflict banner when one fires.
-    # No-conflict stderr still includes a status line ("merge_train: checked").
-    assert "merge_train: checked" in err, (
-        f"stderr lost; the CLI TUI would see no status line. Got: {err!r}"
-    )
+    assert err == "", f"routine check polluted the CLI TUI: {err!r}"
 
 
-def test_hook_script_handles_non_git_cwd(clean_log_dir: None, tmp_path: Path) -> None:
+def test_hook_script_handles_non_git_cwd(log_root: Path, tmp_path: Path) -> None:
     """If the cwd is not a git repo, the hook must not crash and must
     still emit a valid JSON envelope. Logging is best-effort and skipped."""
     payload = json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "/tmp/x.py"}})
@@ -189,13 +167,13 @@ def test_hook_script_handles_non_git_cwd(clean_log_dir: None, tmp_path: Path) ->
         f"hook polluted stderr on non-git cwd; defeats chat-visible UX. Got: {err!r}"
     )
     # And no log dir should have been created for `no-repo` when REPO_ROOT is empty.
-    no_repo_dir = Path("/tmp/merge_train") / "no-repo"
+    no_repo_dir = log_root / "no-repo"
     assert not no_repo_dir.exists() or not any(no_repo_dir.iterdir()), (
         f"non-git cwd should not create a no-repo log dir; got: {list(no_repo_dir.iterdir())}"
     )
 
 
-def test_hook_script_redacts_arbitrary_body_keys(clean_log_dir: None) -> None:
+def test_hook_script_redacts_arbitrary_body_keys(log_root: Path) -> None:
     """Regression test for the brittle redaction logic.
 
     The original code only invoked the Python redaction helper when the
@@ -233,7 +211,7 @@ def test_hook_script_redacts_arbitrary_body_keys(clean_log_dir: None) -> None:
         ["git", "symbolic-ref", "--short", "HEAD"],
         cwd=repo, capture_output=True, text=True,
     ).stdout.strip() or "detached"
-    log_dir = Path("/tmp/merge_train") / repo.name / branch
+    log_dir = log_root / repo.name / branch
     logs = sorted(log_dir.glob("hook-*.log"))
     assert logs, f"no log file in {log_dir}"
     content_text = logs[-1].read_text()
@@ -253,7 +231,7 @@ def test_hook_script_redacts_arbitrary_body_keys(clean_log_dir: None) -> None:
     )
 
 
-def test_hook_script_logfile_is_owner_only(clean_log_dir: None) -> None:
+def test_hook_script_logfile_is_owner_only(log_root: Path) -> None:
     """The log file must be 0600 (owner-only) and the log dir 0700.
     Otherwise on a shared box, any local user can read every file the
     agent edited plus the literal Edit body (C1 in adversarial review)."""
@@ -276,7 +254,7 @@ def test_hook_script_logfile_is_owner_only(clean_log_dir: None) -> None:
         cwd=repo, capture_output=True, text=True,
     ).stdout.strip() or "detached"
     log_date = datetime.date.today().isoformat()
-    log_file = Path("/tmp/merge_train") / repo.name / branch / f"hook-{log_date}.log"
+    log_file = log_root / repo.name / branch / f"hook-{log_date}.log"
     assert log_file.exists(), f"log file not created: {log_file}"
     mode = stat.S_IMODE(log_file.stat().st_mode)
     assert mode & 0o077 == 0, f"log file is group/world readable: mode={oct(mode)}"

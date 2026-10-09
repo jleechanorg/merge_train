@@ -10,8 +10,8 @@
 // payload ({tool_name, tool_input.file_path}) and pipes it to the SAME wrapper
 // the other runtimes use. The wrapper logs to /tmp/merge_train/<repo>/<branch>/
 // (the runtime-agnostic proof record) and returns a decision envelope. This
-// plugin is WARN-ONLY: it surfaces the reason but never throws / blocks, matching
-// merge_train's design for every repo except merge_train itself.
+// The plugin surfaces warnings and preserves the shared helper's deny decision
+// for repositories configured with blocking enforcement.
 //
 // Source of truth: merge_train/hooks/opencode-conflict-plugin.js (installed to
 // ~/.config/opencode/plugins/merge-train-conflict.js by install.sh).
@@ -19,33 +19,37 @@
 const WRAP = `${process.env.HOME}/.local/bin/conflict-warn-pre-tool.sh`;
 
 // OpenCode edit-family tools whose args carry a target file path.
-const EDIT_TOOLS = new Set(["edit", "write", "multiedit", "patch", "apply_patch"]);
+const EDIT_TOOLS = new Set(["edit", "write", "apply_patch"]);
 
 export const MergeTrainConflictPlugin = async ({ $ }) => {
-  console.log("[merge_train] OpenCode conflict plugin loaded (warn-only)");
-
   return {
     "tool.execute.before": async (input, output) => {
+      let denialReason = "";
       try {
         const tool = (input?.tool || "").toLowerCase();
         if (!EDIT_TOOLS.has(tool)) return;
 
         const args = output?.args || {};
-        const filePath =
-          args.filePath || args.file_path || args.path || args.TargetFile || "";
-        if (!filePath) return;
+        const toolInput =
+          tool === "apply_patch"
+            ? { command: args.patchText || "" }
+            : {
+                file_path:
+                  args.filePath || args.file_path || args.path || args.TargetFile || "",
+              };
+        if (!toolInput.command && !toolInput.file_path) return;
 
         // Build a Claude-shaped payload so the shared wrapper/helper recognize it.
         const payload = JSON.stringify({
           tool_name: tool,
-          tool_input: { file_path: filePath },
+          tool_input: toolInput,
         });
 
         // Pipe to the shared wrapper. Bun's `$` safely escapes ${payload}.
         // .quiet() suppresses passthrough; .nothrow() so a non-zero exit
         // (the wrapper never denies in warn-only repos, but be defensive)
         // can't crash the plugin.
-        const res = await $`printf %s ${payload} | bash ${WRAP}`
+        const res = await $`printf %s ${payload} | bash ${WRAP} --runtime opencode`
           .quiet()
           .nothrow();
         const stdout = res?.stdout?.toString?.() ?? "";
@@ -57,6 +61,9 @@ export const MergeTrainConflictPlugin = async ({ $ }) => {
             decision?.hookSpecificOutput?.permissionDecisionReason ||
             decision?.systemMessage ||
             "";
+          if (decision?.hookSpecificOutput?.permissionDecision === "deny") {
+            denialReason = reason || "merge_train denied the edit";
+          }
         } catch {
           /* non-JSON output — ignore, warn-only */
         }
@@ -67,9 +74,10 @@ export const MergeTrainConflictPlugin = async ({ $ }) => {
           console.warn(`[merge_train] ${reason}`);
         }
       } catch (err) {
-        // Warn-only: never let the conflict check break the edit.
+        // Unexpected checker failures remain warn-only.
         console.warn(`[merge_train] conflict check skipped: ${err?.message || err}`);
       }
+      if (denialReason) throw new Error(denialReason);
     },
   };
 };

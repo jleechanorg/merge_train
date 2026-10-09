@@ -18,10 +18,44 @@
 #     so the CLI TUI stays clean.
 set -euo pipefail
 
+RUNTIME="claude"
+if [[ "${1:-}" == "--runtime" ]] && [[ -n "${2:-}" ]]; then
+  RUNTIME="$2"
+fi
+
 # Restrict new files/dirs to owner-only. Set before any mkdir / redirect.
 umask 077
 
+# agy denies the tool when the hook prints no decision, so any failure below
+# must still defer to agy's own permission flow.
+AGY_DECIDED=0
+if [[ "$RUNTIME" == "agy" ]]; then
+  trap '[[ "$AGY_DECIDED" == 1 ]] || printf "%s\n" "{\"decision\": \"ask\", \"reason\": \"merge_train: hook error; deferring to agy\"}"; exit 0' EXIT
+fi
+
 INPUT="$(cat)"
+
+# agy runs hooks from the directory holding hooks.json, not the workspace.
+# Resolve repo/branch from the edited file's directory instead.
+if [[ "$RUNTIME" == "agy" ]]; then
+  AGY_DIR="$(printf '%s' "$INPUT" | python3 -c '
+import json, os, sys
+try:
+    d = json.loads(sys.stdin.read())
+    target = ((d.get("toolCall") or {}).get("args") or {}).get("TargetFile") or ""
+    # A new file may sit in directories that do not exist yet.
+    parent = os.path.dirname(target) if os.path.isabs(target) else ""
+    while parent and not os.path.isdir(parent) and parent != os.path.dirname(parent):
+        parent = os.path.dirname(parent)
+    dirs = [parent] + list(d.get("workspacePaths") or [])
+    print(next((p for p in dirs if p and os.path.isdir(p)), ""))
+except Exception:
+    print("")
+')"
+  if [[ -n "$AGY_DIR" ]]; then
+    cd "$AGY_DIR"
+  fi
+fi
 
 # Resolve log path. Best-effort: if we can't determine repo/branch, we still
 # run the conflict check — we just skip logging entirely (no mkdir, no tee).
@@ -29,7 +63,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo "detached")"
 REPO_NAME="$(basename "$REPO_ROOT" 2>/dev/null || echo "no-repo")"
 LOG_DATE="$(date +%Y-%m-%d)"
-LOG_DIR="/tmp/merge_train/${REPO_NAME:-no-repo}/${BRANCH}"
+MERGE_TRAIN_LOG_ROOT="${MERGE_TRAIN_LOG_ROOT:-/tmp/merge_train}"
+LOG_DIR="${MERGE_TRAIN_LOG_ROOT}/${REPO_NAME:-no-repo}/${BRANCH}"
 LOG_FILE="${LOG_DIR}/hook-${LOG_DATE}.log"
 
 # Redact the Edit body. The literal new_string / new_text / content is
@@ -52,9 +87,10 @@ PAYLOAD_SUMMARY="$(printf '%s' "$INPUT" | python3 -c '
 import json, sys
 try:
     d = json.loads(sys.stdin.read())
-    tool = d.get("tool_name", "?")
-    inp = d.get("tool_input", {})
-    path = inp.get("file_path", "?")
+    call = d.get("toolCall") or {}
+    tool = call.get("name") or d.get("tool_name", "?")
+    inp = call.get("args") or d.get("tool_input", {})
+    path = inp.get("file_path") or inp.get("TargetFile") or "?"
     # Truncate path to basename — keeps log readable, drops user/customer names.
     import os
     path = os.path.basename(path) if path and path != "?" else "?"
@@ -94,7 +130,7 @@ HELPER_PATH="${SCRIPT_DIR}/conflict_check_helper.py"
 if [[ ! -f "$HELPER_PATH" ]]; then
   HELPER_PATH="$HOME/.local/bin/conflict_check_helper.py"
 fi
-STDOUT="$(echo "$INPUT" | python3 "$HELPER_PATH" 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
+STDOUT="$(echo "$INPUT" | python3 "$HELPER_PATH" --runtime "$RUNTIME" 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
 
 if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   TS="$(date '+%Y-%m-%dT%H:%M:%S%z')"
@@ -105,5 +141,11 @@ if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   } >> "$LOG_FILE" 2>/dev/null || true
 fi
 
-echo "$STDOUT"
+if [[ "$RUNTIME" == "agy" ]] && [[ "$EXIT" -ne 0 ]]; then
+  STDOUT=""
+fi
+if [[ -n "$STDOUT" ]]; then
+  printf '%s\n' "$STDOUT"
+  AGY_DECIDED=1
+fi
 exit "$EXIT"

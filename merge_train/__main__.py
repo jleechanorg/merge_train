@@ -31,7 +31,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="merge_train",
         description=(
             "merge_train: symbol-level PR conflict prediction + per-agent hook installer. "
-            "All hooks are warn-only after PR #18."
+            "Per-repo enforcement controls whether conflicts warn or block."
         ),
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
