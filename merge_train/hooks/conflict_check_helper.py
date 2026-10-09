@@ -51,22 +51,14 @@ for _p in (
     if _p.exists():
         sys.path.insert(0, str(_p))
 
-# Optional imports — fail-safe if the package isn't installed.
+# Optional imports — fail-safe if the package isn't installed. main() reports
+# the failure in the active runtime's output shape.
+_IMPORT_FAILED = False
 try:
     from merge_train.symbol_discovery import symbols_from_files_in_pr
     from merge_train.symbols import extract_symbols, is_python_path
 except ImportError:  # pragma: no cover — fail-safe fallback
-    _reason = "merge_train: package import failed; allowing"
-    print(
-        json.dumps({
-            "systemMessage": _reason,
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "additionalContext": _reason,
-            },
-        })
-    )
-    sys.exit(0)
+    _IMPORT_FAILED = True
 
 try:
     from merge_train.config import (
@@ -138,6 +130,11 @@ def _decision_payload(decision: str, reason: str, runtime: str = "claude") -> di
             return {"decision": "deny", "reason": safe_reason}
         return {"systemMessage": safe_reason}
 
+    if runtime == "agy":
+        # agy denies the tool unless stdout carries a decision; "ask" defers
+        # to agy's normal permission flow.
+        return {"decision": permission_decision or "ask", "reason": safe_reason}
+
     if runtime == "cursor":
         payload = {"permission": permission_decision or "allow"}
         if reason:
@@ -174,6 +171,8 @@ def _silent_approve(runtime: str = "claude") -> None:
     """
     if runtime == "gemini":
         print("{}")
+    elif runtime == "agy":
+        print(json.dumps({"decision": "ask"}))
     elif runtime == "cursor":
         print(json.dumps({"permission": "allow"}))
 
@@ -225,6 +224,8 @@ def _resolve_enforcement(repo_root: str) -> tuple[str, str]:
 #   Gemini   : write_file, replace                    (tool_input.file_path)
 #   Codex    : apply_patch                            (path(s) in patch body)
 #   OpenCode : edit, write                            (surfaced by the plugin)
+#   Agy      : write_to_file, replace_file_content,
+#              multi_replace_file_content            (toolCall.args.TargetFile)
 #   Windsurf : replace_file_content, multi_replace_file_content (legacy)
 _MUTATION_TOOLS = frozenset({
     "Edit", "Write", "MultiEdit", "NotebookEdit",
@@ -232,7 +233,7 @@ _MUTATION_TOOLS = frozenset({
     "write_file", "replace",
     "apply_patch",
     "edit", "write", "multiedit", "patch",
-    "replace_file_content", "multi_replace_file_content",
+    "replace_file_content", "multi_replace_file_content", "write_to_file",
 })
 
 # Codex's apply_patch embeds its target file(s) in the patch text under its
@@ -369,6 +370,9 @@ def _collect_conflicts_for_path(
 
 
 def main(runtime: str = "claude") -> None:
+    if _IMPORT_FAILED:
+        _emit("allow", "merge_train: package import failed; allowing", runtime)
+        return
     try:
         raw_input = sys.stdin.read()
         if not raw_input.strip():
@@ -381,8 +385,10 @@ def main(runtime: str = "claude") -> None:
         return
 
     # Check tool name — only file-mutation tools get the conflict check.
+    tool_call = payload.get("toolCall") or {}
     tool_name = (
-        payload.get("name")
+        tool_call.get("name")
+        or payload.get("name")
         or payload.get("tool_name")
         or payload.get("tool")
         or ""
@@ -393,11 +399,15 @@ def main(runtime: str = "claude") -> None:
         # implicit approve. Emitting a decision payload here triggered
         # "unsupported permissionDecision:allow" when tools like Bash fired
         # through a hook with a broad (*) matcher.
+        if runtime == "agy":
+            _silent_approve(runtime)
         return
 
     # Extract target file path(s). Most runtimes give a single file_path;
     # codex's apply_patch can carry several paths in the patch body.
-    tool_input = payload.get("input") or payload.get("tool_input") or {}
+    tool_input = (
+        tool_call.get("args") or payload.get("input") or payload.get("tool_input") or {}
+    )
     raw_paths = _extract_paths(tool_name, tool_input, payload)
     if not raw_paths:
         _emit("allow", "merge_train: no file_path in tool input; allowing.", runtime)
