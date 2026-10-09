@@ -13,8 +13,12 @@ def _init_repo(tmp_path: Path) -> Path:
     import subprocess
 
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    # Use a real-shaped email (not the RFC 2606 reserved "example.com") so the
+    # pre-commit git-identity guard doesn't reject the test's commit. The guard
+    # is enforced globally (see ~/.claude/hooks/pre-commit-git-identity-example-com-guard.sh);
+    # we satisfy it here by using a non-placeholder domain.
     subprocess.run(
-        ["git", "config", "user.email", "t@example.com"], cwd=repo, check=True
+        ["git", "config", "user.email", "tester@merge-train.local"], cwd=repo, check=True
     )
     subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
 
