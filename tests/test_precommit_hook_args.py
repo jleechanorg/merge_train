@@ -9,7 +9,7 @@ from pathlib import Path
 HOOK = Path(__file__).resolve().parents[1] / "merge_train" / "hooks" / "pre-commit.sh"
 
 
-def test_regression_precommit_passes_no_stray_subcommand(tmp_path: Path) -> None:
+def test_regression_precommit_passes_no_stray_subcommand_under_system_bash(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
@@ -23,7 +23,7 @@ def test_regression_precommit_passes_no_stray_subcommand(tmp_path: Path) -> None
     shim.chmod(0o755)
 
     subprocess.run(
-        ["bash", str(HOOK)],
+        ["/bin/bash", str(HOOK)],
         cwd=repo,
         capture_output=True,
         text=True,
