@@ -21,6 +21,10 @@ def _init_repo(tmp_path: Path) -> Path:
         ["git", "config", "user.email", "tester@merge-train.local"], cwd=repo, check=True
     )
     subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
+    # Host-wide hooks (core.hooksPath) must not decide whether the fixture commits.
+    subprocess.run(
+        ["git", "config", "core.hooksPath", "/dev/null"], cwd=repo, check=True
+    )
 
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(
