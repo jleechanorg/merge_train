@@ -4,13 +4,14 @@
 # What this does (idempotent):
 #   1. Verify Python >= 3.10 and git are available.
 #   2. `uv tool install` the merge_train package (isolated binary install).
-#   3. Wire per-CLI session-start / session-stop conflict-check hooks:
-#      a. .git/hooks/pre-commit  (last-resort fallback for raw git commits)
-#      b. .codex/hooks.json      (Codex SessionStart + Stop)
-#      c. .gemini/predict-spawn-check.sh + .gemini/settings.json (Antigravity)
-#      d. .opencode.json         (OpenCode custom /conflict-check command stub)
-#      NOTE: Claude Code global ~/.claude/settings.json is wired separately
-#            (already done if this install.sh is run with merge_train >= 0.2).
+#   3. Wire the conflict-check hooks (user scope unless noted):
+#      a. Claude Code  ~/.claude/settings.json
+#      b. Codex        ~/.codex/hooks.json (apply_patch)
+#      c. Gemini       ~/.gemini/settings.json (BeforeTool)
+#      d. Antigravity  ~/.gemini/config/hooks.json (via `merge_train install-hooks --agent agy`)
+#      e. Cursor       <target>/.cursor/hooks.json (project scope)
+#      f. OpenCode     ~/.config/opencode/plugins + <target>/.opencode.json
+#      g. .git/hooks/pre-commit  (last-resort fallback for raw git commits)
 #   4. Smoke-test the install (predict-conflicts --help).
 #   5. Print next steps.
 #
@@ -24,7 +25,7 @@
 # Flags:
 #   --no-hook            Skip the pre-commit hook installation.
 #   --force-hook         Replace an existing pre-commit hook (after backup).
-#   --no-yaml            Skip creating file_domains.yaml skeleton.
+#   --no-yaml            No-op, kept for compatibility (no registry file is created).
 #   --python PYTHON_BIN  Override python binary (default: python3).
 #   -h, --help           Show this help.
 
