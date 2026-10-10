@@ -1,6 +1,6 @@
 """Automatic symbol discovery from git/GitHub PR diffs.
 
-Extracts which Python symbols (functions, classes, methods) are touched
+Extracts which symbols (functions, classes, methods) are touched
 by a PR or the current staged changes — so callers can populate
 ``PRSpec.symbols_by_file`` without hand-authoring YAML.
 
@@ -10,8 +10,9 @@ The main entry points:
 * ``symbols_from_pr_diff(pr_number, repo)`` — uses ``gh pr diff``.
 
 Both return ``dict[str, set[str]]`` mapping file path -> symbol names.
-Non-Python files and files that fail to parse are silently omitted
-(callers fall back to whole-file locking for them).
+Every language in ``symbols.LANG_EXTENSIONS`` is resolved by its extractor;
+unsupported files and files that fail to parse are omitted (callers fall
+back to whole-file locking for them).
 """
 
 from __future__ import annotations
@@ -77,13 +78,13 @@ def _split_diff_by_file(diff_text: str) -> dict[str, str]:
 def symbols_from_staged_diff(
     cwd: Optional[Path] = None,
 ) -> dict[str, set[str]]:
-    """Return touched symbols for every staged Python file.
+    """Return touched symbols for every staged file in a supported language.
 
     Runs ``git diff --staged --name-only`` to enumerate changed files,
-    then resolves symbols for each ``.py`` file via the index.
+    then resolves symbols for each supported file via the index.
 
     Returns ``{file_path: set_of_symbol_names}``. Files that can't be
-    symbol-resolved (non-Python, parse errors) are silently omitted.
+    symbol-resolved (unsupported extension, parse errors) are omitted.
     """
     try:
         proc = subprocess.run(
@@ -275,11 +276,12 @@ def symbols_from_pr_diff(
     pr_number: int,
     repo: Optional[str] = None,
 ) -> dict[str, set[str]]:
-    """Return touched symbols for every Python file changed in a GitHub PR.
+    """Return touched symbols for every supported-language file changed in a GitHub PR.
 
     Uses ``gh pr diff --patch`` to get the full diff, splits it per file,
-    and calls :func:`~merge_train.symbols.touched_symbols` for each ``.py``
-    file. Post-edit content is fetched via ``gh api``.
+    and resolves symbols for each supported file: Python via
+    :func:`~merge_train.symbols.touched_symbols`, other languages via
+    ``merge_train.lang_extractors``. Post-edit content is fetched via ``gh api``.
 
     Files that cannot be fetched or parsed are silently omitted.
     Returns ``{file_path: set_of_symbol_names}``.
