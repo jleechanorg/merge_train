@@ -5,7 +5,8 @@
 #   1. Verify Python >= 3.10 and git are available.
 #   2. `uv tool install` the merge_train package (isolated binary install).
 #   3. Wire the conflict-check hooks (user scope unless noted):
-#      a. Claude Code  ~/.claude/settings.json
+#      a. Claude Code  ~/.claude/settings.json (patched inline at step 3d, then again by
+#                      `merge_train install-hooks --agent claude` at step 3e; both are idempotent)
 #      b. Codex        ~/.codex/hooks.json (apply_patch)
 #      c. Gemini       ~/.gemini/settings.json (BeforeTool)
 #      d. Antigravity  ~/.gemini/config/hooks.json (via `merge_train install-hooks --agent agy`)

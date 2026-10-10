@@ -81,7 +81,9 @@ def symbols_from_staged_diff(
     """Return touched symbols for every staged file in a supported language.
 
     Runs ``git diff --staged --name-only`` to enumerate changed files,
-    then resolves symbols for each supported file via the index.
+    then resolves symbols for each supported file via the index. Markdown
+    files are resolved by heading through their own branch
+    (``_touched_markdown_symbols``).
 
     Returns ``{file_path: set_of_symbol_names}``. Files that can't be
     symbol-resolved (unsupported extension, parse errors) are omitted.
@@ -281,7 +283,9 @@ def symbols_from_pr_diff(
     Uses ``gh pr diff --patch`` to get the full diff, splits it per file,
     and resolves symbols for each supported file: Python via
     :func:`~merge_train.symbols.touched_symbols`, other languages via
-    ``merge_train.lang_extractors``. Post-edit content is fetched via ``gh api``.
+    ``merge_train.lang_extractors``; Markdown files are resolved by heading
+    through their own branch (``_touched_markdown_symbols``). Post-edit
+    content is fetched via ``gh api``.
 
     Files that cannot be fetched or parsed are silently omitted.
     Returns ``{file_path: set_of_symbol_names}``.
