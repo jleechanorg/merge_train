@@ -33,9 +33,9 @@ fi
 
 # ── Resolve predict-conflicts CLI ─────────────────────────────────────────────
 if command -v predict-conflicts >/dev/null 2>&1; then
-  CLI_PREFIX="predict-conflicts"
+  CLI_CMD=(predict-conflicts)
 else
-  CLI_PREFIX="python3 -m merge_train.predict"
+  CLI_CMD=(python3 -m merge_train.predict)
 fi
 
 # ── Collect open PR numbers ───────────────────────────────────────────────────
@@ -85,7 +85,7 @@ fi
 # ── Run predict-conflicts ─────────────────────────────────────────────────────
 echo "merge_train: pre-commit — predicting conflicts across PRs: $OPEN_PRS ..." >&2
 
-PREDICT_JSON="$(eval "$CLI_PREFIX" \
+PREDICT_JSON="$("${CLI_CMD[@]}" \
   ${REGISTRY_ARG[@]+"${REGISTRY_ARG[@]}"} \
   --from-prs "$OPEN_PRS" \
   ${REPO_ARG[@]+"${REPO_ARG[@]}"} \
