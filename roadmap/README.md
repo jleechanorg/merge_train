@@ -2,6 +2,15 @@
 
 ## Recent activity (rolling)
 
+- 2026-10-10 — Apply the pre-commit argument-handling fixes from
+  [PR #48](https://github.com/jleechanorg/merge_train/pull/48) and
+  [PR #49](https://github.com/jleechanorg/merge_train/pull/49) to the spawn hook:
+  invoke an argv array directly, omit the stray subcommand, and guard empty
+  optional arrays for Bash 3.2. The
+  [test-first commit](https://github.com/jleechanorg/merge_train/commit/8164f0bc20771f3a62499465e9cd2392c3254dd0)
+  covers both CLI entry points, literal registry paths, and existing warn-only
+  outcomes without calling GitHub or the real prediction CLI.
+
 - 2026-10-08 — Archived-evidence validation now checks the byte integrity and
   internally consistent recorded metadata of sidecar-backed bundles, rather
   than claiming retired domain-lock captures prove the current implementation.
