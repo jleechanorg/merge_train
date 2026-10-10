@@ -39,11 +39,11 @@ fi
 
 # ── Resolve the predict-conflicts CLI ────────────────────────────────────────
 # predict-conflicts is a standalone entry point (pyproject.toml entry point)
-# or callable as: python3 -m merge_train.predict predict-conflicts
+# or callable as: python3 -m merge_train.predict
 if command -v predict-conflicts >/dev/null 2>&1; then
-  CLI_PREFIX="predict-conflicts"
+  CLI_CMD=(predict-conflicts)
 else
-  CLI_PREFIX="python3 -m merge_train.predict"
+  CLI_CMD=(python3 -m merge_train.predict)
 fi
 
 # ── Collect open PR numbers from GitHub ──────────────────────────────────────
@@ -90,11 +90,10 @@ fi
 # ── Run predict-conflicts (warn-only) ────────────────────────────────────────
 echo "merge_train: predicting conflicts across open PRs: $OPEN_PRS ..." >&2
 
-PREDICT_JSON="$(eval "$CLI_PREFIX" \
-  "${REGISTRY_ARG[@]}" \
-  predict-conflicts \
+PREDICT_JSON="$("${CLI_CMD[@]}" \
+  ${REGISTRY_ARG[@]+"${REGISTRY_ARG[@]}"} \
   --from-prs "$OPEN_PRS" \
-  "${REPO_ARG[@]}" \
+  ${REPO_ARG[@]+"${REPO_ARG[@]}"} \
   --json \
   2>/dev/null || true)"
 
