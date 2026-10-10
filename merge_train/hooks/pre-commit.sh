@@ -86,10 +86,9 @@ fi
 echo "merge_train: pre-commit — predicting conflicts across PRs: $OPEN_PRS ..." >&2
 
 PREDICT_JSON="$(eval "$CLI_PREFIX" \
-  "${REGISTRY_ARG[@]}" \
-  predict-conflicts \
+  ${REGISTRY_ARG[@]+"${REGISTRY_ARG[@]}"} \
   --from-prs "$OPEN_PRS" \
-  "${REPO_ARG[@]}" \
+  ${REPO_ARG[@]+"${REPO_ARG[@]}"} \
   --json \
   2>/dev/null || true)"
 
