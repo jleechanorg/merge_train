@@ -540,6 +540,36 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
         absolute_roots.discard(None)
         return absolute_roots.pop() if len(absolute_roots) == 1 else None
 
+    # A relative mutation can escape its nested workdir (for example,
+    # ``../sibling-repo/file.py``). Resolve it against the same explicit
+    # context that supplies its base before selecting a repository. Otherwise
+    # the workdir's repo can be selected first and the escaped path later
+    # remains an unmatched raw string during conflict lookup.
+    relative_contexts: list[str] = []
+    for contexts in (nested_workdirs, tool_dirs, payload_dirs):
+        relative_contexts = [d for d in contexts if isinstance(d, str) and d]
+        if relative_contexts:
+            break
+    if relative_contexts and not any(
+        isinstance(path, str) and Path(path).is_absolute() for path in raw_paths
+    ):
+        relative_roots = set()
+        for path in raw_paths:
+            if not isinstance(path, str) or Path(path).is_absolute():
+                continue
+            for directory in relative_contexts:
+                try:
+                    resolved_path = str((Path(directory) / path).resolve())
+                except (OSError, RuntimeError):
+                    continue
+                root = _repo_root_for_mutation_path(resolved_path)
+                if root:
+                    relative_roots.add(root)
+        if len(relative_roots) == 1:
+            return relative_roots.pop()
+        if len(relative_roots) > 1:
+            return None
+
     # An absolute mutation target identifies the checkout being changed, even
     # when an outer orchestration payload contains a nested workdir from its
     # own repository.

@@ -630,6 +630,77 @@ def test_nested_literal_workdir_does_not_override_absolute_target_repo(tmp_path:
     assert "PR#123" in output["systemMessage"]
 
 
+def test_relative_target_escaping_nested_workdir_uses_target_repo(tmp_path: Path) -> None:
+    """Relative targets are resolved from workdir before selecting the repo."""
+    import os
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    workdir_repo = tmp_path / "workdir-repo"
+    target_repo = tmp_path / "target-repo"
+    for repo in (workdir_repo, target_repo):
+        repo.mkdir()
+        subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    (target_repo / "target").mkdir()
+    target = target_repo / "target" / "changed.py"
+    Path(f"/tmp/merge_train_cache_{target_repo.name}.json").unlink(missing_ok=True)
+    test_home = tmp_path / "home"
+    (test_home / "merge_train").mkdir(parents=True)
+    (test_home / "merge_train" / "config.json").write_text(json.dumps({
+        "default_enforcement": "warn",
+        "repos": {str(target_repo): {"alias": "merge_train", "enforcement": "block"}},
+    }))
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$2\" = \"list\" ]; then\n"
+        "  printf '%s\\n' '[{\"number\":123,\"headRefName\":\"other-branch\",\"headRefOid\":\"oid-123\"}]'\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [ \"$2\" = \"diff\" ]; then\n"
+        "  printf '%s\\n' 'target/changed.py'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    fake_gh.chmod(0o755)
+
+    for file_path in ("../target-repo/target/changed.py", str(target)):
+        payload = json.dumps({
+            "tool_name": "Write",
+            "cwd": str(tmp_path),
+            "code": (
+                'await tools.exec_command({cmd: "git status", '
+                f'workdir: "{workdir_repo}"' + '});'
+            ),
+            "tool_input": {"file_path": file_path, "content": "new file\\n"},
+        })
+        result = subprocess.run(
+            [sys.executable, str(helper)],
+            input=payload.encode(),
+            capture_output=True,
+            cwd=str(tmp_path),
+            env={
+                **os.environ,
+                "HOME": str(test_home),
+                "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            },
+        )
+        assert result.returncode == 0
+        assert "CONFLICT" in result.stderr.decode(), (
+            f"file_path={file_path!r} stdout={result.stdout.decode()!r} "
+            f"stderr={result.stderr.decode()!r}"
+        )
+        output = json.loads(result.stdout.decode().strip().splitlines()[-1])
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert "PR#123" in output["systemMessage"]
+
+
 def test_nested_exec_workdir_ignores_cmd_comments_and_nested_properties(tmp_path: Path) -> None:
     """Only a top-level exec argument can identify the nested command repo."""
     import importlib.util
