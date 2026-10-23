@@ -403,6 +403,32 @@ def test_absolute_mutation_target_disambiguates_outer_payload_cwd(tmp_path: Path
     ) is None
 
 
+def test_relative_mutation_outside_implicit_cwd_repo_uses_target_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A relative path escaping cwd must be checked in the target checkout."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    outer_repo = tmp_path / "outer"
+    target_repo = tmp_path / "target"
+    for repo in (outer_repo, target_repo):
+        repo.mkdir()
+        subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+
+    monkeypatch.chdir(outer_repo)
+    target = "../target/changed.py"
+    assert module._resolve_repo_root({}, {}, [target]) == str(target_repo)
+    assert module._normalize_rel(
+        target, target_repo, module._mutation_context_directories({}, {})
+    ) == "changed.py"
+
+
 def test_absolute_target_in_new_directory_checks_target_repo(tmp_path: Path) -> None:
     """An Add-file target identifies its checkout before its parent exists."""
     import os
@@ -1202,3 +1228,23 @@ def test_opencode_apply_patch_text_cannot_override_target_repo_with_nested_workd
     decision = json.loads(result.stdout.decode().strip().splitlines()[-1])
     assert decision["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert "PR#123" in decision["systemMessage"]
+
+
+def test_valid_json_with_unexpected_tool_input_shape_allows_cleanly(tmp_path: Path) -> None:
+    """Malformed hook fields must not leave Codex with a failed helper exit."""
+    import os
+
+    helper = _helper_path_for_test()
+    payload = json.dumps({"tool_name": "Edit", "tool_input": ["unexpected"]})
+    result = subprocess.run(
+        [sys.executable, str(helper), "--runtime", "codex"],
+        input=payload.encode(), capture_output=True, cwd=str(tmp_path),
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+    )
+
+    assert result.returncode == 0, result.stderr.decode()
+    output = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    hook_output = output["hookSpecificOutput"]
+    assert hook_output.get("permissionDecision") != "deny"
+    assert "helper failed" in hook_output["additionalContext"]
+    assert "helper failed" in output["systemMessage"]

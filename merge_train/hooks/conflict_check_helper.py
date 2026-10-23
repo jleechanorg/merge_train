@@ -571,6 +571,10 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
         relative_contexts = [d for d in contexts if isinstance(d, str) and d]
         if relative_contexts:
             break
+    # When the hook payload carries no working-directory context, relative
+    # mutation paths are relative to the process cwd used by the hook.
+    if not relative_contexts:
+        relative_contexts = [str(Path.cwd())]
     if relative_contexts and not any(
         isinstance(path, str) and Path(path).is_absolute() for path in raw_paths
     ):
@@ -648,6 +652,8 @@ def _mutation_context_directories(payload: dict, tool_input: dict) -> list[str]:
                                      payload.get("workdir"), payload.get("cwd"))
         if isinstance(directory, str) and directory
     )
+    if not contexts:
+        contexts.append(str(Path.cwd()))
     return contexts
 
 
@@ -744,7 +750,7 @@ def _collect_conflicts_for_path(
 # --------------------------------------------------------------------------- #
 
 
-def main(runtime: str = "claude") -> None:
+def _main(runtime: str = "claude") -> None:
     if _IMPORT_FAILED:
         _emit("allow", "merge_train: package import failed; allowing", runtime)
         return
@@ -999,6 +1005,15 @@ def main(runtime: str = "claude") -> None:
 
     # No conflicts — silent approve. No systemMessage to avoid noise on every edit.
     _silent_approve(runtime)
+
+
+def main(runtime: str = "claude") -> None:
+    """Run the hook fail-open if an unexpected payload shape breaks parsing."""
+    try:
+        _main(runtime)
+    except Exception as exc:
+        print(f"merge_train: conflict helper failed; allowing: {exc}", file=sys.stderr)
+        _emit("allow", "merge_train: conflict helper failed; allowing.", runtime)
 
 
 if __name__ == "__main__":
