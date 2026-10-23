@@ -376,6 +376,15 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                     index += 1
                 key = source[key_start:index]
             index = skip_space_and_comments(index)
+            if key in ("get", "set") and (
+                source.startswith("workdir", index)
+                and (index + len("workdir") == len(source)
+                     or not (source[index + len("workdir")].isalnum()
+                             or source[index + len("workdir")] in "_$"))
+                or index < len(source) and source[index] == "["
+            ):
+                # Accessor syntax can compute the workdir dynamically.
+                return True, True, None
             if index >= len(source) or source[index] != ":":
                 # A bare workdir is JS shorthand, so its value is dynamic.
                 # Computed keys and spreads can also supply/override workdir;
@@ -420,7 +429,18 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
     index = 0
     while index < len(source):
         if source[index] in ("'", '"', "`"):
-            index = skip_quoted(index)
+            if source[index] == "`":
+                end = skip_quoted(index)
+                template = source[index:end]
+                if "${" in template and "tools.exec_command" in template:
+                    # Nested calls inside template interpolations are source
+                    # expressions, but parsing them safely requires a full JS
+                    # parser. Preserve ambiguity instead of using outer cwd.
+                    recognized_workdir = True
+                    unresolved_workdir = True
+                index = end
+            else:
+                index = skip_quoted(index)
             continue
         if source.startswith("//", index):
             newline = source.find("\n", index + 2)

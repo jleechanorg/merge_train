@@ -173,6 +173,51 @@ def test_hook_script_handles_non_git_cwd(log_root: Path, tmp_path: Path) -> None
     )
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        'await tools.exec_command({cmd: "git status", get workdir() { return target; }});',
+        'const result = `nested: ${await tools.exec_command({cmd: "git status", workdir: target})}`;',
+    ],
+    ids=["getter-workdir", "template-interpolation"],
+)
+def test_hook_script_does_not_use_outer_repo_for_opaque_nested_workdir(
+    log_root: Path, tmp_path: Path, source: str
+) -> None:
+    """Opaque nested workdirs must not be attributed to the hook's outer repo."""
+    import os
+
+    outer_repo = tmp_path / "outer-hook-repo"
+    outer_repo.mkdir()
+    subprocess.run(["git", "init", str(outer_repo)], check=True, capture_output=True)
+
+    # If the resolver incorrectly falls back to outer_repo, a harmless fake gh
+    # gives it a successful empty PR list without making a network request.
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text("#!/bin/sh\nprintf '[]\\n'\n")
+    fake_gh.chmod(0o755)
+
+    payload = json.dumps({
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "target.py"},
+        "code": source,
+    })
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    result = subprocess.run(
+        ["bash", str(_hook_script())], input=payload.encode(), capture_output=True,
+        cwd=outer_repo, env=env, timeout=30,
+    )
+
+    assert result.returncode == 0
+    emitted = [json.loads(line) for line in result.stdout.decode().splitlines() if line.strip()]
+    assert emitted, "opaque nested context should report an unresolved-repo allow"
+    reason = emitted[-1].get("hookSpecificOutput", {}).get("additionalContext", "")
+    assert "not inside a git repo" in reason
+
+
 def test_hook_script_redacts_arbitrary_body_keys(log_root: Path) -> None:
     """Regression test for the brittle redaction logic.
 
