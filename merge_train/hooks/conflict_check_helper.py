@@ -431,7 +431,7 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                 return found, False, value
         return found, False, value
 
-    results: list[str] = []
+    results: list[str | None] = []
     recognized_workdir = False
     unresolved_workdir = False
     index = 0
@@ -468,11 +468,14 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                     object_start = skip_space_and_comments(call_paren + 1)
                     if object_start < len(source) and source[object_start] == "{":
                         found, ambiguous, value = workdir_property(object_start)
+                        # A call with no workdir uses the invoking process's
+                        # cwd. Keep it in the set of candidate bases so a
+                        # sibling call with a different explicit workdir is
+                        # recognized as ambiguous.
+                        results.append(value if found else None)
+                        recognized_workdir = True
                         if found:
-                            recognized_workdir = True
                             unresolved_workdir = unresolved_workdir or ambiguous or value is None
-                        if value:
-                            results.append(value)
                     else:
                         # The call may receive a named options object (or
                         # another expression) whose workdir cannot be
@@ -510,7 +513,7 @@ def _nested_exec_sources(payload: dict, tool_input: dict) -> list[str]:
 
 def _literal_exec_command_workdirs(source: str) -> list[str]:
     """Return parsed workdir literals for compatibility with focused callers."""
-    return _scan_literal_exec_command_workdirs(source)[2]
+    return [value for value in _scan_literal_exec_command_workdirs(source)[2] if value]
 
 
 def _repo_root_for_directory(directory: str) -> str | None:
@@ -541,50 +544,41 @@ def _resolve_repo_root(
 ) -> str | None:
     """Resolve context only from explicit hook cwd/workdir or mutation paths.
 
-    Absolute mutation targets take priority over nested orchestration context;
-    they identify the checkout being changed. Nested exec workdirs then
-    identify the base for relative paths. Multiple explicit roots are treated
-    as ambiguous; the hook never searches unrelated repositories.
+    Every target must independently identify the same checkout. Nested exec
+    workdirs identify the base for relative paths. Multiple explicit roots,
+    unresolved paths, and targets outside that checkout are ambiguous; the hook
+    never searches unrelated repositories.
     """
     if context_dirs is None:
         context_dirs = _mutation_context_directories(payload, tool_input)
-    if any(isinstance(path, str) and not Path(path).is_absolute() for path in raw_paths):
-        if not context_dirs:
+    if not raw_paths:
+        return _repo_root_for_directory(context_dirs[0]) if len(context_dirs) == 1 else None
+    roots: set[str] = set()
+    for path in raw_paths:
+        if not isinstance(path, str):
             return None
-        # Resolve the repository and normalized path from the same single
-        # context. Multiple relative bases are ambiguous even if they happen
-        # to belong to the same checkout: the same filename can identify two
-        # different files, so selecting either can produce a false denial.
-        roots = set()
-        for path in raw_paths:
-            if not isinstance(path, str):
+        if Path(path).is_absolute():
+            candidates = [Path(path)]
+        else:
+            if not context_dirs:
+                return None
+            candidates = [Path(directory) / path for directory in context_dirs]
+        path_roots: set[str] = set()
+        for candidate in candidates:
+            try:
+                resolved_path = candidate.resolve()
+            except (OSError, RuntimeError):
                 continue
-            for directory in ([None] if Path(path).is_absolute() else context_dirs):
-                try:
-                    resolved_path = (
-                        Path(path) if directory is None else Path(directory) / path
-                    ).resolve()
-                except (OSError, RuntimeError):
-                    continue
-                root = _repo_root_for_mutation_path(str(resolved_path))
-                if root:
-                    roots.add(root)
-        return roots.pop() if len(roots) == 1 else None
-
-    # Absolute mutation targets identify their checkout independently of an
-    # outer orchestration cwd.
-    roots = {
-        _repo_root_for_mutation_path(path)
-        for path in raw_paths
-        if isinstance(path, str) and Path(path).is_absolute()
-    }
-    roots.discard(None)
-    if len(roots) == 1:
-        return roots.pop()
-    if roots:
-        return None
-
-    return _repo_root_for_directory(context_dirs[0]) if context_dirs else None
+            root = _repo_root_for_mutation_path(str(resolved_path))
+            if root:
+                path_roots.add(root)
+        # Every target must identify exactly one root. A path outside Git, an
+        # unresolved path, or multiple candidate bases is ambiguous; do not
+        # retain a different target's root as an accidental fallback.
+        if len(path_roots) != 1:
+            return None
+        roots.update(path_roots)
+    return roots.pop() if len(roots) == 1 else None
 
 
 def _mutation_context_directories(payload: dict, tool_input: dict) -> list[str]:
@@ -594,23 +588,45 @@ def _mutation_context_directories(payload: dict, tool_input: dict) -> list[str]:
     Return no context so callers fail open instead of checking an arbitrary
     same-named file selected by iteration order.
     """
-    nested: list[str] = []
+    nested: list[str | None] = []
     nested_seen = nested_unresolved = False
     for source in _nested_exec_sources(payload, tool_input):
         found, unresolved, workdirs = _scan_literal_exec_command_workdirs(source)
         nested_seen = nested_seen or found
         nested_unresolved = nested_unresolved or unresolved
         nested.extend(workdirs)
-    candidates = nested if nested_seen else [
+    outer = [
         directory for directory in (tool_input.get("workdir"), tool_input.get("cwd"),
                                      payload.get("workdir"), payload.get("cwd"))
         if isinstance(directory, str) and directory
     ]
     if nested_seen and nested_unresolved:
         return []
+    if nested_seen:
+        candidates = []
+        for directory in nested:
+            if directory is not None:
+                candidates.append(directory)
+            else:
+                # Nested calls without workdir inherit the payload/tool cwd.
+                # If that context is absent, use the process cwd already
+                # captured by this hook invocation.
+                candidates.extend(outer or [str(Path.cwd())])
+    else:
+        candidates = outer
     if not candidates:
         candidates = [str(Path.cwd())]
     try:
+        absolute_outer = [str(Path(directory).resolve()) for directory in outer
+                          if Path(directory).is_absolute()]
+        if any(not Path(directory).is_absolute() for directory in candidates):
+            # Relative workdirs are meaningful only against one known outer
+            # invocation directory. Never reinterpret them against hook cwd.
+            if len(set(absolute_outer)) != 1:
+                return []
+            base = Path(absolute_outer[0])
+            candidates = [str(Path(directory) if Path(directory).is_absolute()
+                              else base / directory) for directory in candidates]
         unique = list(dict.fromkeys(str(Path(directory).resolve()) for directory in candidates))
     except (OSError, RuntimeError):
         return []
@@ -619,20 +635,19 @@ def _mutation_context_directories(payload: dict, tool_input: dict) -> list[str]:
 
 def _normalize_rel(
     file_path: str, repo_path: Path, context_dirs: list[str] | None = None
-) -> str:
-    """Best-effort path relative to the repo root (posix); falls back to raw."""
+) -> str | None:
+    """Resolve a target relative to the repo root; reject out-of-root paths."""
     try:
         candidates = [Path(file_path)]
         if not Path(file_path).is_absolute():
             candidates = [Path(directory) / file_path for directory in (context_dirs or [])]
-            candidates.append(Path(file_path))
         for candidate in candidates:
             abs_path = candidate.resolve()
             if abs_path.is_relative_to(repo_path):
                 return abs_path.relative_to(repo_path).as_posix()
     except Exception:
         pass
-    return file_path
+    return None
 
 
 def _collect_conflicts_for_path(
@@ -776,6 +791,10 @@ def _main(runtime: str = "claude") -> None:
 
     # Normalize every target path relative to repo root.
     rel_paths = [_normalize_rel(fp, repo_path, context_dirs) for fp in raw_paths]
+    if any(path is None for path in rel_paths):
+        _emit("allow", "merge_train: target path is ambiguous or outside the selected git repo; allowing.", runtime)
+        return
+    rel_paths = [path for path in rel_paths if path is not None]
     paths_label = ", ".join(f"'{p}'" for p in rel_paths)
 
     # Current branch.

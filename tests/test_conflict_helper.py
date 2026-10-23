@@ -403,6 +403,25 @@ def test_absolute_mutation_target_disambiguates_outer_payload_cwd(tmp_path: Path
     ) is None
 
 
+def test_mixed_absolute_and_relative_targets_outside_root_fail_open(tmp_path: Path) -> None:
+    """Every target must normalize inside the selected repository."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / "merge_train"
+    repo.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    payload = {"cwd": str(tmp_path)}
+    paths = [str(repo / "changed.py"), "../outside/hook_install.py"]
+    assert module._resolve_repo_root(payload, {}, paths) is None
+    assert module._normalize_rel(paths[1], repo, [str(tmp_path)]) is None
+
+
 def test_relative_mutation_outside_implicit_cwd_repo_uses_target_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -547,6 +566,30 @@ def test_distinct_nested_dirs_in_one_repo_make_relative_target_ambiguous(
 
     assert module._mutation_context_directories(payload, {}) == []
     assert module._resolve_repo_root(payload, {}, ["shared.py"]) is None
+
+
+def test_explicit_and_implicit_nested_calls_are_ambiguous_in_both_orders(
+    tmp_path: Path,
+) -> None:
+    """An omitted workdir means outer cwd, not the previous call's cwd."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / "repo"
+    nested = repo / "nested"
+    nested.mkdir(parents=True)
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    explicit = f'tools.exec_command({{cmd: "edit", workdir: "{nested}"}})'
+    implicit = 'tools.exec_command({cmd: "edit"})'
+    for source in (f"{explicit}; {implicit};", f"{implicit}; {explicit};"):
+        payload = {"code": source, "cwd": str(repo)}
+        assert module._mutation_context_directories(payload, {}) == []
+        assert module._resolve_repo_root(payload, {}, ["hook_install.py"]) is None
 
 
 def test_relative_mutation_under_nested_workdir_uses_repo_relative_path(tmp_path: Path) -> None:
