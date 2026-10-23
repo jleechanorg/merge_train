@@ -502,6 +502,14 @@ def _repo_root_for_directory(directory: str) -> str | None:
     return resolved or None
 
 
+def _repo_root_for_mutation_path(path: str) -> str | None:
+    """Resolve a Git root through the nearest existing target ancestor."""
+    directory = Path(path).parent
+    while not directory.is_dir() and directory != directory.parent:
+        directory = directory.parent
+    return _repo_root_for_directory(str(directory))
+
+
 def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) -> str | None:
     """Resolve context only from explicit hook cwd/workdir or mutation paths.
 
@@ -524,7 +532,7 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
 
     if nested_context_seen and nested_context_unresolved:
         absolute_roots = {
-            _repo_root_for_directory(str(Path(path).parent))
+            _repo_root_for_mutation_path(path)
             for path in raw_paths
             if isinstance(path, str) and Path(path).is_absolute()
         }
@@ -550,7 +558,7 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
     # with absolute paths). They disambiguate an outer payload cwd, which may
     # belong to the orchestration repo. Relative paths need a declared cwd.
     roots = {
-        _repo_root_for_directory(str(Path(path).parent))
+        _repo_root_for_mutation_path(path)
         for path in raw_paths
         if isinstance(path, str) and Path(path).is_absolute()
     }

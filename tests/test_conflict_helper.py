@@ -403,6 +403,73 @@ def test_absolute_mutation_target_disambiguates_outer_payload_cwd(tmp_path: Path
     ) is None
 
 
+def test_absolute_target_in_new_directory_checks_target_repo(tmp_path: Path) -> None:
+    """An Add-file target identifies its checkout before its parent exists."""
+    import os
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    outer_repo = tmp_path / "outer"
+    target_repo = tmp_path / "merge_train"
+    for repo in (outer_repo, target_repo):
+        repo.mkdir()
+        subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+
+    target = target_repo / "newdir" / "changed.py"
+    assert not target.parent.exists()
+    assert module._resolve_repo_root(
+        {"cwd": str(outer_repo)}, {}, [str(target)]
+    ) == str(target_repo)
+
+    cache_file = Path(f"/tmp/merge_train_cache_{target_repo.name}.json")
+    cache_file.unlink(missing_ok=True)
+    test_home = tmp_path / "home"
+    (test_home / "merge_train").mkdir(parents=True)
+    (test_home / "merge_train" / "config.json").write_text(json.dumps({
+        "default_enforcement": "warn",
+        "repos": {str(target_repo): {"alias": "merge_train", "enforcement": "block"}},
+    }))
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$2\" = \"list\" ]; then\n"
+        "  printf '%s\\n' '[{\"number\":123,\"headRefName\":\"other-branch\",\"headRefOid\":\"oid-123\"}]'\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [ \"$2\" = \"diff\" ]; then\n"
+        "  printf '%s\\n' 'newdir/changed.py'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    fake_gh.chmod(0o755)
+    payload = json.dumps({
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(target), "content": "new file\n"},
+    })
+    result = subprocess.run(
+        [sys.executable, str(helper)],
+        input=payload.encode(),
+        capture_output=True,
+        cwd=str(outer_repo),
+        env={
+            **os.environ,
+            "HOME": str(test_home),
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+        },
+    )
+    assert result.returncode == 0
+    assert "CONFLICT" in result.stderr.decode()
+    output = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "PR#123" in output["systemMessage"]
+
+
 def test_resolve_repo_root_uses_nested_exec_command_workdir(tmp_path: Path) -> None:
     """A nested command's explicit workdir wins over the outer non-repo cwd."""
     import importlib.util
