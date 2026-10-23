@@ -474,6 +474,56 @@ def test_resolve_repo_root_keeps_true_nonrepo_silent(tmp_path: Path) -> None:
     assert module._resolve_repo_root(payload, {}, []) is None
 
 
+def test_unresolved_nested_exec_workdir_blocks_outer_repo_fallback(tmp_path: Path) -> None:
+    """An unparseable nested context must not attribute the outer repo."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    outer_repo = tmp_path / "outer-repo"
+    outer_repo.mkdir()
+    subprocess.run(["git", "init", str(outer_repo)], check=True, capture_output=True)
+    source = 'await tools.exec_command({cmd: "git status", workdir: repo_path});'
+
+    assert module._resolve_repo_root(
+        {"code": source, "cwd": str(outer_repo)}, {}, []
+    ) is None
+    assert module._resolve_repo_root(
+        {"code": source, "cwd": str(outer_repo)}, {},
+        [str(outer_repo / "target.py")],
+    ) == str(outer_repo)
+
+
+def test_duplicate_nested_exec_workdir_blocks_outer_repo_fallback(tmp_path: Path) -> None:
+    """Duplicate JS keys are ambiguous because runtime semantics use the last."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    outer_repo = tmp_path / "outer-repo"
+    first_repo = tmp_path / "first-repo"
+    last_repo = tmp_path / "last-repo"
+    for repo in (outer_repo, first_repo, last_repo):
+        repo.mkdir()
+        subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    source = (
+        'await tools.exec_command({cmd: "git status", '
+        f'workdir: "{first_repo}", workdir: "{last_repo}"' + '});'
+    )
+
+    assert module._resolve_repo_root(
+        {"code": source, "cwd": str(outer_repo)}, {}, []
+    ) is None
+
+
 def test_issue42_decision_payload_never_emits_approve_as_permission_decision() -> None:
     """Unit-level regression for issue #42: _decision_payload must never set
     hookSpecificOutput.permissionDecision to 'approve'.

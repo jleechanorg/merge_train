@@ -284,7 +284,7 @@ def _extract_paths(tool_name: str, tool_input: dict, payload: dict) -> list:
     return [single] if single else []
 
 
-def _literal_exec_command_workdirs(source: str) -> list[str]:
+def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[str]]:
     """Read static ``workdir`` literals from nested ``tools.exec_command`` calls.
 
     Some orchestration tools wrap a command call in source text and run their
@@ -355,12 +355,14 @@ def _literal_exec_command_workdirs(source: str) -> list[str]:
             index += 1
         return index
 
-    def workdir_property(object_start: int) -> str | None:
+    def workdir_property(object_start: int) -> tuple[bool, bool, str | None]:
         index = object_start + 1
+        found = False
+        value: str | None = None
         while index < len(source):
             index = skip_space_and_comments(index)
             if index >= len(source) or source[index] == "}":
-                return None
+                return found, False, value
             key_start = index
             if source[index] in ("'", '"'):
                 key_end = skip_quoted(index)
@@ -380,29 +382,35 @@ def _literal_exec_command_workdirs(source: str) -> list[str]:
                 if index < len(source) and source[index] == ",":
                     index += 1
                     continue
-                return None
+                return found, False, value
             value_start = skip_space_and_comments(index + 1)
             value_end = property_value_end(value_start)
             if key == "workdir":
-                value = None
+                if found:
+                    return True, True, None
+                found = True
+                parsed_value = None
                 if value_start < value_end and source[value_start] in ("'", '"'):
                     token_end = skip_quoted(value_start)
                     if skip_space_and_comments(token_end) == value_end:
                         try:
-                            value = literal_eval(source[value_start:token_end])
+                            parsed_value = literal_eval(source[value_start:token_end])
                         except (SyntaxError, ValueError):
                             pass
-                if isinstance(value, str) and value:
-                    return value
-                return None
+                if isinstance(parsed_value, str) and parsed_value:
+                    value = parsed_value
+                else:
+                    return True, True, None
             index = value_end
             if index < len(source) and source[index] == ",":
                 index += 1
             elif index < len(source) and source[index] == "}":
-                return None
-        return None
+                return found, False, value
+        return found, False, value
 
     results: list[str] = []
+    recognized_workdir = False
+    unresolved_workdir = False
     index = 0
     while index < len(source):
         if source[index] in ("'", '"', "`"):
@@ -425,11 +433,19 @@ def _literal_exec_command_workdirs(source: str) -> list[str]:
                 if call_paren < len(source) and source[call_paren] == "(":
                     object_start = skip_space_and_comments(call_paren + 1)
                     if object_start < len(source) and source[object_start] == "{":
-                        value = workdir_property(object_start)
+                        found, ambiguous, value = workdir_property(object_start)
+                        if found:
+                            recognized_workdir = True
+                            unresolved_workdir = unresolved_workdir or ambiguous or value is None
                         if value:
                             results.append(value)
         index += 1
-    return results
+    return recognized_workdir, unresolved_workdir, results
+
+
+def _literal_exec_command_workdirs(source: str) -> list[str]:
+    """Return parsed workdir literals for compatibility with focused callers."""
+    return _scan_literal_exec_command_workdirs(source)[2]
 
 
 def _repo_root_for_directory(directory: str) -> str | None:
@@ -454,10 +470,24 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
     tool_dirs = [tool_input.get("workdir"), tool_input.get("cwd")]
     payload_dirs = [payload.get("workdir"), payload.get("cwd")]
     nested_workdirs: list[str] = []
+    nested_context_seen = False
+    nested_context_unresolved = False
     for source in (payload.get("code"), payload.get("command"),
                    tool_input.get("code"), tool_input.get("command")):
         if isinstance(source, str):
-            nested_workdirs.extend(_literal_exec_command_workdirs(source))
+            found, unresolved, workdirs = _scan_literal_exec_command_workdirs(source)
+            nested_context_seen = nested_context_seen or found
+            nested_context_unresolved = nested_context_unresolved or unresolved
+            nested_workdirs.extend(workdirs)
+
+    if nested_context_seen and nested_context_unresolved:
+        absolute_roots = {
+            _repo_root_for_directory(str(Path(path).parent))
+            for path in raw_paths
+            if isinstance(path, str) and Path(path).is_absolute()
+        }
+        absolute_roots.discard(None)
+        return absolute_roots.pop() if len(absolute_roots) == 1 else None
 
     # The explicit nested workdir wins over an outer orchestration cwd.
     for preferred in (nested_workdirs, tool_dirs):
