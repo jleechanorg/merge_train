@@ -377,7 +377,13 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                 key = source[key_start:index]
             index = skip_space_and_comments(index)
             if index >= len(source) or source[index] != ":":
-                # Methods, spreads and malformed properties are not candidates.
+                # A bare workdir is JS shorthand, so its value is dynamic.
+                # Computed keys and spreads can also supply/override workdir;
+                # keep the whole nested context unresolved rather than falling
+                # back to the outer hook cwd.
+                if key == "workdir" or source.startswith("...", key_start) or source[key_start] == "[":
+                    return True, True, None
+                # Methods and malformed properties are not candidates.
                 index = property_value_end(index)
                 if index < len(source) and source[index] == ",":
                     index += 1
