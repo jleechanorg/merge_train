@@ -1134,3 +1134,71 @@ def test_pr_cache_reuses_files_until_head_sha_changes(tmp_path: Path) -> None:
     assert _diff_calls() == 1, (
         f"only the PR whose head SHA moved may be re-diffed; saw {counter.read_text()}"
     )
+
+
+def test_opencode_apply_patch_text_cannot_override_target_repo_with_nested_workdir(
+    tmp_path: Path,
+) -> None:
+    """Patch contents are mutation data, not executable orchestration context."""
+    import os
+
+    helper = _helper_path_for_test()
+    target_repo = tmp_path / "target-repo"
+    nested_repo = tmp_path / "nested-repo"
+    for repo in (target_repo, nested_repo):
+        repo.mkdir()
+        subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "remote", "add", "origin", f"https://github.com/test/{repo.name}.git"],
+            cwd=str(repo), check=True, capture_output=True,
+        )
+
+    Path(f"/tmp/merge_train_cache_{target_repo.name}.json").unlink(missing_ok=True)
+    test_home = tmp_path / "home"
+    config_dir = test_home / "merge_train"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text(json.dumps({
+        "default_enforcement": "warn",
+        "repos": {str(target_repo): {"alias": "target", "enforcement": "block"}},
+    }))
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$2\" = \"list\" ]; then\n"
+        "  printf '%s\\n' '[{\"number\":123,\"headRefName\":\"other-branch\",\"headRefOid\":\"oid-123\"}]'\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [ \"$2\" = \"diff\" ]; then\n"
+        "  printf '%s\\n' 'changed.py'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    fake_gh.chmod(0o755)
+
+    # This mirrors opencode-conflict-plugin.js: patchText is passed as the
+    # apply_patch command field. The added JS happens to contain an
+    # orchestration helper call naming another repository's workdir.
+    patch_text = (
+        "*** Begin Patch\n*** Update File: changed.py\n"
+        "+await tools.exec_command({cmd: \"git status\", "
+        f"workdir: \"{nested_repo}\"" + "});\n"
+        "*** End Patch\n"
+    )
+    payload = json.dumps({
+        "tool_name": "apply_patch",
+        "tool_input": {"command": patch_text},
+    })
+    result = subprocess.run(
+        [sys.executable, str(helper)], input=payload.encode(), capture_output=True,
+        cwd=str(target_repo),
+        env={**os.environ, "HOME": str(test_home), "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+    )
+
+    assert result.returncode == 0
+    assert "CONFLICT" in result.stderr.decode(), (
+        f"stdout={result.stdout.decode()!r} stderr={result.stderr.decode()!r}"
+    )
+    decision = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    assert decision["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "PR#123" in decision["systemMessage"]

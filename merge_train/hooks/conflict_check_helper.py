@@ -485,6 +485,29 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
     return recognized_workdir, unresolved_workdir, results
 
 
+def _nested_exec_sources(payload: dict, tool_input: dict) -> list[str]:
+    """Return source fields that can represent executable orchestration.
+
+    OpenCode's ``apply_patch`` puts the patch body in ``tool_input.command``.
+    Its contents are mutation data, even when the added text contains a
+    literal ``tools.exec_command`` call, so it must never choose the checkout
+    whose conflicts are inspected.
+    """
+    tool_call = payload.get("toolCall") or {}
+    tool_name = (
+        tool_call.get("name") or payload.get("name") or payload.get("tool_name")
+        or payload.get("tool") or ""
+    ).lower()
+    if tool_name == "apply_patch":
+        return []
+    return [
+        source for source in (
+            payload.get("code"), payload.get("command"),
+            tool_input.get("code"), tool_input.get("command"),
+        ) if isinstance(source, str)
+    ]
+
+
 def _literal_exec_command_workdirs(source: str) -> list[str]:
     """Return parsed workdir literals for compatibility with focused callers."""
     return _scan_literal_exec_command_workdirs(source)[2]
@@ -523,13 +546,11 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
     nested_workdirs: list[str] = []
     nested_context_seen = False
     nested_context_unresolved = False
-    for source in (payload.get("code"), payload.get("command"),
-                   tool_input.get("code"), tool_input.get("command")):
-        if isinstance(source, str):
-            found, unresolved, workdirs = _scan_literal_exec_command_workdirs(source)
-            nested_context_seen = nested_context_seen or found
-            nested_context_unresolved = nested_context_unresolved or unresolved
-            nested_workdirs.extend(workdirs)
+    for source in _nested_exec_sources(payload, tool_input):
+        found, unresolved, workdirs = _scan_literal_exec_command_workdirs(source)
+        nested_context_seen = nested_context_seen or found
+        nested_context_unresolved = nested_context_unresolved or unresolved
+        nested_workdirs.extend(workdirs)
 
     if nested_context_seen and nested_context_unresolved:
         absolute_roots = {
@@ -620,10 +641,8 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
 def _mutation_context_directories(payload: dict, tool_input: dict) -> list[str]:
     """Return explicit bases for resolving relative mutation paths."""
     contexts: list[str] = []
-    for source in (payload.get("code"), payload.get("command"),
-                   tool_input.get("code"), tool_input.get("command")):
-        if isinstance(source, str):
-            contexts.extend(_literal_exec_command_workdirs(source))
+    for source in _nested_exec_sources(payload, tool_input):
+        contexts.extend(_literal_exec_command_workdirs(source))
     contexts.extend(
         directory for directory in (tool_input.get("workdir"), tool_input.get("cwd"),
                                      payload.get("workdir"), payload.get("cwd"))
