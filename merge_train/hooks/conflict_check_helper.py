@@ -445,6 +445,14 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                             unresolved_workdir = unresolved_workdir or ambiguous or value is None
                         if value:
                             results.append(value)
+                    else:
+                        # The call may receive a named options object (or
+                        # another expression) whose workdir cannot be
+                        # inspected without evaluating source. Preserve that
+                        # unresolved nested context instead of using the
+                        # outer hook cwd.
+                        recognized_workdir = True
+                        unresolved_workdir = True
         index += 1
     return recognized_workdir, unresolved_workdir, results
 

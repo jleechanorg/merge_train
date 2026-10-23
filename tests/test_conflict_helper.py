@@ -570,6 +570,26 @@ def test_computed_workdir_and_spread_block_outer_repo_fallback(tmp_path: Path) -
         ) is None
 
 
+def test_exec_command_options_argument_blocks_outer_repo_fallback(tmp_path: Path) -> None:
+    """A named options object may carry a dynamic workdir expression."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    outer_repo = tmp_path / "outer-repo"
+    outer_repo.mkdir()
+    subprocess.run(["git", "init", str(outer_repo)], check=True, capture_output=True)
+    source = 'const options = {workdir: target}; await tools.exec_command(options);'
+
+    assert module._resolve_repo_root(
+        {"code": source, "cwd": str(outer_repo)}, {}, []
+    ) is None
+
+
 def test_issue42_decision_payload_never_emits_approve_as_permission_decision() -> None:
     """Unit-level regression for issue #42: _decision_payload must never set
     hookSpecificOutput.permissionDecision to 'approve'.
