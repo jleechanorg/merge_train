@@ -228,7 +228,8 @@ def _resolve_enforcement(repo_root: str) -> tuple[str, str]:
 # File-mutation tool names across every CLI fanout runtime we wire a hook into.
 # Each runtime names its edit tools differently; the conflict check must
 # recognize all of them or it silently no-ops ("not a file mutation; skipping").
-#   Claude   : Edit, Write, MultiEdit, NotebookEdit  (tool_input.file_path)
+#   Claude   : Edit, Write, MultiEdit (tool_input.file_path),
+#              NotebookEdit (tool_input.notebook_path)
 #   Cursor   : Edit, Write                            (tool_input.file_path)
 #   Gemini   : write_file, replace                    (tool_input.file_path)
 #   Codex    : apply_patch                            (path(s) in patch body)
@@ -283,6 +284,7 @@ def _extract_paths(tool_name: str, tool_input: dict, payload: dict) -> list:
 
     single = (
         tool_input.get("file_path")
+        or tool_input.get("notebook_path")
         or tool_input.get("TargetFile")
         or tool_input.get("path")
         or payload.get("file_path")

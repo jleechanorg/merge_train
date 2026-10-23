@@ -515,6 +515,22 @@ def test_absolute_target_in_new_directory_checks_target_repo(tmp_path: Path) -> 
     assert "PR#123" in output["systemMessage"]
 
 
+def test_notebook_edit_extracts_notebook_path(tmp_path: Path) -> None:
+    """Claude NotebookEdit identifies its mutation target as notebook_path."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    notebook = str(tmp_path / "analysis.ipynb")
+    assert module._extract_paths(
+        "NotebookEdit", {"notebook_path": notebook, "new_source": "x"}, {}
+    ) == [notebook]
+
+
 def test_resolve_repo_root_uses_nested_exec_command_workdir(tmp_path: Path) -> None:
     """A nested command's explicit workdir wins over the outer non-repo cwd."""
     import importlib.util

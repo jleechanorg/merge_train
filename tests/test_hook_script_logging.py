@@ -316,6 +316,59 @@ def test_hook_script_does_not_use_outer_repo_for_opaque_nested_workdir(
     assert "not inside a git repo" in reason
 
 
+def test_wrapper_denies_notebook_edit_conflicting_with_open_pr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The installed wrapper enforces conflicts for NotebookEdit payloads."""
+    # Keep the helper's on-disk PR cache isolated from other tests and the
+    # operator's live merge_train cache.
+    repo = tmp_path / "notebook-conflict-fixture"
+    repo.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    notebook = repo / "analysis.ipynb"
+
+    home = tmp_path / "home"
+    config_dir = home / "merge_train"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text(json.dumps({
+        "default_enforcement": "warn",
+        "repos": {str(repo): {"alias": "merge_train", "enforcement": "block"}},
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$2\" = \"list\" ]; then\n"
+        "  printf '%s\\n' '[{\"number\":123,\"headRefName\":\"other-branch\",\"headRefOid\":\"oid-123\"}]'\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [ \"$2\" = \"diff\" ]; then\n"
+        "  printf '%s\\n' 'analysis.ipynb'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    fake_gh.chmod(0o755)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
+
+    payload = json.dumps({
+        "tool_name": "NotebookEdit",
+        "tool_input": {"notebook_path": str(notebook), "new_source": "x"},
+    })
+    result = subprocess.run(
+        ["bash", str(_hook_script())], input=payload.encode(), capture_output=True,
+        cwd=repo, timeout=30,
+    )
+
+    assert result.returncode == 0
+    assert "CONFLICT" in result.stderr.decode()
+    output = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "PR#123" in output["systemMessage"]
+
+
 def test_hook_script_redacts_arbitrary_body_keys(log_root: Path) -> None:
     """Regression test for the brittle redaction logic.
 
