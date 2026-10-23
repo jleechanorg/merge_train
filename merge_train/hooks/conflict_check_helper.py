@@ -533,7 +533,12 @@ def _repo_root_for_mutation_path(path: str) -> str | None:
     return _repo_root_for_directory(str(directory))
 
 
-def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) -> str | None:
+def _resolve_repo_root(
+    payload: dict,
+    tool_input: dict,
+    raw_paths: list[str],
+    context_dirs: list[str] | None = None,
+) -> str | None:
     """Resolve context only from explicit hook cwd/workdir or mutation paths.
 
     Absolute mutation targets take priority over nested orchestration context;
@@ -541,63 +546,33 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
     identify the base for relative paths. Multiple explicit roots are treated
     as ambiguous; the hook never searches unrelated repositories.
     """
-    tool_dirs = [tool_input.get("workdir"), tool_input.get("cwd")]
-    payload_dirs = [payload.get("workdir"), payload.get("cwd")]
-    nested_workdirs: list[str] = []
-    nested_context_seen = False
-    nested_context_unresolved = False
-    for source in _nested_exec_sources(payload, tool_input):
-        found, unresolved, workdirs = _scan_literal_exec_command_workdirs(source)
-        nested_context_seen = nested_context_seen or found
-        nested_context_unresolved = nested_context_unresolved or unresolved
-        nested_workdirs.extend(workdirs)
-
-    if nested_context_seen and nested_context_unresolved:
-        absolute_roots = {
-            _repo_root_for_mutation_path(path)
-            for path in raw_paths
-            if isinstance(path, str) and Path(path).is_absolute()
-        }
-        absolute_roots.discard(None)
-        return absolute_roots.pop() if len(absolute_roots) == 1 else None
-
-    # A relative mutation can escape its nested workdir (for example,
-    # ``../sibling-repo/file.py``). Resolve it against the same explicit
-    # context that supplies its base before selecting a repository. Otherwise
-    # the workdir's repo can be selected first and the escaped path later
-    # remains an unmatched raw string during conflict lookup.
-    relative_contexts: list[str] = []
-    for contexts in (nested_workdirs, tool_dirs, payload_dirs):
-        relative_contexts = [d for d in contexts if isinstance(d, str) and d]
-        if relative_contexts:
-            break
-    # When the hook payload carries no working-directory context, relative
-    # mutation paths are relative to the process cwd used by the hook.
-    if not relative_contexts:
-        relative_contexts = [str(Path.cwd())]
-    if relative_contexts and not any(
-        isinstance(path, str) and Path(path).is_absolute() for path in raw_paths
-    ):
-        relative_roots = set()
+    if context_dirs is None:
+        context_dirs = _mutation_context_directories(payload, tool_input)
+    if any(isinstance(path, str) and not Path(path).is_absolute() for path in raw_paths):
+        if not context_dirs:
+            return None
+        # Resolve the repository and normalized path from the same single
+        # context. Multiple relative bases are ambiguous even if they happen
+        # to belong to the same checkout: the same filename can identify two
+        # different files, so selecting either can produce a false denial.
+        roots = set()
         for path in raw_paths:
-            if not isinstance(path, str) or Path(path).is_absolute():
+            if not isinstance(path, str):
                 continue
-            for directory in relative_contexts:
+            for directory in ([None] if Path(path).is_absolute() else context_dirs):
                 try:
-                    resolved_path = str((Path(directory) / path).resolve())
+                    resolved_path = (
+                        Path(path) if directory is None else Path(directory) / path
+                    ).resolve()
                 except (OSError, RuntimeError):
                     continue
-                root = _repo_root_for_mutation_path(resolved_path)
+                root = _repo_root_for_mutation_path(str(resolved_path))
                 if root:
-                    relative_roots.add(root)
-        if len(relative_roots) == 1:
-            return relative_roots.pop()
-        if len(relative_roots) > 1:
-            return None
+                    roots.add(root)
+        return roots.pop() if len(roots) == 1 else None
 
-    # An absolute mutation target identifies the checkout being changed, even
-    # when an outer orchestration payload contains a nested workdir from its
-    # own repository.
+    # Absolute mutation targets identify their checkout independently of an
+    # outer orchestration cwd.
     roots = {
         _repo_root_for_mutation_path(path)
         for path in raw_paths
@@ -609,52 +584,37 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
     if roots:
         return None
 
-    # With no absolute target, the explicit nested workdir wins over an outer
-    # orchestration cwd because it supplies the base for relative paths.
-    for preferred in (nested_workdirs, tool_dirs):
-        preferred = [d for d in preferred if isinstance(d, str) and d]
-        if not preferred:
-            continue
-        roots = {_repo_root_for_directory(d) for d in preferred}
-        roots.discard(None)
-        if len(roots) == 1:
-            return roots.pop()
-        if len(roots) > 1:
-            return None
-        # Explicit context exists but is not a Git checkout; do not fall back
-        # to process cwd or a file path from another context.
-        return None
-
-    payload_dirs = [d for d in payload_dirs if isinstance(d, str) and d]
-    payload_roots = {_repo_root_for_directory(d) for d in payload_dirs}
-    payload_roots.discard(None)
-    if len(payload_roots) == 1:
-        return payload_roots.pop()
-    if len(payload_roots) > 1:
-        return None
-
-    if payload_dirs:
-        # An outer payload cwd may be a non-repo orchestration directory. We
-        # have already tried explicit absolute mutation targets above; if none
-        # identify one checkout, don't guess a repository.
-        return None
-
-    return _repo_root_for_directory(str(Path.cwd()))
+    return _repo_root_for_directory(context_dirs[0]) if context_dirs else None
 
 
 def _mutation_context_directories(payload: dict, tool_input: dict) -> list[str]:
-    """Return explicit bases for resolving relative mutation paths."""
-    contexts: list[str] = []
+    """Return the sole trustworthy base for resolving relative targets.
+
+    Distinct bases are ambiguous even when they share a repository root.
+    Return no context so callers fail open instead of checking an arbitrary
+    same-named file selected by iteration order.
+    """
+    nested: list[str] = []
+    nested_seen = nested_unresolved = False
     for source in _nested_exec_sources(payload, tool_input):
-        contexts.extend(_literal_exec_command_workdirs(source))
-    contexts.extend(
+        found, unresolved, workdirs = _scan_literal_exec_command_workdirs(source)
+        nested_seen = nested_seen or found
+        nested_unresolved = nested_unresolved or unresolved
+        nested.extend(workdirs)
+    candidates = nested if nested_seen else [
         directory for directory in (tool_input.get("workdir"), tool_input.get("cwd"),
                                      payload.get("workdir"), payload.get("cwd"))
         if isinstance(directory, str) and directory
-    )
-    if not contexts:
-        contexts.append(str(Path.cwd()))
-    return contexts
+    ]
+    if nested_seen and nested_unresolved:
+        return []
+    if not candidates:
+        candidates = [str(Path.cwd())]
+    try:
+        unique = list(dict.fromkeys(str(Path(directory).resolve()) for directory in candidates))
+    except (OSError, RuntimeError):
+        return []
+    return unique if len(unique) == 1 else []
 
 
 def _normalize_rel(
@@ -801,7 +761,8 @@ def _main(runtime: str = "claude") -> None:
     # Resolve Git from the hook's explicit context. Orchestrators may run the
     # hook from their own non-repo root while the nested command names its
     # actual workdir in the payload.
-    repo_root = _resolve_repo_root(payload, tool_input, raw_paths)
+    context_dirs = _mutation_context_directories(payload, tool_input)
+    repo_root = _resolve_repo_root(payload, tool_input, raw_paths, context_dirs)
     if not repo_root:
         _emit("allow", "merge_train: not inside a git repo; allowing.", runtime)
         return
@@ -814,7 +775,6 @@ def _main(runtime: str = "claude") -> None:
     enforcement_bool = enforcement == "block"
 
     # Normalize every target path relative to repo root.
-    context_dirs = _mutation_context_directories(payload, tool_input)
     rel_paths = [_normalize_rel(fp, repo_path, context_dirs) for fp in raw_paths]
     paths_label = ", ".join(f"'{p}'" for p in rel_paths)
 

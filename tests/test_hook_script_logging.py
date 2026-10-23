@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -148,6 +149,96 @@ def test_hook_script_is_silent_without_conflicts(log_root: Path) -> None:
     )
     err = result.stderr.decode()
     assert err == "", f"routine check polluted the CLI TUI: {err!r}"
+
+
+@pytest.mark.parametrize(
+    "timeout_value",
+    ["", "not-a-number", "-1", "nan", "inf"],
+    ids=["empty", "malformed", "negative", "nan", "infinity"],
+)
+def test_invalid_runner_timeout_fails_open(
+    tmp_path: Path,
+    timeout_value: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Empty, malformed, and non-finite/non-positive budgets fail open."""
+    hook_dir = tmp_path / "hook"
+    hook_dir.mkdir()
+    shutil.copy2(_hook_script(), hook_dir / "conflict-warn-pre-tool.sh")
+    (hook_dir / "conflict_check_helper.py").write_text(
+        "import json\n"
+        "print(json.dumps({'hookSpecificOutput': {'permissionDecision': 'deny'}}))\n"
+    )
+    monkeypatch.setenv("MERGE_TRAIN_HELPER_TIMEOUT_SECONDS", timeout_value)
+
+    result = subprocess.run(
+        ["bash", str(hook_dir / "conflict-warn-pre-tool.sh")],
+        input=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "x.py"}}),
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=10,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert "allowing" in result.stderr
+
+
+@pytest.mark.parametrize("helper_exit", [1, 7, 42, -9])
+def test_runner_failures_fail_open_without_forwarding_partial_deny(
+    tmp_path: Path, helper_exit: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failing helper cannot enforce its partial denial output."""
+    hook_dir = tmp_path / "hook"
+    hook_dir.mkdir()
+    shutil.copy2(_hook_script(), hook_dir / "conflict-warn-pre-tool.sh")
+    helper = hook_dir / "conflict_check_helper.py"
+    helper.write_text(
+        "import json, sys\n"
+        "print(json.dumps({'hookSpecificOutput': {'permissionDecision': 'deny'}}))\n"
+        f"sys.exit({helper_exit})\n"
+    )
+    monkeypatch.delenv("MERGE_TRAIN_HELPER_TIMEOUT_SECONDS", raising=False)
+
+    result = subprocess.run(
+        ["bash", str(hook_dir / "conflict-warn-pre-tool.sh")],
+        input=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "x.py"}}),
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=10,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert "allowing" in result.stderr
+
+
+def test_runner_preserves_successful_intentional_deny(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A zero-exit helper denial remains authoritative."""
+    hook_dir = tmp_path / "hook"
+    hook_dir.mkdir()
+    shutil.copy2(_hook_script(), hook_dir / "conflict-warn-pre-tool.sh")
+    (hook_dir / "conflict_check_helper.py").write_text(
+        "import json\n"
+        "print(json.dumps({'hookSpecificOutput': {'permissionDecision': 'deny'}}))\n"
+    )
+    monkeypatch.delenv("MERGE_TRAIN_HELPER_TIMEOUT_SECONDS", raising=False)
+
+    result = subprocess.run(
+        ["bash", str(hook_dir / "conflict-warn-pre-tool.sh")],
+        input=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "x.py"}}),
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=10,
+    )
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 def test_hook_script_handles_non_git_cwd(log_root: Path, tmp_path: Path) -> None:

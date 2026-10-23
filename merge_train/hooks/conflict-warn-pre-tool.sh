@@ -132,7 +132,7 @@ if [[ ! -f "$HELPER_PATH" ]]; then
 fi
 # Measured helper cost: ~2s warm (head-SHA cache) and ~7.5s cold on a repo with
 # ~100 open PRs. 12s leaves margin while staying below the CLI hook timeout.
-HELPER_TIMEOUT_SECONDS="${MERGE_TRAIN_HELPER_TIMEOUT_SECONDS:-12}"
+HELPER_TIMEOUT_SECONDS="${MERGE_TRAIN_HELPER_TIMEOUT_SECONDS-12}"
 # Bound the helper. The helper is advisory: a stale PR cache can mean one
 # `gh pr diff` per open PR, and a repo with ~100 open PRs took ~13s serially.
 # Without a bound the hook was either killed by the CLI timeout (reported as a
@@ -140,12 +140,16 @@ HELPER_TIMEOUT_SECONDS="${MERGE_TRAIN_HELPER_TIMEOUT_SECONDS:-12}"
 # group keeps a child `gh` from outliving the hook.
 BOUNDED_RUNNER='
 import os
+import math
 import signal
 import subprocess
 import sys
 
-helper_path, runtime, budget = sys.argv[1], sys.argv[2], float(sys.argv[3])
+helper_path, runtime = sys.argv[1], sys.argv[2]
 try:
+    budget = float(sys.argv[3])
+    if not math.isfinite(budget) or budget <= 0:
+        raise ValueError("helper timeout must be a finite positive number")
     proc = subprocess.Popen(
         [sys.executable, helper_path, "--runtime", runtime],
         stdin=subprocess.PIPE,
@@ -168,6 +172,13 @@ try:
             "merge_train: conflict check timed out after %gs; allowing\n" % budget
         )
         raise SystemExit(124)
+    if proc.returncode != 0:
+        if stderr:
+            sys.stderr.write(stderr)
+        sys.stderr.write(
+            "merge_train: conflict helper exited %s; allowing\n" % proc.returncode
+        )
+        raise SystemExit(125)
     if stderr:
         sys.stderr.write(stderr)
     if stdout:

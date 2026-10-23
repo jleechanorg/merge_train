@@ -523,6 +523,32 @@ def test_resolve_repo_root_uses_nested_exec_command_workdir(tmp_path: Path) -> N
     ) == str(repo)
 
 
+def test_distinct_nested_dirs_in_one_repo_make_relative_target_ambiguous(
+    tmp_path: Path,
+) -> None:
+    """Same-repo nested dirs cannot pick an arbitrary same-named file."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / "nested-repo"
+    (repo / "left").mkdir(parents=True)
+    (repo / "right").mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    source = (
+        f'await tools.exec_command({{cmd: "edit", workdir: "{repo / "left"}"}}); '
+        f'await tools.exec_command({{cmd: "edit", workdir: "{repo / "right"}"}});'
+    )
+    payload = {"code": source, "cwd": str(repo)}
+
+    assert module._mutation_context_directories(payload, {}) == []
+    assert module._resolve_repo_root(payload, {}, ["shared.py"]) is None
+
+
 def test_relative_mutation_under_nested_workdir_uses_repo_relative_path(tmp_path: Path) -> None:
     """A relative mutation is rooted at the nested command's workdir."""
     import os
