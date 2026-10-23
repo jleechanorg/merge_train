@@ -260,7 +260,7 @@ def _install_claude(target: Path) -> dict:
         _strip_stale_source_entries({"PreToolUse": pre_tool}, src_root)
         pre_tool = data["hooks"]["PreToolUse"]
 
-        for matcher in ("Edit", "Write"):
+        for matcher in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
             match_entry = next(
                 (m for m in pre_tool if m.get("matcher") == matcher), None
             )
@@ -380,7 +380,10 @@ def _install_codex(target: Path) -> dict:
                 {
                     "type": "command",
                     "command": cmd,
-                    "timeout": 15,
+                    # Codex measures hook timeouts in seconds and must stay
+                    # above the wrapper's own 12s helper bound, otherwise the
+                    # CLI kills the hook before its fail-open path can run.
+                    "timeout": 25,
                 }
             )
 

@@ -29,6 +29,14 @@ import re
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+
+# Open-PR metadata cache TTL. Freshness for already-cached PRs is enforced by
+# head SHA, not by this value, so it can be generous.
+CACHE_TTL_SECONDS = 300
+# Concurrent `gh pr diff` fetches. Serial fetches over ~100 open PRs took ~15s,
+# which exceeded the Codex hook time budget and disabled the check entirely.
+MAX_FETCH_WORKERS = 24
 from pathlib import Path
 from ast import literal_eval
 
@@ -757,59 +765,97 @@ def main(runtime: str = "claude") -> None:
     if repo_remote and repo_alias == repo_name:
         repo_alias = repo_remote.split("/")[-1]
 
-    # Read from cache (45s TTL).
+    # Read from cache. The TTL only has to be short enough that a PR opened
+    # seconds ago cannot cause a silent miss; the expensive part (one
+    # `gh pr diff` per open PR, up to ~100 of them) is refreshed per PR by
+    # head SHA below, so a longer TTL costs no freshness.
     cache_file = Path(f"/tmp/merge_train_cache_{repo_name}.json")
-    prs_data: dict = {}
+    cached_prs: dict = {}
     if cache_file.exists():
         try:
             cache = json.loads(cache_file.read_text())
-            if time.time() - cache.get("timestamp", 0) < 45:
-                prs_data = cache.get("prs", {})
+            if time.time() - cache.get("timestamp", 0) < CACHE_TTL_SECONDS:
+                cached_prs = cache.get("prs", {})
+            else:
+                cached_prs = cache.get("prs", {})
         except Exception:
             pass
+    prs_data: dict = dict(cached_prs)
 
-    if not prs_data:
-        # Query open PRs via GitHub CLI.
-        try:
-            cmd = ["gh", "pr", "list", "--state", "open", "--json", "number,headRefName"]
-            if repo_remote:
-                cmd += ["--repo", repo_remote]
-            proc = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=repo_path)
-            if proc.returncode == 0:
-                prs = json.loads(proc.stdout)
-                for pr in prs:
-                    pr_num = pr.get("number")
-                    pr_branch = pr.get("headRefName")
-                    if pr_branch == current_branch:
-                        continue
-                    diff_cmd = ["gh", "pr", "diff", str(pr_num), "--name-only"]
-                    if repo_remote:
-                        diff_cmd += ["--repo", repo_remote]
-                    diff_proc = subprocess.run(
-                        diff_cmd, capture_output=True, text=True, check=False, cwd=repo_path
-                    )
-                    if diff_proc.returncode == 0:
-                        files = [f.strip() for f in diff_proc.stdout.splitlines() if f.strip()]
-                        prs_data[str(pr_num)] = {
-                            "branch": pr_branch,
-                            "files": files,
-                            "symbols": {},
-                        }
+    # Always re-list open PRs (one fast call) so newly opened PRs are seen;
+    # reuse the cached file list for any PR whose head SHA is unchanged.
+    try:
+        cmd = [
+            "gh", "pr", "list", "--state", "open",
+            "--json", "number,headRefName,headRefOid", "--limit", "500",
+        ]
+        if repo_remote:
+            cmd += ["--repo", repo_remote]
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=repo_path)
+        if proc.returncode == 0:
+            prs = json.loads(proc.stdout)
+            reuse: dict = {}
+            pending: list = []
+            for pr in prs:
+                pr_num = pr.get("number")
+                pr_branch = pr.get("headRefName")
+                pr_oid = pr.get("headRefOid") or ""
+                if pr_branch == current_branch:
+                    prs_data.pop(str(pr_num), None)
+                    continue
+                known = cached_prs.get(str(pr_num))
+                if known and known.get("oid") == pr_oid and pr_oid:
+                    reuse[str(pr_num)] = {
+                        "branch": pr_branch,
+                        "oid": pr_oid,
+                        "files": known.get("files", []),
+                        "symbols": known.get("symbols", {}),
+                    }
+                else:
+                    pending.append((str(pr_num), pr_branch, pr_oid))
+
+            # Fetch missing diffs concurrently: with ~100 open PRs the serial
+            # loop alone cost ~15s and pushed every Codex apply_patch past its
+            # hook time budget, so the check never actually ran.
+            def _fetch(entry):
+                num, branch, oid = entry
+                diff_cmd = ["gh", "pr", "diff", num, "--name-only"]
+                if repo_remote:
+                    diff_cmd += ["--repo", repo_remote]
+                diff_proc = subprocess.run(
+                    diff_cmd, capture_output=True, text=True, check=False, cwd=repo_path
+                )
+                if diff_proc.returncode != 0:
+                    return None
+                files = [f.strip() for f in diff_proc.stdout.splitlines() if f.strip()]
+                return (num, {"branch": branch, "oid": oid, "files": files, "symbols": {}})
+
+            fetched: dict = {}
+            if pending:
+                with ThreadPoolExecutor(max_workers=MAX_FETCH_WORKERS) as pool:
+                    for result in pool.map(_fetch, pending):
+                        if result:
+                            fetched[result[0]] = result[1]
+            prs_data = dict(fetched)
+            prs_data.update(reuse)
+            try:
                 cache_file.write_text(json.dumps({
                     "timestamp": time.time(),
                     "prs": prs_data,
                 }))
-        except Exception as e:
-            print(
-                f"merge_train: checked {paths_label} — conflict check skipped due to error: {e}",
-                file=sys.stderr,
-            )
-            _emit(
-                "allow",
-                f"merge_train: {paths_label} — conflict check skipped (gh CLI error); allowing.",
-                runtime,
-            )
-            return
+            except Exception:
+                pass
+    except Exception as e:
+        print(
+            f"merge_train: checked {paths_label} — conflict check skipped due to error: {e}",
+            file=sys.stderr,
+        )
+        _emit(
+            "allow",
+            f"merge_train: {paths_label} — conflict check skipped (gh CLI error); allowing.",
+            runtime,
+        )
+        return
 
     if not prs_data:
         _silent_approve(runtime)

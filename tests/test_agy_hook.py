@@ -203,3 +203,35 @@ def test_regression_agy_partial_output_then_crash_emits_one_decision(
         "decision": "ask",
         "reason": "merge_train: hook error; deferring to agy",
     }
+
+
+def test_slow_helper_times_out_fail_open(tmp_path: Path) -> None:
+    """A helper slower than the budget must allow the edit, not fail the hook.
+
+    Regression: one `gh pr diff` per open PR (~100 PRs) took ~13s, so Codex
+    killed the hook at its bound and surfaced `Hook failed / hook exited with
+    code 1` on every apply_patch while the conflict check never ran.
+    """
+    import os
+
+    hooks = tmp_path / "hooks"
+    hooks.mkdir()
+    (hooks / "conflict-warn-pre-tool.sh").write_text(WRAPPER.read_text())
+    (hooks / "conflict_check_helper.py").write_text("import time\ntime.sleep(30)\n")
+    repo = _git_repo(tmp_path / "repo")
+    proc = subprocess.run(
+        ["bash", str(hooks / "conflict-warn-pre-tool.sh"), "--runtime", "codex"],
+        input=_agy_payload(repo / "f.txt", repo),
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={
+            **os.environ,
+            "MERGE_TRAIN_LOG_ROOT": str(tmp_path / "logs"),
+            "MERGE_TRAIN_HELPER_TIMEOUT_SECONDS": "1",
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == ""
+    assert "timed out after 1s; allowing" in proc.stderr

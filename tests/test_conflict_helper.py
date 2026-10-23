@@ -590,6 +590,7 @@ def test_exec_command_options_argument_blocks_outer_repo_fallback(tmp_path: Path
     ) is None
 
 
+
 def test_issue42_decision_payload_never_emits_approve_as_permission_decision() -> None:
     """Unit-level regression for issue #42: _decision_payload must never set
     hookSpecificOutput.permissionDecision to 'approve'.
@@ -700,4 +701,98 @@ def test_warn_only_conflict_exits_zero_with_context(tmp_path: Path) -> None:
     assert "CONFLICT" in first_line, (
         f"first stderr line must contain 'CONFLICT' (this is the TUI banner); "
         f"got: {first_line!r}\nfull stderr: {result.stderr.decode()!r}"
+    )
+
+
+def _make_counting_gh(tmp_path: Path, prs: list) -> Path:
+    """Fake ``gh`` that lists ``prs`` and counts ``pr diff`` invocations.
+
+    ``prs`` is a list of ``{"number": N, "headRefName": "b", "headRefOid": "o",
+    "files": ["a.py"]}``.
+    """
+    import json as _json
+
+    counter = tmp_path / "gh-diff-count"
+    counter.write_text("0")
+    fake_gh = tmp_path / "gh"
+    spec = _json.dumps({str(p["number"]): p for p in prs})
+    fake_gh.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, os, sys\n"
+        f"spec = json.loads({spec!r})\n"
+        f"counter = {str(counter)!r}\n"
+        "args = sys.argv[1:]\n"
+        "if args[:2] == ['pr', 'list']:\n"
+        "    print(json.dumps([{ 'number': int(k), 'headRefName': v['headRefName'],\n"
+        "                        'headRefOid': v['headRefOid'] } for k, v in spec.items()]))\n"
+        "    raise SystemExit(0)\n"
+        "if args[:2] == ['pr', 'diff']:\n"
+        "    n = int(open(counter).read())\n"
+        "    open(counter, 'w').write(str(n + 1))\n"
+        "    print('\\n'.join(spec[args[2]]['files']))\n"
+        "    raise SystemExit(0)\n"
+        "raise SystemExit(0)\n"
+    )
+    fake_gh.chmod(0o755)
+    return counter
+
+
+def test_pr_cache_reuses_files_until_head_sha_changes(tmp_path: Path) -> None:
+    """The hook must not re-run one `gh pr diff` per open PR on every call.
+
+    Regression: with ~100 open PRs the serial diff loop took ~13-15s, so Codex
+    killed the hook at its 10s bound and reported `hook exited with code 1`
+    while the conflict check never ran. Reuse must be keyed on the PR head SHA
+    so an unchanged PR costs zero diffs and a pushed PR refreshes exactly once.
+    """
+    import os
+
+    helper = _helper_path_for_test()
+    repo = tmp_path / "cacheprobe"
+    Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
+    repo.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/test/cacheprobe.git"],
+        cwd=str(repo), check=True, capture_output=True,
+    )
+
+    prs = [
+        {"number": 11, "headRefName": "feat-a", "headRefOid": "aaa", "files": ["foo.py"]},
+        {"number": 12, "headRefName": "feat-b", "headRefOid": "bbb", "files": ["bar.py"]},
+    ]
+    counter = _make_counting_gh(tmp_path, prs)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    payload = json.dumps({
+        "tool_name": "Edit",
+        "tool_input": {"file_path": str(repo / "foo.py")},
+    }).encode()
+
+    def _run():
+        return subprocess.run(
+            [sys.executable, str(helper)],
+            input=payload, capture_output=True, cwd=str(repo), env=env,
+        )
+
+    first = _run()
+    assert first.returncode == 0
+    assert counter.read_text() == "2", "cold run must diff each foreign PR once"
+    assert "PR#11" in first.stdout.decode()
+
+    second = _run()
+    assert second.returncode == 0
+    assert counter.read_text() == "2", (
+        "warm run must reuse cached files when head SHAs are unchanged; "
+        f"expected no new diffs, counter={counter.read_text()}"
+    )
+    assert "PR#11" in second.stdout.decode(), "warm run must still report the conflict"
+
+    # One PR moves: only that PR is re-diffed.
+    prs[1]["headRefOid"] = "ccc"
+    _make_counting_gh(tmp_path, prs)
+    (tmp_path / "gh-diff-count").write_text("2")
+    third = _run()
+    assert third.returncode == 0
+    assert (tmp_path / "gh-diff-count").read_text() == "3", (
+        "only the PR whose head SHA moved may be re-diffed"
     )
