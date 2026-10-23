@@ -140,10 +140,27 @@ def test_regression_agy_conflict_denies_through_main(
         json.dumps(
             {
                 "timestamp": time.time(),
-                "prs": {"99": {"branch": "other", "files": ["shared.txt"]}},
+                "prs": {
+                    "99": {
+                        "branch": "other",
+                        "oid": "head-99",
+                        "files": ["shared.txt"],
+                    }
+                },
             }
         )
     )
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = pr ] && [ \"$2\" = list ]; then\n"
+        "  printf '%s\\n' '[{\"number\":99,\"headRefName\":\"other\",\"headRefOid\":\"head-99\"}]'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    fake_gh.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     try:
         helper = _load_helper()
         monkeypatch.setattr(helper, "_resolve_enforcement", lambda root: ("block", "t"))

@@ -546,16 +546,9 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
         # to process cwd or a file path from another context.
         return None
 
-    payload_dirs = [d for d in payload_dirs if isinstance(d, str) and d]
-    payload_roots = {_repo_root_for_directory(d) for d in payload_dirs}
-    payload_roots.discard(None)
-    if len(payload_roots) == 1:
-        return payload_roots.pop()
-    if len(payload_roots) > 1:
-        return None
-
     # Absolute mutation targets are an explicit context too (e.g. apply_patch
-    # with absolute paths). Relative paths need a declared cwd to be safe.
+    # with absolute paths). They disambiguate an outer payload cwd, which may
+    # belong to the orchestration repo. Relative paths need a declared cwd.
     roots = {
         _repo_root_for_directory(str(Path(path).parent))
         for path in raw_paths
@@ -565,6 +558,14 @@ def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) ->
     if len(roots) == 1:
         return roots.pop()
     if roots:
+        return None
+
+    payload_dirs = [d for d in payload_dirs if isinstance(d, str) and d]
+    payload_roots = {_repo_root_for_directory(d) for d in payload_dirs}
+    payload_roots.discard(None)
+    if len(payload_roots) == 1:
+        return payload_roots.pop()
+    if len(payload_roots) > 1:
         return None
 
     if payload_dirs:
@@ -776,8 +777,6 @@ def main(runtime: str = "claude") -> None:
             cache = json.loads(cache_file.read_text())
             if time.time() - cache.get("timestamp", 0) < CACHE_TTL_SECONDS:
                 cached_prs = cache.get("prs", {})
-            else:
-                cached_prs = cache.get("prs", {})
         except Exception:
             pass
     prs_data: dict = dict(cached_prs)
@@ -792,8 +791,15 @@ def main(runtime: str = "claude") -> None:
         if repo_remote:
             cmd += ["--repo", repo_remote]
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=repo_path)
+        if proc.returncode != 0:
+            _emit(
+                "allow",
+                f"merge_train: {paths_label} — conflict check skipped (gh PR list failed); allowing.",
+                runtime,
+            )
+            return
+        prs = json.loads(proc.stdout)
         if proc.returncode == 0:
-            prs = json.loads(proc.stdout)
             reuse: dict = {}
             pending: list = []
             for pr in prs:

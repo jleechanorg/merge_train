@@ -379,6 +379,30 @@ def test_issue42_mutation_tool_outside_git_repo_emits_no_approve(tmp_path: Path)
             )
 
 
+def test_absolute_mutation_target_disambiguates_outer_payload_cwd(tmp_path: Path) -> None:
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    outer_repo = tmp_path / "outer"
+    target_repo = tmp_path / "target"
+    for repo in (outer_repo, target_repo):
+        repo.mkdir()
+        subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+
+    assert module._resolve_repo_root(
+        {"cwd": str(outer_repo)}, {}, [str(target_repo / "changed.py")]
+    ) == str(target_repo)
+    assert module._resolve_repo_root(
+        {"cwd": str(outer_repo)}, {},
+        [str(target_repo / "changed.py"), str(outer_repo / "other.py")],
+    ) is None
+
+
 def test_resolve_repo_root_uses_nested_exec_command_workdir(tmp_path: Path) -> None:
     """A nested command's explicit workdir wins over the outer non-repo cwd."""
     import importlib.util
@@ -736,6 +760,45 @@ def _make_counting_gh(tmp_path: Path, prs: list) -> Path:
     )
     fake_gh.chmod(0o755)
     return counter
+
+
+def test_failed_pr_list_does_not_deny_from_expired_cache(tmp_path: Path) -> None:
+    import os
+    import time
+
+    helper = _helper_path_for_test()
+    repo = tmp_path / "expiredcache"
+    repo.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/test/expiredcache.git"],
+        cwd=str(repo), check=True, capture_output=True,
+    )
+    cache_file = Path(f"/tmp/merge_train_cache_{repo.name}.json")
+    cache_file.write_text(json.dumps({
+        "timestamp": time.time() - 10_000,
+        "prs": {"91": {
+            "branch": "old-conflict", "oid": "old", "files": ["target.py"],
+            "symbols": {},
+        }},
+    }))
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text("#!/bin/sh\nexit 1\n")
+    fake_gh.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    payload = json.dumps({
+        "tool_name": "Edit",
+        "tool_input": {"file_path": str(repo / "target.py")},
+    }).encode()
+    result = subprocess.run(
+        [sys.executable, str(helper)], input=payload, capture_output=True,
+        cwd=str(repo), env=env,
+    )
+
+    assert result.returncode == 0
+    assert "deny" not in result.stdout.decode()
+    assert "allow" in result.stdout.decode()
+    cache_file.unlink(missing_ok=True)
 
 
 def test_pr_cache_reuses_files_until_head_sha_changes(tmp_path: Path) -> None:
