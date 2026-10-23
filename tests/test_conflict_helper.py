@@ -712,8 +712,8 @@ def _make_counting_gh(tmp_path: Path, prs: list) -> Path:
     """
     import json as _json
 
-    counter = tmp_path / "gh-diff-count"
-    counter.write_text("0")
+    counter = tmp_path / "gh-diff-calls"
+    counter.write_text("")
     fake_gh = tmp_path / "gh"
     spec = _json.dumps({str(p["number"]): p for p in prs})
     fake_gh.write_text(
@@ -727,8 +727,9 @@ def _make_counting_gh(tmp_path: Path, prs: list) -> Path:
         "                        'headRefOid': v['headRefOid'] } for k, v in spec.items()]))\n"
         "    raise SystemExit(0)\n"
         "if args[:2] == ['pr', 'diff']:\n"
-        "    n = int(open(counter).read())\n"
-        "    open(counter, 'w').write(str(n + 1))\n"
+        # Append one line per call: the helper fetches diffs concurrently, so a
+        # read-modify-write counter loses updates and makes the test flaky.
+        "    open(counter, 'a').write(args[2] + '\\n')\n"
         "    print('\\n'.join(spec[args[2]]['files']))\n"
         "    raise SystemExit(0)\n"
         "raise SystemExit(0)\n"
@@ -774,25 +775,28 @@ def test_pr_cache_reuses_files_until_head_sha_changes(tmp_path: Path) -> None:
             input=payload, capture_output=True, cwd=str(repo), env=env,
         )
 
+    def _diff_calls() -> int:
+        return len([ln for ln in counter.read_text().splitlines() if ln.strip()])
+
     first = _run()
     assert first.returncode == 0
-    assert counter.read_text() == "2", "cold run must diff each foreign PR once"
+    assert _diff_calls() == 2, "cold run must diff each foreign PR once"
     assert "PR#11" in first.stdout.decode()
 
     second = _run()
     assert second.returncode == 0
-    assert counter.read_text() == "2", (
+    assert _diff_calls() == 2, (
         "warm run must reuse cached files when head SHAs are unchanged; "
-        f"expected no new diffs, counter={counter.read_text()}"
+        f"expected no new diffs, saw {_diff_calls()}"
     )
     assert "PR#11" in second.stdout.decode(), "warm run must still report the conflict"
 
     # One PR moves: only that PR is re-diffed.
     prs[1]["headRefOid"] = "ccc"
     _make_counting_gh(tmp_path, prs)
-    (tmp_path / "gh-diff-count").write_text("2")
+    counter.write_text(counter.read_text())
     third = _run()
     assert third.returncode == 0
-    assert (tmp_path / "gh-diff-count").read_text() == "3", (
-        "only the PR whose head SHA moved may be re-diffed"
+    assert _diff_calls() == 1, (
+        f"only the PR whose head SHA moved may be re-diffed; saw {counter.read_text()}"
     )
