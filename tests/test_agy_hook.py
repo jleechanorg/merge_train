@@ -204,10 +204,11 @@ def test_regression_agy_helper_silent_exit_defers_to_agy(tmp_path: Path) -> None
     assert json.loads(proc.stdout)["decision"] == "ask"
 
 
-def test_helper_crash_keeps_claude_behavior(tmp_path: Path) -> None:
+def test_helper_crash_fails_open_for_claude(tmp_path: Path) -> None:
     proc = _run_wrapper_with_helper(tmp_path, "raise RuntimeError('boom')\n", "claude")
-    assert proc.returncode != 0
+    assert proc.returncode == 0, proc.stderr
     assert proc.stdout == ""
+    assert "conflict helper exited 1; allowing" in proc.stderr
 
 
 def test_regression_agy_partial_output_then_crash_emits_one_decision(
