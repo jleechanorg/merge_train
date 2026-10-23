@@ -406,6 +406,60 @@ def test_resolve_repo_root_uses_nested_exec_command_workdir(tmp_path: Path) -> N
     ) == str(repo)
 
 
+def test_nested_exec_workdir_ignores_cmd_comments_and_nested_properties(tmp_path: Path) -> None:
+    """Only a top-level exec argument can identify the nested command repo."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / "actual-repo"
+    decoy = tmp_path / "decoy"
+    repo.mkdir()
+    decoy.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    cmd_decoy = (
+        'await tools.exec_command({cmd: \'echo workdir: "' + str(decoy) + '\', '
+        'workdir: "' + str(repo) + '"});'
+    )
+    comment_decoy = (
+        'await tools.exec_command({cmd: "git status", '
+        '/* workdir: "' + str(decoy) + '" */ workdir: "' + str(repo) + '" '
+        '/* trailing comment */});'
+    )
+    nested_decoy = (
+        'await tools.exec_command({options: {workdir: "' + str(decoy) + '"}, '
+        'cmd: "git status", workdir: "' + str(repo) + '"});'
+    )
+
+    for source in (cmd_decoy, comment_decoy, nested_decoy):
+        assert module._literal_exec_command_workdirs(source) == [str(repo)]
+        assert module._resolve_repo_root(
+            {"code": source, "cwd": str(tmp_path)}, {}, []
+        ) == str(repo)
+
+    # Expressions stay out of scope, and distinct actual call roots stay ambiguous.
+    assert module._literal_exec_command_workdirs(
+        'await tools.exec_command({workdir: repo_path});'
+    ) == []
+    assert module._literal_exec_command_workdirs(
+        'await tools.exec_command({workdir: (globalThis.sideEffect = true)});'
+    ) == []
+    other_repo = tmp_path / "other-repo"
+    other_repo.mkdir()
+    subprocess.run(["git", "init", str(other_repo)], check=True, capture_output=True)
+    ambiguous = (
+        'await tools.exec_command({workdir: "' + str(repo) + '"}); '
+        'await tools.exec_command({workdir: "' + str(other_repo) + '"});'
+    )
+    assert module._resolve_repo_root(
+        {"code": ambiguous, "cwd": str(tmp_path)}, {}, []
+    ) is None
+
+
 def test_resolve_repo_root_keeps_true_nonrepo_silent(tmp_path: Path) -> None:
     """Explicit non-repo context must not fall back to a different cwd."""
     import importlib.util

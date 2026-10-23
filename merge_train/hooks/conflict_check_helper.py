@@ -292,46 +292,143 @@ def _literal_exec_command_workdirs(source: str) -> list[str]:
     a recognized ``tools.exec_command({...})`` call are accepted; expressions
     and arbitrary command text are never evaluated.
     """
-    results: list[str] = []
-    call_re = re.compile(r"\btools\.exec_command\s*\(\s*\{")
-    for match in call_re.finditer(source):
-        start = match.end() - 1  # opening object brace
-        depth = 0
-        quote = ""
+    def skip_space_and_comments(index: int) -> int:
+        while index < len(source):
+            if source[index].isspace():
+                index += 1
+            elif source.startswith("//", index):
+                newline = source.find("\n", index + 2)
+                index = len(source) if newline < 0 else newline + 1
+            elif source.startswith("/*", index):
+                close = source.find("*/", index + 2)
+                index = len(source) if close < 0 else close + 2
+            else:
+                break
+        return index
+
+    def skip_quoted(index: int) -> int:
+        quote = source[index]
+        index += 1
         escaped = False
-        end = None
-        for index in range(start, len(source)):
+        while index < len(source):
             char = source[index]
-            if quote:
-                if escaped:
-                    escaped = False
-                elif char == "\\":
-                    escaped = True
-                elif char == quote:
-                    quote = ""
-                continue
+            index += 1
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                break
+        return index
+
+    def property_value_end(index: int) -> int:
+        curly = bracket = paren = 0
+        while index < len(source):
+            char = source[index]
             if char in ("'", '"', "`"):
-                quote = char
-            elif char == "{":
-                depth += 1
+                index = skip_quoted(index)
+                continue
+            if source.startswith("//", index):
+                newline = source.find("\n", index + 2)
+                index = len(source) if newline < 0 else newline + 1
+                continue
+            if source.startswith("/*", index):
+                close = source.find("*/", index + 2)
+                index = len(source) if close < 0 else close + 2
+                continue
+            if char == "{":
+                curly += 1
             elif char == "}":
-                depth -= 1
-                if depth == 0:
-                    end = index + 1
+                if curly == bracket == paren == 0:
                     break
-        if end is None:
+                curly -= 1
+            elif char == "[":
+                bracket += 1
+            elif char == "]":
+                bracket -= 1
+            elif char == "(":
+                paren += 1
+            elif char == ")":
+                paren -= 1
+            elif char == "," and curly == bracket == paren == 0:
+                break
+            index += 1
+        return index
+
+    def workdir_property(object_start: int) -> str | None:
+        index = object_start + 1
+        while index < len(source):
+            index = skip_space_and_comments(index)
+            if index >= len(source) or source[index] == "}":
+                return None
+            key_start = index
+            if source[index] in ("'", '"'):
+                key_end = skip_quoted(index)
+                try:
+                    key = literal_eval(source[index:key_end])
+                except (SyntaxError, ValueError):
+                    key = None
+                index = key_end
+            else:
+                while index < len(source) and (source[index].isalnum() or source[index] in "_$"):
+                    index += 1
+                key = source[key_start:index]
+            index = skip_space_and_comments(index)
+            if index >= len(source) or source[index] != ":":
+                # Methods, spreads and malformed properties are not candidates.
+                index = property_value_end(index)
+                if index < len(source) and source[index] == ",":
+                    index += 1
+                    continue
+                return None
+            value_start = skip_space_and_comments(index + 1)
+            value_end = property_value_end(value_start)
+            if key == "workdir":
+                value = None
+                if value_start < value_end and source[value_start] in ("'", '"'):
+                    token_end = skip_quoted(value_start)
+                    if skip_space_and_comments(token_end) == value_end:
+                        try:
+                            value = literal_eval(source[value_start:token_end])
+                        except (SyntaxError, ValueError):
+                            pass
+                if isinstance(value, str) and value:
+                    return value
+                return None
+            index = value_end
+            if index < len(source) and source[index] == ",":
+                index += 1
+            elif index < len(source) and source[index] == "}":
+                return None
+        return None
+
+    results: list[str] = []
+    index = 0
+    while index < len(source):
+        if source[index] in ("'", '"', "`"):
+            index = skip_quoted(index)
             continue
-        object_text = source[start:end]
-        value_match = re.search(r"\bworkdir\s*:\s*(['\"])(.*?)\1", object_text, re.DOTALL)
-        if not value_match:
+        if source.startswith("//", index):
+            newline = source.find("\n", index + 2)
+            index = len(source) if newline < 0 else newline + 1
             continue
-        literal = value_match.group(0).split(":", 1)[1].strip()
-        try:
-            value = literal_eval(literal)
-        except (SyntaxError, ValueError):
+        if source.startswith("/*", index):
+            close = source.find("*/", index + 2)
+            index = len(source) if close < 0 else close + 2
             continue
-        if isinstance(value, str) and value:
-            results.append(value)
+        if source.startswith("tools.exec_command", index):
+            before_ok = index == 0 or not (source[index - 1].isalnum() or source[index - 1] in "_$.")
+            after = index + len("tools.exec_command")
+            after_ok = after == len(source) or not (source[after].isalnum() or source[after] in "_$.")
+            if before_ok and after_ok:
+                call_paren = skip_space_and_comments(after)
+                if call_paren < len(source) and source[call_paren] == "(":
+                    object_start = skip_space_and_comments(call_paren + 1)
+                    if object_start < len(source) and source[object_start] == "{":
+                        value = workdir_property(object_start)
+                        if value:
+                            results.append(value)
+        index += 1
     return results
 
 
