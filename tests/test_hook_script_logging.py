@@ -19,6 +19,7 @@ with a clear message otherwise — same pattern as
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -40,7 +41,13 @@ def _hook_script() -> Path:
 def log_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Give each test a private hook log root."""
     root = tmp_path / "merge_train-logs"
+    fake_bin = tmp_path / "log-root-bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text("#!/bin/sh\nprintf '[]\\n'\n")
+    fake_gh.chmod(0o755)
     monkeypatch.setenv("MERGE_TRAIN_LOG_ROOT", str(root))
+    monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
     return root
 
 
