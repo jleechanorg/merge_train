@@ -379,6 +379,47 @@ def test_issue42_mutation_tool_outside_git_repo_emits_no_approve(tmp_path: Path)
             )
 
 
+def test_resolve_repo_root_uses_nested_exec_command_workdir(tmp_path: Path) -> None:
+    """A nested command's explicit workdir wins over the outer non-repo cwd."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / "nested-command-repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    source = (
+        'await tools.exec_command({cmd: "git status", '
+        f'workdir: "{repo}"' + '});'
+    )
+    payload = {"code": source, "cwd": str(tmp_path)}
+
+    assert module._resolve_repo_root(payload, {}, []) == str(repo)
+    # A global hook can also receive only the outer cwd plus an absolute
+    # mutation target; that target identifies the checkout without guessing.
+    assert module._resolve_repo_root(
+        {"cwd": str(tmp_path)}, {}, [str(repo / "target.py")]
+    ) == str(repo)
+
+
+def test_resolve_repo_root_keeps_true_nonrepo_silent(tmp_path: Path) -> None:
+    """Explicit non-repo context must not fall back to a different cwd."""
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    payload = {"cwd": str(tmp_path)}
+    assert module._resolve_repo_root(payload, {}, []) is None
+
+
 def test_issue42_decision_payload_never_emits_approve_as_permission_decision() -> None:
     """Unit-level regression for issue #42: _decision_payload must never set
     hookSpecificOutput.permissionDecision to 'approve'.

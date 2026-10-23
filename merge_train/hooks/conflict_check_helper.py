@@ -30,6 +30,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from ast import literal_eval
 
 # Add merge_train source locations to sys.path so we can import the
 # package. The helper is normally called from ~/.local/bin/, where
@@ -283,6 +284,129 @@ def _extract_paths(tool_name: str, tool_input: dict, payload: dict) -> list:
     return [single] if single else []
 
 
+def _literal_exec_command_workdirs(source: str) -> list[str]:
+    """Read static ``workdir`` literals from nested ``tools.exec_command`` calls.
+
+    Some orchestration tools wrap a command call in source text and run their
+    hooks from the outer session directory. Only explicit string literals on
+    a recognized ``tools.exec_command({...})`` call are accepted; expressions
+    and arbitrary command text are never evaluated.
+    """
+    results: list[str] = []
+    call_re = re.compile(r"\btools\.exec_command\s*\(\s*\{")
+    for match in call_re.finditer(source):
+        start = match.end() - 1  # opening object brace
+        depth = 0
+        quote = ""
+        escaped = False
+        end = None
+        for index in range(start, len(source)):
+            char = source[index]
+            if quote:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = ""
+                continue
+            if char in ("'", '"', "`"):
+                quote = char
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    end = index + 1
+                    break
+        if end is None:
+            continue
+        object_text = source[start:end]
+        value_match = re.search(r"\bworkdir\s*:\s*(['\"])(.*?)\1", object_text, re.DOTALL)
+        if not value_match:
+            continue
+        literal = value_match.group(0).split(":", 1)[1].strip()
+        try:
+            value = literal_eval(literal)
+        except (SyntaxError, ValueError):
+            continue
+        if isinstance(value, str) and value:
+            results.append(value)
+    return results
+
+
+def _repo_root_for_directory(directory: str) -> str | None:
+    """Return a Git root for an explicit directory without changing cwd."""
+    try:
+        resolved = subprocess.run(
+            ["git", "-C", directory, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    return resolved or None
+
+
+def _resolve_repo_root(payload: dict, tool_input: dict, raw_paths: list[str]) -> str | None:
+    """Resolve context only from explicit hook cwd/workdir or mutation paths.
+
+    Nested exec workdirs take priority over the outer hook cwd because they
+    identify where the command runs. Multiple explicit roots are treated as
+    ambiguous; the hook never searches unrelated repositories.
+    """
+    tool_dirs = [tool_input.get("workdir"), tool_input.get("cwd")]
+    payload_dirs = [payload.get("workdir"), payload.get("cwd")]
+    nested_workdirs: list[str] = []
+    for source in (payload.get("code"), payload.get("command"),
+                   tool_input.get("code"), tool_input.get("command")):
+        if isinstance(source, str):
+            nested_workdirs.extend(_literal_exec_command_workdirs(source))
+
+    # The explicit nested workdir wins over an outer orchestration cwd.
+    for preferred in (nested_workdirs, tool_dirs):
+        preferred = [d for d in preferred if isinstance(d, str) and d]
+        if not preferred:
+            continue
+        roots = {_repo_root_for_directory(d) for d in preferred}
+        roots.discard(None)
+        if len(roots) == 1:
+            return roots.pop()
+        if len(roots) > 1:
+            return None
+        # Explicit context exists but is not a Git checkout; do not fall back
+        # to process cwd or a file path from another context.
+        return None
+
+    payload_dirs = [d for d in payload_dirs if isinstance(d, str) and d]
+    payload_roots = {_repo_root_for_directory(d) for d in payload_dirs}
+    payload_roots.discard(None)
+    if len(payload_roots) == 1:
+        return payload_roots.pop()
+    if len(payload_roots) > 1:
+        return None
+
+    # Absolute mutation targets are an explicit context too (e.g. apply_patch
+    # with absolute paths). Relative paths need a declared cwd to be safe.
+    roots = {
+        _repo_root_for_directory(str(Path(path).parent))
+        for path in raw_paths
+        if isinstance(path, str) and Path(path).is_absolute()
+    }
+    roots.discard(None)
+    if len(roots) == 1:
+        return roots.pop()
+    if roots:
+        return None
+
+    if payload_dirs:
+        # An outer payload cwd may be a non-repo orchestration directory. We
+        # have already tried explicit absolute mutation targets above; if none
+        # identify one checkout, don't guess a repository.
+        return None
+
+    return _repo_root_for_directory(str(Path.cwd()))
+
+
 def _normalize_rel(file_path: str, repo_path: Path) -> str:
     """Best-effort path relative to the repo root (posix); falls back to raw."""
     try:
@@ -417,13 +541,11 @@ def main(runtime: str = "claude") -> None:
     start_line = tool_input.get("StartLine") or tool_input.get("startLine") or tool_input.get("StartLineNumber")
     end_line = tool_input.get("EndLine") or tool_input.get("endLine") or tool_input.get("EndLineNumber")
 
-    # Resolve current git repo.
-    try:
-        repo_root = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        ).stdout.strip()
-    except subprocess.CalledProcessError:
+    # Resolve Git from the hook's explicit context. Orchestrators may run the
+    # hook from their own non-repo root while the nested command names its
+    # actual workdir in the payload.
+    repo_root = _resolve_repo_root(payload, tool_input, raw_paths)
+    if not repo_root:
         _emit("allow", "merge_train: not inside a git repo; allowing.", runtime)
         return
 
@@ -441,7 +563,7 @@ def main(runtime: str = "claude") -> None:
     # Current branch.
     current_branch = subprocess.run(
         ["git", "branch", "--show-current"],
-        capture_output=True, text=True, check=False,
+        capture_output=True, text=True, check=False, cwd=repo_path,
     ).stdout.strip()
 
     # Detect remote OWNER/REPO for `gh --repo` scoping.
@@ -457,7 +579,7 @@ def main(runtime: str = "claude") -> None:
     try:
         remote_url = subprocess.run(
             ["git", "remote", "get-url", "origin"],
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, check=False, cwd=repo_path,
         ).stdout.strip()
         if remote_url:
             if remote_url.endswith(".git"):
@@ -491,7 +613,7 @@ def main(runtime: str = "claude") -> None:
             cmd = ["gh", "pr", "list", "--state", "open", "--json", "number,headRefName"]
             if repo_remote:
                 cmd += ["--repo", repo_remote]
-            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=repo_path)
             if proc.returncode == 0:
                 prs = json.loads(proc.stdout)
                 for pr in prs:
@@ -502,7 +624,9 @@ def main(runtime: str = "claude") -> None:
                     diff_cmd = ["gh", "pr", "diff", str(pr_num), "--name-only"]
                     if repo_remote:
                         diff_cmd += ["--repo", repo_remote]
-                    diff_proc = subprocess.run(diff_cmd, capture_output=True, text=True, check=False)
+                    diff_proc = subprocess.run(
+                        diff_cmd, capture_output=True, text=True, check=False, cwd=repo_path
+                    )
                     if diff_proc.returncode == 0:
                         files = [f.strip() for f in diff_proc.stdout.splitlines() if f.strip()]
                         prs_data[str(pr_num)] = {
