@@ -1183,6 +1183,59 @@ def test_failed_pr_list_does_not_deny_from_expired_cache(tmp_path: Path) -> None
     cache_file.unlink(missing_ok=True)
 
 
+def test_failed_pr_diff_reports_incomplete_check(tmp_path: Path) -> None:
+    """A PR whose diff cannot be fetched must not look like a clean check.
+
+    Regression: `_fetch` returned ``None`` and the caller dropped the PR, so a
+    transient `gh pr diff` failure produced the same empty stdout as a genuine
+    no-conflict result and the edit was implicitly approved.
+    """
+    import os
+
+    helper = _helper_path_for_test()
+    repo = tmp_path / "incompletediff"
+    Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
+    repo.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/test/incompletediff.git"],
+        cwd=str(repo), check=True, capture_output=True,
+    )
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$2\" = \"list\" ]; then\n"
+        "  printf '%s\\n' '[{\"number\":77,\"headRefName\":\"other\",\"headRefOid\":\"oid77\"}]'\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [ \"$2\" = \"diff\" ]; then\n"
+        "  echo 'HTTP 502' >&2\n"
+        "  exit 1\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    fake_gh.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    payload = json.dumps({
+        "tool_name": "Edit",
+        "tool_input": {"file_path": str(repo / "shared.py")},
+    }).encode()
+    result = subprocess.run(
+        [sys.executable, str(helper)], input=payload, capture_output=True,
+        cwd=str(repo), env=env,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    assert "permissionDecision" not in output.get("hookSpecificOutput", {}), (
+        f"incomplete check must not deny; got {output}"
+    )
+    reason = output["systemMessage"]
+    assert "conflict check incomplete" in reason, reason
+    assert "#77" in reason, reason
+    Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
+
+
 def test_pr_cache_reuses_files_until_head_sha_changes(tmp_path: Path) -> None:
     """The hook must not re-run one `gh pr diff` per open PR on every call.
 

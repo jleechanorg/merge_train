@@ -844,6 +844,9 @@ def _main(runtime: str = "claude") -> None:
         except Exception:
             pass
     prs_data: dict = dict(cached_prs)
+    # PR numbers whose `gh pr diff` failed. Those PRs cannot be checked, so a
+    # clean result must not be reported as if the check were complete.
+    unchecked: list = []
 
     # Always re-list open PRs (one fast call) so newly opened PRs are seen;
     # reuse the cached file list for any PR whose head SHA is unchanged.
@@ -896,16 +899,18 @@ def _main(runtime: str = "claude") -> None:
                     diff_cmd, capture_output=True, text=True, check=False, cwd=repo_path
                 )
                 if diff_proc.returncode != 0:
-                    return None
+                    return (num, None)
                 files = [f.strip() for f in diff_proc.stdout.splitlines() if f.strip()]
                 return (num, {"branch": branch, "oid": oid, "files": files, "symbols": {}})
 
             fetched: dict = {}
             if pending:
                 with ThreadPoolExecutor(max_workers=MAX_FETCH_WORKERS) as pool:
-                    for result in pool.map(_fetch, pending):
-                        if result:
-                            fetched[result[0]] = result[1]
+                    for num, payload in pool.map(_fetch, pending):
+                        if payload:
+                            fetched[num] = payload
+                        else:
+                            unchecked.append(num)
             prs_data = dict(fetched)
             prs_data.update(reuse)
             try:
@@ -927,7 +932,7 @@ def _main(runtime: str = "claude") -> None:
         )
         return
 
-    if not prs_data:
+    if not prs_data and not unchecked:
         _silent_approve(runtime)
         return
 
@@ -978,6 +983,20 @@ def _main(runtime: str = "claude") -> None:
                 runtime,
             )
             return
+
+    # No conflicts, but a failed `gh pr diff` means some open PR could not be
+    # inspected. Report the check as incomplete instead of emitting the same
+    # silence a fully clean check produces. Still fail-open: the edit runs.
+    if unchecked:
+        unread = ", ".join(f"#{num}" for num in unchecked)
+        _emit(
+            "allow",
+            f"merge_train: {paths_label} — conflict check incomplete; "
+            f"{len(unchecked)} open PR{'' if len(unchecked) == 1 else 's'} could not be "
+            f"diffed ({unread}); allowing. Re-run after GitHub recovers.",
+            runtime,
+        )
+        return
 
     # No conflicts — silent approve. No systemMessage to avoid noise on every edit.
     _silent_approve(runtime)
