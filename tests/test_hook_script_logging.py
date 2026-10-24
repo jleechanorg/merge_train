@@ -19,6 +19,8 @@ with a clear message otherwise — same pattern as
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -40,7 +42,13 @@ def _hook_script() -> Path:
 def log_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Give each test a private hook log root."""
     root = tmp_path / "merge_train-logs"
+    fake_bin = tmp_path / "log-root-bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text("#!/bin/sh\nprintf '[]\\n'\n")
+    fake_gh.chmod(0o755)
     monkeypatch.setenv("MERGE_TRAIN_LOG_ROOT", str(root))
+    monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
     return root
 
 
@@ -143,6 +151,96 @@ def test_hook_script_is_silent_without_conflicts(log_root: Path) -> None:
     assert err == "", f"routine check polluted the CLI TUI: {err!r}"
 
 
+@pytest.mark.parametrize(
+    "timeout_value",
+    ["", "not-a-number", "-1", "nan", "inf"],
+    ids=["empty", "malformed", "negative", "nan", "infinity"],
+)
+def test_invalid_runner_timeout_fails_open(
+    tmp_path: Path,
+    timeout_value: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Empty, malformed, and non-finite/non-positive budgets fail open."""
+    hook_dir = tmp_path / "hook"
+    hook_dir.mkdir()
+    shutil.copy2(_hook_script(), hook_dir / "conflict-warn-pre-tool.sh")
+    (hook_dir / "conflict_check_helper.py").write_text(
+        "import json\n"
+        "print(json.dumps({'hookSpecificOutput': {'permissionDecision': 'deny'}}))\n"
+    )
+    monkeypatch.setenv("MERGE_TRAIN_HELPER_TIMEOUT_SECONDS", timeout_value)
+
+    result = subprocess.run(
+        ["bash", str(hook_dir / "conflict-warn-pre-tool.sh")],
+        input=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "x.py"}}),
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=10,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert "allowing" in result.stderr
+
+
+@pytest.mark.parametrize("helper_exit", [1, 7, 42, -9])
+def test_runner_failures_fail_open_without_forwarding_partial_deny(
+    tmp_path: Path, helper_exit: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failing helper cannot enforce its partial denial output."""
+    hook_dir = tmp_path / "hook"
+    hook_dir.mkdir()
+    shutil.copy2(_hook_script(), hook_dir / "conflict-warn-pre-tool.sh")
+    helper = hook_dir / "conflict_check_helper.py"
+    helper.write_text(
+        "import json, sys\n"
+        "print(json.dumps({'hookSpecificOutput': {'permissionDecision': 'deny'}}))\n"
+        f"sys.exit({helper_exit})\n"
+    )
+    monkeypatch.delenv("MERGE_TRAIN_HELPER_TIMEOUT_SECONDS", raising=False)
+
+    result = subprocess.run(
+        ["bash", str(hook_dir / "conflict-warn-pre-tool.sh")],
+        input=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "x.py"}}),
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=10,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert "allowing" in result.stderr
+
+
+def test_runner_preserves_successful_intentional_deny(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A zero-exit helper denial remains authoritative."""
+    hook_dir = tmp_path / "hook"
+    hook_dir.mkdir()
+    shutil.copy2(_hook_script(), hook_dir / "conflict-warn-pre-tool.sh")
+    (hook_dir / "conflict_check_helper.py").write_text(
+        "import json\n"
+        "print(json.dumps({'hookSpecificOutput': {'permissionDecision': 'deny'}}))\n"
+    )
+    monkeypatch.delenv("MERGE_TRAIN_HELPER_TIMEOUT_SECONDS", raising=False)
+
+    result = subprocess.run(
+        ["bash", str(hook_dir / "conflict-warn-pre-tool.sh")],
+        input=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "x.py"}}),
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=10,
+    )
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
 def test_hook_script_handles_non_git_cwd(log_root: Path, tmp_path: Path) -> None:
     """If the cwd is not a git repo, the hook must not crash and must
     still emit a valid JSON envelope. Logging is best-effort and skipped."""
@@ -171,6 +269,104 @@ def test_hook_script_handles_non_git_cwd(log_root: Path, tmp_path: Path) -> None
     assert not no_repo_dir.exists() or not any(no_repo_dir.iterdir()), (
         f"non-git cwd should not create a no-repo log dir; got: {list(no_repo_dir.iterdir())}"
     )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'await tools.exec_command({cmd: "git status", get workdir() { return target; }});',
+        'const result = `nested: ${await tools.exec_command({cmd: "git status", workdir: target})}`;',
+    ],
+    ids=["getter-workdir", "template-interpolation"],
+)
+def test_hook_script_does_not_use_outer_repo_for_opaque_nested_workdir(
+    log_root: Path, tmp_path: Path, source: str
+) -> None:
+    """Opaque nested workdirs must not be attributed to the hook's outer repo."""
+    import os
+
+    outer_repo = tmp_path / "outer-hook-repo"
+    outer_repo.mkdir()
+    subprocess.run(["git", "init", str(outer_repo)], check=True, capture_output=True)
+
+    # If the resolver incorrectly falls back to outer_repo, a harmless fake gh
+    # gives it a successful empty PR list without making a network request.
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text("#!/bin/sh\nprintf '[]\\n'\n")
+    fake_gh.chmod(0o755)
+
+    payload = json.dumps({
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "target.py"},
+        "code": source,
+    })
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    result = subprocess.run(
+        ["bash", str(_hook_script())], input=payload.encode(), capture_output=True,
+        cwd=outer_repo, env=env, timeout=30,
+    )
+
+    assert result.returncode == 0
+    emitted = [json.loads(line) for line in result.stdout.decode().splitlines() if line.strip()]
+    assert emitted, "opaque nested context should report an unresolved-repo allow"
+    reason = emitted[-1].get("hookSpecificOutput", {}).get("additionalContext", "")
+    assert "not inside a git repo" in reason
+
+
+def test_wrapper_denies_notebook_edit_conflicting_with_open_pr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The installed wrapper enforces conflicts for NotebookEdit payloads."""
+    # Keep the helper's on-disk PR cache isolated from other tests and the
+    # operator's live merge_train cache.
+    repo = tmp_path / "notebook-conflict-fixture"
+    repo.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    notebook = repo / "analysis.ipynb"
+
+    home = tmp_path / "home"
+    config_dir = home / "merge_train"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text(json.dumps({
+        "default_enforcement": "warn",
+        "repos": {str(repo): {"alias": "merge_train", "enforcement": "block"}},
+    }))
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$2\" = \"list\" ]; then\n"
+        "  printf '%s\\n' '[{\"number\":123,\"headRefName\":\"other-branch\",\"headRefOid\":\"oid-123\"}]'\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [ \"$2\" = \"diff\" ]; then\n"
+        "  printf '%s\\n' 'analysis.ipynb'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    fake_gh.chmod(0o755)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
+
+    payload = json.dumps({
+        "tool_name": "NotebookEdit",
+        "tool_input": {"notebook_path": str(notebook), "new_source": "x"},
+    })
+    result = subprocess.run(
+        ["bash", str(_hook_script())], input=payload.encode(), capture_output=True,
+        cwd=repo, timeout=30,
+    )
+
+    assert result.returncode == 0
+    assert "CONFLICT" in result.stderr.decode()
+    output = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "PR#123" in output["systemMessage"]
 
 
 def test_hook_script_redacts_arbitrary_body_keys(log_root: Path) -> None:

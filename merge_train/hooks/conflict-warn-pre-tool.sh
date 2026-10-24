@@ -130,7 +130,69 @@ HELPER_PATH="${SCRIPT_DIR}/conflict_check_helper.py"
 if [[ ! -f "$HELPER_PATH" ]]; then
   HELPER_PATH="$HOME/.local/bin/conflict_check_helper.py"
 fi
-STDOUT="$(echo "$INPUT" | python3 "$HELPER_PATH" --runtime "$RUNTIME" 2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
+# Measured helper cost: ~2s warm (head-SHA cache) and ~7.5s cold on a repo with
+# ~100 open PRs. 12s leaves margin while staying below the CLI hook timeout.
+HELPER_TIMEOUT_SECONDS="${MERGE_TRAIN_HELPER_TIMEOUT_SECONDS-12}"
+# Bound the helper. The helper is advisory: a stale PR cache can mean one
+# `gh pr diff` per open PR, and a repo with ~100 open PRs took ~13s serially.
+# Without a bound the hook was either killed by the CLI timeout (reported as a
+# failed hook) or, on Codex, silently skipped; killing the helper's process
+# group keeps a child `gh` from outliving the hook.
+BOUNDED_RUNNER='
+import os
+import math
+import signal
+import subprocess
+import sys
+
+helper_path, runtime = sys.argv[1], sys.argv[2]
+try:
+    budget = float(sys.argv[3])
+    if not math.isfinite(budget) or budget <= 0:
+        raise ValueError("helper timeout must be a finite positive number")
+    proc = subprocess.Popen(
+        [sys.executable, helper_path, "--runtime", runtime],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(sys.stdin.read(), timeout=budget)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        stdout, stderr = proc.communicate()
+        if stderr:
+            sys.stderr.write(stderr)
+        sys.stderr.write(
+            "merge_train: conflict check timed out after %gs; allowing\n" % budget
+        )
+        raise SystemExit(124)
+    if proc.returncode != 0:
+        if stderr:
+            sys.stderr.write(stderr)
+        sys.stderr.write(
+            "merge_train: conflict helper exited %s; allowing\n" % proc.returncode
+        )
+        raise SystemExit(125)
+    if stderr:
+        sys.stderr.write(stderr)
+    if stdout:
+        sys.stdout.write(stdout)
+    raise SystemExit(proc.returncode)
+except SystemExit:
+    raise
+except Exception as exc:
+    sys.stderr.write(f"merge_train: bounded conflict check failed: {exc}; allowing\n")
+    raise SystemExit(125)
+'
+STDOUT="$(printf '%s' "$INPUT" | python3 -c "$BOUNDED_RUNNER" \
+  "$HELPER_PATH" "$RUNTIME" "$HELPER_TIMEOUT_SECONDS" \
+  2> >(tee -a "$_TEE_TARGET" >&2))" || EXIT=$?
 
 if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   TS="$(date '+%Y-%m-%dT%H:%M:%S%z')"
@@ -141,6 +203,12 @@ if [[ -n "${REPO_ROOT}" ]] && [[ -d "$LOG_DIR" ]]; then
   } >> "$LOG_FILE" 2>/dev/null || true
 fi
 
+# Fail open on a bounded-runner timeout/error for every CLI: the check is
+# advisory, and a partial or empty decision must never block the edit.
+if [[ "$EXIT" == "124" ]] || [[ "$EXIT" == "125" ]]; then
+  STDOUT=""
+  EXIT=0
+fi
 if [[ "$RUNTIME" == "agy" ]] && [[ "$EXIT" -ne 0 ]]; then
   STDOUT=""
 fi
