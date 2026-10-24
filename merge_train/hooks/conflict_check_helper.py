@@ -29,7 +29,16 @@ import re
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+
+# Open-PR metadata cache TTL. Freshness for already-cached PRs is enforced by
+# head SHA, not by this value, so it can be generous.
+CACHE_TTL_SECONDS = 300
+# Concurrent `gh pr diff` fetches. Serial fetches over ~100 open PRs took ~15s,
+# which exceeded the Codex hook time budget and disabled the check entirely.
+MAX_FETCH_WORKERS = 24
 from pathlib import Path
+from ast import literal_eval
 
 # Add merge_train source locations to sys.path so we can import the
 # package. The helper is normally called from ~/.local/bin/, where
@@ -219,7 +228,8 @@ def _resolve_enforcement(repo_root: str) -> tuple[str, str]:
 # File-mutation tool names across every CLI fanout runtime we wire a hook into.
 # Each runtime names its edit tools differently; the conflict check must
 # recognize all of them or it silently no-ops ("not a file mutation; skipping").
-#   Claude   : Edit, Write, MultiEdit, NotebookEdit  (tool_input.file_path)
+#   Claude   : Edit, Write, MultiEdit (tool_input.file_path),
+#              NotebookEdit (tool_input.notebook_path)
 #   Cursor   : Edit, Write                            (tool_input.file_path)
 #   Gemini   : write_file, replace                    (tool_input.file_path)
 #   Codex    : apply_patch                            (path(s) in patch body)
@@ -274,6 +284,7 @@ def _extract_paths(tool_name: str, tool_input: dict, payload: dict) -> list:
 
     single = (
         tool_input.get("file_path")
+        or tool_input.get("notebook_path")
         or tool_input.get("TargetFile")
         or tool_input.get("path")
         or payload.get("file_path")
@@ -283,15 +294,357 @@ def _extract_paths(tool_name: str, tool_input: dict, payload: dict) -> list:
     return [single] if single else []
 
 
-def _normalize_rel(file_path: str, repo_path: Path) -> str:
-    """Best-effort path relative to the repo root (posix); falls back to raw."""
+def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[str]]:
+    """Read static ``workdir`` literals from nested ``tools.exec_command`` calls.
+
+    Some orchestration tools wrap a command call in source text and run their
+    hooks from the outer session directory. Only explicit string literals on
+    a recognized ``tools.exec_command({...})`` call are accepted; expressions
+    and arbitrary command text are never evaluated.
+    """
+    def skip_space_and_comments(index: int) -> int:
+        while index < len(source):
+            if source[index].isspace():
+                index += 1
+            elif source.startswith("//", index):
+                newline = source.find("\n", index + 2)
+                index = len(source) if newline < 0 else newline + 1
+            elif source.startswith("/*", index):
+                close = source.find("*/", index + 2)
+                index = len(source) if close < 0 else close + 2
+            else:
+                break
+        return index
+
+    def skip_quoted(index: int) -> int:
+        quote = source[index]
+        index += 1
+        escaped = False
+        while index < len(source):
+            char = source[index]
+            index += 1
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                break
+        return index
+
+    def property_value_end(index: int) -> int:
+        curly = bracket = paren = 0
+        while index < len(source):
+            char = source[index]
+            if char in ("'", '"', "`"):
+                index = skip_quoted(index)
+                continue
+            if source.startswith("//", index):
+                newline = source.find("\n", index + 2)
+                index = len(source) if newline < 0 else newline + 1
+                continue
+            if source.startswith("/*", index):
+                close = source.find("*/", index + 2)
+                index = len(source) if close < 0 else close + 2
+                continue
+            if char == "{":
+                curly += 1
+            elif char == "}":
+                if curly == bracket == paren == 0:
+                    break
+                curly -= 1
+            elif char == "[":
+                bracket += 1
+            elif char == "]":
+                bracket -= 1
+            elif char == "(":
+                paren += 1
+            elif char == ")":
+                paren -= 1
+            elif char == "," and curly == bracket == paren == 0:
+                break
+            index += 1
+        return index
+
+    def workdir_property(object_start: int) -> tuple[bool, bool, str | None]:
+        index = object_start + 1
+        found = False
+        value: str | None = None
+        while index < len(source):
+            index = skip_space_and_comments(index)
+            if index >= len(source) or source[index] == "}":
+                return found, False, value
+            key_start = index
+            if source[index] in ("'", '"'):
+                key_end = skip_quoted(index)
+                try:
+                    key = literal_eval(source[index:key_end])
+                except (SyntaxError, ValueError):
+                    key = None
+                index = key_end
+            else:
+                while index < len(source) and (source[index].isalnum() or source[index] in "_$"):
+                    index += 1
+                key = source[key_start:index]
+            index = skip_space_and_comments(index)
+            if key in ("get", "set") and (
+                source.startswith("workdir", index)
+                and (index + len("workdir") == len(source)
+                     or not (source[index + len("workdir")].isalnum()
+                             or source[index + len("workdir")] in "_$"))
+                or index < len(source) and source[index] == "["
+            ):
+                # Accessor syntax can compute the workdir dynamically.
+                return True, True, None
+            if index >= len(source) or source[index] != ":":
+                # A bare workdir is JS shorthand, so its value is dynamic.
+                # Computed keys and spreads can also supply/override workdir;
+                # keep the whole nested context unresolved rather than falling
+                # back to the outer hook cwd.
+                if key == "workdir" or source.startswith("...", key_start) or source[key_start] == "[":
+                    return True, True, None
+                # Methods and malformed properties are not candidates.
+                index = property_value_end(index)
+                if index < len(source) and source[index] == ",":
+                    index += 1
+                    continue
+                return found, False, value
+            value_start = skip_space_and_comments(index + 1)
+            value_end = property_value_end(value_start)
+            if key == "workdir":
+                if found:
+                    return True, True, None
+                found = True
+                parsed_value = None
+                if value_start < value_end and source[value_start] in ("'", '"'):
+                    token_end = skip_quoted(value_start)
+                    if skip_space_and_comments(token_end) == value_end:
+                        try:
+                            parsed_value = literal_eval(source[value_start:token_end])
+                        except (SyntaxError, ValueError):
+                            pass
+                if isinstance(parsed_value, str) and parsed_value:
+                    value = parsed_value
+                else:
+                    return True, True, None
+            index = value_end
+            if index < len(source) and source[index] == ",":
+                index += 1
+            elif index < len(source) and source[index] == "}":
+                return found, False, value
+        return found, False, value
+
+    results: list[str | None] = []
+    recognized_workdir = False
+    unresolved_workdir = False
+    index = 0
+    while index < len(source):
+        if source[index] in ("'", '"', "`"):
+            if source[index] == "`":
+                end = skip_quoted(index)
+                template = source[index:end]
+                if "${" in template and "tools.exec_command" in template:
+                    # Nested calls inside template interpolations are source
+                    # expressions, but parsing them safely requires a full JS
+                    # parser. Preserve ambiguity instead of using outer cwd.
+                    recognized_workdir = True
+                    unresolved_workdir = True
+                index = end
+            else:
+                index = skip_quoted(index)
+            continue
+        if source.startswith("//", index):
+            newline = source.find("\n", index + 2)
+            index = len(source) if newline < 0 else newline + 1
+            continue
+        if source.startswith("/*", index):
+            close = source.find("*/", index + 2)
+            index = len(source) if close < 0 else close + 2
+            continue
+        if source.startswith("tools.exec_command", index):
+            before_ok = index == 0 or not (source[index - 1].isalnum() or source[index - 1] in "_$.")
+            after = index + len("tools.exec_command")
+            after_ok = after == len(source) or not (source[after].isalnum() or source[after] in "_$.")
+            if before_ok and after_ok:
+                call_paren = skip_space_and_comments(after)
+                if call_paren < len(source) and source[call_paren] == "(":
+                    object_start = skip_space_and_comments(call_paren + 1)
+                    if object_start < len(source) and source[object_start] == "{":
+                        found, ambiguous, value = workdir_property(object_start)
+                        # A call with no workdir uses the invoking process's
+                        # cwd. Keep it in the set of candidate bases so a
+                        # sibling call with a different explicit workdir is
+                        # recognized as ambiguous.
+                        results.append(value if found else None)
+                        recognized_workdir = True
+                        if found:
+                            unresolved_workdir = unresolved_workdir or ambiguous or value is None
+                    else:
+                        # The call may receive a named options object (or
+                        # another expression) whose workdir cannot be
+                        # inspected without evaluating source. Preserve that
+                        # unresolved nested context instead of using the
+                        # outer hook cwd.
+                        recognized_workdir = True
+                        unresolved_workdir = True
+        index += 1
+    return recognized_workdir, unresolved_workdir, results
+
+
+def _nested_exec_sources(payload: dict, tool_input: dict) -> list[str]:
+    """Return source fields that can represent executable orchestration.
+
+    OpenCode's ``apply_patch`` puts the patch body in ``tool_input.command``.
+    Its contents are mutation data, even when the added text contains a
+    literal ``tools.exec_command`` call, so it must never choose the checkout
+    whose conflicts are inspected.
+    """
+    tool_call = payload.get("toolCall") or {}
+    tool_name = (
+        tool_call.get("name") or payload.get("name") or payload.get("tool_name")
+        or payload.get("tool") or ""
+    ).lower()
+    if tool_name == "apply_patch":
+        return []
+    return [
+        source for source in (
+            payload.get("code"), payload.get("command"),
+            tool_input.get("code"), tool_input.get("command"),
+        ) if isinstance(source, str)
+    ]
+
+
+def _repo_root_for_directory(directory: str) -> str | None:
+    """Return a Git root for an explicit directory without changing cwd."""
     try:
-        abs_path = Path(file_path).resolve()
-        if abs_path.is_relative_to(repo_path):
-            return abs_path.relative_to(repo_path).as_posix()
+        resolved = subprocess.run(
+            ["git", "-C", directory, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    return resolved or None
+
+
+def _repo_root_for_mutation_path(path: str) -> str | None:
+    """Resolve a Git root through the nearest existing target ancestor."""
+    directory = Path(path).parent
+    while not directory.is_dir() and directory != directory.parent:
+        directory = directory.parent
+    return _repo_root_for_directory(str(directory))
+
+
+def _resolve_repo_root(
+    payload: dict,
+    tool_input: dict,
+    raw_paths: list[str],
+    context_dirs: list[str] | None = None,
+) -> str | None:
+    """Resolve context only from explicit hook cwd/workdir or mutation paths.
+
+    Every target must independently identify the same checkout. Nested exec
+    workdirs identify the base for relative paths. Multiple explicit roots,
+    unresolved paths, and targets outside that checkout are ambiguous; the hook
+    never searches unrelated repositories.
+    """
+    if context_dirs is None:
+        context_dirs = _mutation_context_directories(payload, tool_input)
+    if not raw_paths:
+        return _repo_root_for_directory(context_dirs[0]) if len(context_dirs) == 1 else None
+    roots: set[str] = set()
+    for path in raw_paths:
+        if not isinstance(path, str):
+            return None
+        if Path(path).is_absolute():
+            candidates = [Path(path)]
+        else:
+            if not context_dirs:
+                return None
+            candidates = [Path(directory) / path for directory in context_dirs]
+        path_roots: set[str] = set()
+        for candidate in candidates:
+            try:
+                resolved_path = candidate.resolve()
+            except (OSError, RuntimeError):
+                continue
+            root = _repo_root_for_mutation_path(str(resolved_path))
+            if root:
+                path_roots.add(root)
+        # Every target must identify exactly one root. A path outside Git, an
+        # unresolved path, or multiple candidate bases is ambiguous; do not
+        # retain a different target's root as an accidental fallback.
+        if len(path_roots) != 1:
+            return None
+        roots.update(path_roots)
+    return roots.pop() if len(roots) == 1 else None
+
+
+def _mutation_context_directories(payload: dict, tool_input: dict) -> list[str]:
+    """Return the sole trustworthy base for resolving relative targets.
+
+    Distinct bases are ambiguous even when they share a repository root.
+    Return no context so callers fail open instead of checking an arbitrary
+    same-named file selected by iteration order.
+    """
+    nested: list[str | None] = []
+    nested_seen = nested_unresolved = False
+    for source in _nested_exec_sources(payload, tool_input):
+        found, unresolved, workdirs = _scan_literal_exec_command_workdirs(source)
+        nested_seen = nested_seen or found
+        nested_unresolved = nested_unresolved or unresolved
+        nested.extend(workdirs)
+    outer = [
+        directory for directory in (tool_input.get("workdir"), tool_input.get("cwd"),
+                                     payload.get("workdir"), payload.get("cwd"))
+        if isinstance(directory, str) and directory
+    ]
+    if nested_seen and nested_unresolved:
+        return []
+    if nested_seen:
+        candidates = []
+        for directory in nested:
+            if directory is not None:
+                candidates.append(directory)
+            else:
+                # Nested calls without workdir inherit the payload/tool cwd.
+                # If that context is absent, use the process cwd already
+                # captured by this hook invocation.
+                candidates.extend(outer or [str(Path.cwd())])
+    else:
+        candidates = outer
+    if not candidates:
+        candidates = [str(Path.cwd())]
+    try:
+        absolute_outer = [str(Path(directory).resolve()) for directory in outer
+                          if Path(directory).is_absolute()]
+        if any(not Path(directory).is_absolute() for directory in candidates):
+            # Relative workdirs are meaningful only against one known outer
+            # invocation directory. Never reinterpret them against hook cwd.
+            if len(set(absolute_outer)) != 1:
+                return []
+            base = Path(absolute_outer[0])
+            candidates = [str(Path(directory) if Path(directory).is_absolute()
+                              else base / directory) for directory in candidates]
+        unique = list(dict.fromkeys(str(Path(directory).resolve()) for directory in candidates))
+    except (OSError, RuntimeError):
+        return []
+    return unique if len(unique) == 1 else []
+
+
+def _normalize_rel(
+    file_path: str, repo_path: Path, context_dirs: list[str] | None = None
+) -> str | None:
+    """Resolve a target relative to the repo root; reject out-of-root paths."""
+    try:
+        candidates = [Path(file_path)]
+        if not Path(file_path).is_absolute():
+            candidates = [Path(directory) / file_path for directory in (context_dirs or [])]
+        for candidate in candidates:
+            abs_path = candidate.resolve()
+            if abs_path.is_relative_to(repo_path):
+                return abs_path.relative_to(repo_path).as_posix()
     except Exception:
         pass
-    return file_path
+    return None
 
 
 def _collect_conflicts_for_path(
@@ -369,7 +722,7 @@ def _collect_conflicts_for_path(
 # --------------------------------------------------------------------------- #
 
 
-def main(runtime: str = "claude") -> None:
+def _main(runtime: str = "claude") -> None:
     if _IMPORT_FAILED:
         _emit("allow", "merge_train: package import failed; allowing", runtime)
         return
@@ -417,13 +770,12 @@ def main(runtime: str = "claude") -> None:
     start_line = tool_input.get("StartLine") or tool_input.get("startLine") or tool_input.get("StartLineNumber")
     end_line = tool_input.get("EndLine") or tool_input.get("endLine") or tool_input.get("EndLineNumber")
 
-    # Resolve current git repo.
-    try:
-        repo_root = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        ).stdout.strip()
-    except subprocess.CalledProcessError:
+    # Resolve Git from the hook's explicit context. Orchestrators may run the
+    # hook from their own non-repo root while the nested command names its
+    # actual workdir in the payload.
+    context_dirs = _mutation_context_directories(payload, tool_input)
+    repo_root = _resolve_repo_root(payload, tool_input, raw_paths, context_dirs)
+    if not repo_root:
         _emit("allow", "merge_train: not inside a git repo; allowing.", runtime)
         return
 
@@ -435,13 +787,17 @@ def main(runtime: str = "claude") -> None:
     enforcement_bool = enforcement == "block"
 
     # Normalize every target path relative to repo root.
-    rel_paths = [_normalize_rel(fp, repo_path) for fp in raw_paths]
+    rel_paths = [_normalize_rel(fp, repo_path, context_dirs) for fp in raw_paths]
+    if any(path is None for path in rel_paths):
+        _emit("allow", "merge_train: target path is ambiguous or outside the selected git repo; allowing.", runtime)
+        return
+    rel_paths = [path for path in rel_paths if path is not None]
     paths_label = ", ".join(f"'{p}'" for p in rel_paths)
 
     # Current branch.
     current_branch = subprocess.run(
         ["git", "branch", "--show-current"],
-        capture_output=True, text=True, check=False,
+        capture_output=True, text=True, check=False, cwd=repo_path,
     ).stdout.strip()
 
     # Detect remote OWNER/REPO for `gh --repo` scoping.
@@ -457,7 +813,7 @@ def main(runtime: str = "claude") -> None:
     try:
         remote_url = subprocess.run(
             ["git", "remote", "get-url", "origin"],
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, check=False, cwd=repo_path,
         ).stdout.strip()
         if remote_url:
             if remote_url.endswith(".git"):
@@ -474,57 +830,102 @@ def main(runtime: str = "claude") -> None:
     if repo_remote and repo_alias == repo_name:
         repo_alias = repo_remote.split("/")[-1]
 
-    # Read from cache (45s TTL).
+    # Read from cache. The TTL only has to be short enough that a PR opened
+    # seconds ago cannot cause a silent miss; the expensive part (one
+    # `gh pr diff` per open PR, up to ~100 of them) is refreshed per PR by
+    # head SHA below, so a longer TTL costs no freshness.
     cache_file = Path(f"/tmp/merge_train_cache_{repo_name}.json")
-    prs_data: dict = {}
+    cached_prs: dict = {}
     if cache_file.exists():
         try:
             cache = json.loads(cache_file.read_text())
-            if time.time() - cache.get("timestamp", 0) < 45:
-                prs_data = cache.get("prs", {})
+            if time.time() - cache.get("timestamp", 0) < CACHE_TTL_SECONDS:
+                cached_prs = cache.get("prs", {})
         except Exception:
             pass
+    prs_data: dict = dict(cached_prs)
 
-    if not prs_data:
-        # Query open PRs via GitHub CLI.
-        try:
-            cmd = ["gh", "pr", "list", "--state", "open", "--json", "number,headRefName"]
-            if repo_remote:
-                cmd += ["--repo", repo_remote]
-            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-            if proc.returncode == 0:
-                prs = json.loads(proc.stdout)
-                for pr in prs:
-                    pr_num = pr.get("number")
-                    pr_branch = pr.get("headRefName")
-                    if pr_branch == current_branch:
-                        continue
-                    diff_cmd = ["gh", "pr", "diff", str(pr_num), "--name-only"]
-                    if repo_remote:
-                        diff_cmd += ["--repo", repo_remote]
-                    diff_proc = subprocess.run(diff_cmd, capture_output=True, text=True, check=False)
-                    if diff_proc.returncode == 0:
-                        files = [f.strip() for f in diff_proc.stdout.splitlines() if f.strip()]
-                        prs_data[str(pr_num)] = {
-                            "branch": pr_branch,
-                            "files": files,
-                            "symbols": {},
-                        }
+    # Always re-list open PRs (one fast call) so newly opened PRs are seen;
+    # reuse the cached file list for any PR whose head SHA is unchanged.
+    try:
+        cmd = [
+            "gh", "pr", "list", "--state", "open",
+            "--json", "number,headRefName,headRefOid", "--limit", "500",
+        ]
+        if repo_remote:
+            cmd += ["--repo", repo_remote]
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=repo_path)
+        if proc.returncode != 0:
+            _emit(
+                "allow",
+                f"merge_train: {paths_label} — conflict check skipped (gh PR list failed); allowing.",
+                runtime,
+            )
+            return
+        prs = json.loads(proc.stdout)
+        if proc.returncode == 0:
+            reuse: dict = {}
+            pending: list = []
+            for pr in prs:
+                pr_num = pr.get("number")
+                pr_branch = pr.get("headRefName")
+                pr_oid = pr.get("headRefOid") or ""
+                if pr_branch == current_branch:
+                    prs_data.pop(str(pr_num), None)
+                    continue
+                known = cached_prs.get(str(pr_num))
+                if known and known.get("oid") == pr_oid and pr_oid:
+                    reuse[str(pr_num)] = {
+                        "branch": pr_branch,
+                        "oid": pr_oid,
+                        "files": known.get("files", []),
+                        "symbols": known.get("symbols", {}),
+                    }
+                else:
+                    pending.append((str(pr_num), pr_branch, pr_oid))
+
+            # Fetch missing diffs concurrently: with ~100 open PRs the serial
+            # loop alone cost ~15s and pushed every Codex apply_patch past its
+            # hook time budget, so the check never actually ran.
+            def _fetch(entry):
+                num, branch, oid = entry
+                diff_cmd = ["gh", "pr", "diff", num, "--name-only"]
+                if repo_remote:
+                    diff_cmd += ["--repo", repo_remote]
+                diff_proc = subprocess.run(
+                    diff_cmd, capture_output=True, text=True, check=False, cwd=repo_path
+                )
+                if diff_proc.returncode != 0:
+                    return None
+                files = [f.strip() for f in diff_proc.stdout.splitlines() if f.strip()]
+                return (num, {"branch": branch, "oid": oid, "files": files, "symbols": {}})
+
+            fetched: dict = {}
+            if pending:
+                with ThreadPoolExecutor(max_workers=MAX_FETCH_WORKERS) as pool:
+                    for result in pool.map(_fetch, pending):
+                        if result:
+                            fetched[result[0]] = result[1]
+            prs_data = dict(fetched)
+            prs_data.update(reuse)
+            try:
                 cache_file.write_text(json.dumps({
                     "timestamp": time.time(),
                     "prs": prs_data,
                 }))
-        except Exception as e:
-            print(
-                f"merge_train: checked {paths_label} — conflict check skipped due to error: {e}",
-                file=sys.stderr,
-            )
-            _emit(
-                "allow",
-                f"merge_train: {paths_label} — conflict check skipped (gh CLI error); allowing.",
-                runtime,
-            )
-            return
+            except Exception:
+                pass
+    except Exception as e:
+        print(
+            f"merge_train: checked {paths_label} — conflict check skipped due to error: {e}",
+            file=sys.stderr,
+        )
+        _emit(
+            "allow",
+            f"merge_train: {paths_label} — conflict check skipped (gh CLI error); allowing.",
+            runtime,
+        )
+        return
 
     if not prs_data:
         _silent_approve(runtime)
@@ -580,6 +981,15 @@ def main(runtime: str = "claude") -> None:
 
     # No conflicts — silent approve. No systemMessage to avoid noise on every edit.
     _silent_approve(runtime)
+
+
+def main(runtime: str = "claude") -> None:
+    """Run the hook fail-open if an unexpected payload shape breaks parsing."""
+    try:
+        _main(runtime)
+    except Exception as exc:
+        print(f"merge_train: conflict helper failed; allowing: {exc}", file=sys.stderr)
+        _emit("allow", "merge_train: conflict helper failed; allowing.", runtime)
 
 
 if __name__ == "__main__":

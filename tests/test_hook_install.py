@@ -148,6 +148,12 @@ def test_install_hooks_claude_patches_settings_json(
     write_matchers = [m for m in pre_tool_hooks if m.get("matcher") == "Write"]
     assert edit_matchers, "Edit matcher must be added"
     assert write_matchers, "Write matcher must be added"
+    # File-creating and multi-file tools must be covered too: a hook wired only
+    # for Edit silently skips Write/MultiEdit/NotebookEdit mutations.
+    for matcher in ("MultiEdit", "NotebookEdit"):
+        assert [m for m in pre_tool_hooks if m.get("matcher") == matcher], (
+            f"{matcher} matcher must be added"
+        )
 
     # The new entry references the installed conflict-warn-pre-tool.sh
     edit_cmd = " ".join(
@@ -259,7 +265,11 @@ def test_install_hooks_codex_patches_hooks_json(
     )
     assert "conflict-warn-pre-tool" in cmds
     hook = edit_matchers[0]["hooks"][0]
-    assert hook["timeout"] == 15
+    # Codex measures hook timeouts in seconds. It must exceed the wrapper's own
+    # internal helper bound (12s), otherwise the CLI kills the hook before the
+    # wrapper's fail-open path can clear the error.
+    assert hook["timeout"] == 25
+    assert hook["timeout"] > 12
     assert "statusMessage" not in hook
 
 

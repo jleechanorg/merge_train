@@ -140,10 +140,27 @@ def test_regression_agy_conflict_denies_through_main(
         json.dumps(
             {
                 "timestamp": time.time(),
-                "prs": {"99": {"branch": "other", "files": ["shared.txt"]}},
+                "prs": {
+                    "99": {
+                        "branch": "other",
+                        "oid": "head-99",
+                        "files": ["shared.txt"],
+                    }
+                },
             }
         )
     )
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = pr ] && [ \"$2\" = list ]; then\n"
+        "  printf '%s\\n' '[{\"number\":99,\"headRefName\":\"other\",\"headRefOid\":\"head-99\"}]'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    fake_gh.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     try:
         helper = _load_helper()
         monkeypatch.setattr(helper, "_resolve_enforcement", lambda root: ("block", "t"))
@@ -187,10 +204,11 @@ def test_regression_agy_helper_silent_exit_defers_to_agy(tmp_path: Path) -> None
     assert json.loads(proc.stdout)["decision"] == "ask"
 
 
-def test_helper_crash_keeps_claude_behavior(tmp_path: Path) -> None:
+def test_helper_crash_fails_open_for_claude(tmp_path: Path) -> None:
     proc = _run_wrapper_with_helper(tmp_path, "raise RuntimeError('boom')\n", "claude")
-    assert proc.returncode != 0
+    assert proc.returncode == 0, proc.stderr
     assert proc.stdout == ""
+    assert "conflict helper exited 1; allowing" in proc.stderr
 
 
 def test_regression_agy_partial_output_then_crash_emits_one_decision(
@@ -203,3 +221,35 @@ def test_regression_agy_partial_output_then_crash_emits_one_decision(
         "decision": "ask",
         "reason": "merge_train: hook error; deferring to agy",
     }
+
+
+def test_slow_helper_times_out_fail_open(tmp_path: Path) -> None:
+    """A helper slower than the budget must allow the edit, not fail the hook.
+
+    Regression: one `gh pr diff` per open PR (~100 PRs) took ~13s, so Codex
+    killed the hook at its bound and surfaced `Hook failed / hook exited with
+    code 1` on every apply_patch while the conflict check never ran.
+    """
+    import os
+
+    hooks = tmp_path / "hooks"
+    hooks.mkdir()
+    (hooks / "conflict-warn-pre-tool.sh").write_text(WRAPPER.read_text())
+    (hooks / "conflict_check_helper.py").write_text("import time\ntime.sleep(30)\n")
+    repo = _git_repo(tmp_path / "repo")
+    proc = subprocess.run(
+        ["bash", str(hooks / "conflict-warn-pre-tool.sh"), "--runtime", "codex"],
+        input=_agy_payload(repo / "f.txt", repo),
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={
+            **os.environ,
+            "MERGE_TRAIN_LOG_ROOT": str(tmp_path / "logs"),
+            "MERGE_TRAIN_HELPER_TIMEOUT_SECONDS": "1",
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == ""
+    assert "timed out after 1s; allowing" in proc.stderr
