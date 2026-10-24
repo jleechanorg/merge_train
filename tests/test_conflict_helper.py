@@ -842,18 +842,18 @@ def test_nested_exec_workdir_ignores_cmd_comments_and_nested_properties(tmp_path
     )
 
     for source in (cmd_decoy, comment_decoy, nested_decoy):
-        assert module._literal_exec_command_workdirs(source) == [str(repo)]
+        assert module._scan_literal_exec_command_workdirs(source) == (True, False, [str(repo)])
         assert module._resolve_repo_root(
             {"code": source, "cwd": str(tmp_path)}, {}, []
         ) == str(repo)
 
     # Expressions stay out of scope, and distinct actual call roots stay ambiguous.
-    assert module._literal_exec_command_workdirs(
+    assert module._scan_literal_exec_command_workdirs(
         'await tools.exec_command({workdir: repo_path});'
-    ) == []
-    assert module._literal_exec_command_workdirs(
+    ) == (True, True, [None])
+    assert module._scan_literal_exec_command_workdirs(
         'await tools.exec_command({workdir: (globalThis.sideEffect = true)});'
-    ) == []
+    ) == (True, True, [None])
     other_repo = tmp_path / "other-repo"
     other_repo.mkdir()
     subprocess.run(["git", "init", str(other_repo)], check=True, capture_output=True)

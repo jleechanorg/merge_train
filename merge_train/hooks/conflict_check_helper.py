@@ -513,11 +513,6 @@ def _nested_exec_sources(payload: dict, tool_input: dict) -> list[str]:
     ]
 
 
-def _literal_exec_command_workdirs(source: str) -> list[str]:
-    """Return parsed workdir literals for compatibility with focused callers."""
-    return [value for value in _scan_literal_exec_command_workdirs(source)[2] if value]
-
-
 def _repo_root_for_directory(directory: str) -> str | None:
     """Return a Git root for an explicit directory without changing cwd."""
     try:
