@@ -1618,13 +1618,15 @@ def test_regression_issue55_property_access_with_whitespace(tmp_path: Path) -> N
         'workdir:"/right"});',
         'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (obj.\n  return / 2),'
         'workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (obj./*note*/return / 2),'
+        'workdir:"/right"});',
     )
     for source in duplicates:
         seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
         assert dirs != ["/wrong"], f"stale '/wrong' retained for {source!r}: {dirs!r}"
         assert unresolved or dirs == ["/right"], source
 
-    for expression in ("obj. return / 2", "obj.\n  return / 2"):
+    for expression in ("obj. return / 2", "obj.\n  return / 2", "obj./*note*/return / 2"):
         source = 'await tools.exec_command({cmd: ' + expression + ', workdir:"/right"});'
         assert module._scan_literal_exec_command_workdirs(source) == (
             True, False, ["/right"]
