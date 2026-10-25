@@ -1386,3 +1386,73 @@ def test_valid_json_with_unexpected_tool_input_shape_allows_cleanly(tmp_path: Pa
     assert hook_output.get("permissionDecision") != "deny"
     assert "helper failed" in hook_output["additionalContext"]
     assert "helper failed" in output["systemMessage"]
+
+
+def test_regression_issue55_regex_literal_before_nested_workdir(tmp_path: Path) -> None:
+    """A JS regex literal must not desync the nested-workdir scan.
+
+    Issue #55: a ``/.../`` literal containing a quote character made the
+    scanner treat the rest of the value as a string, so a ``workdir:``
+    property written after it was never read and the check fell back to the
+    hook's outer cwd — the wrong-checkout class #54 set out to remove.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / "regex-target"
+    outer = tmp_path / "regex-outer"
+    for directory in (repo, outer):
+        directory.mkdir()
+        subprocess.run(["git", "init", str(directory)], check=True, capture_output=True)
+
+    sources = (
+        # Quote characters inside a character class used to open a string.
+        'await tools.exec_command({cmd: "x".replace(/[\'"]/g, ""), workdir: "'
+        + str(repo) + '"});',
+        # Escaped slash inside the class, then a string argument.
+        'await tools.exec_command({cmd: label.split(/[\\/]/)[0], workdir: "'
+        + str(repo) + '"});',
+        # Regex escape sequences before the property.
+        'await tools.exec_command({cmd: s.replace(/\\s+/g, " ").replace(/["\']/g, ""), '
+        'workdir: "' + str(repo) + '"});',
+    )
+    for source in sources:
+        assert module._scan_literal_exec_command_workdirs(source) == (True, False, [str(repo)]), source
+        assert module._mutation_context_directories(
+            {"code": source, "cwd": str(outer)}, {}
+        ) == [str(repo)], source
+
+
+def test_regression_issue55_division_is_not_a_regex(tmp_path: Path) -> None:
+    """Division stays division: the fix must not swallow text up to a later slash.
+
+    Acceptance case 3 of docs/nested_workdir_regex_literal_spec.md.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / "div-target"
+    outer = tmp_path / "div-outer"
+    for directory in (repo, outer):
+        directory.mkdir()
+        subprocess.run(["git", "init", str(directory)], check=True, capture_output=True)
+
+    for expression in ("total / count / 2", "a / b", "(x) / 2"):
+        source = (
+            'await tools.exec_command({cmd: ' + expression + ', workdir: "'
+            + str(repo) + '"});'
+        )
+        assert module._scan_literal_exec_command_workdirs(source) == (True, False, [str(repo)]), source
+        assert module._mutation_context_directories(
+            {"code": source, "cwd": str(outer)}, {}
+        ) == [str(repo)], source
