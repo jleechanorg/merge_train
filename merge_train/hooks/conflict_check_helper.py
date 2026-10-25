@@ -331,6 +331,56 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                 break
         return index
 
+    def starts_regex(index: int) -> bool:
+        """True when the ``/`` at ``index`` opens a regex literal.
+
+        JavaScript decides this from the previous token. Only the common
+        operator and keyword forms are recognised; any other slash stays
+        ordinary text, so an unrecognised case keeps the previous opaque
+        treatment rather than inventing a literal.
+        """
+        previous = index - 1
+        while previous >= 0 and source[previous].isspace():
+            previous -= 1
+        if previous < 0:
+            return True
+        if source[previous] in "(,=:[!&|?{};+-*%<>~^":
+            return True
+        return any(
+            source[: previous + 1].endswith(keyword)
+            for keyword in (
+                "return", "typeof", "case", "in", "of", "new", "delete", "void", "yield"
+            )
+        )
+
+    def skip_regex(index: int) -> int:
+        """Return the index just past the regex literal starting at ``index``.
+
+        Without this, a quote or comma inside ``/.../`` desynchronised the
+        scanner, which is how a `workdir` property written after a regex was
+        missed entirely (issue #55).
+        """
+        index += 1
+        in_class = escaped = False
+        while index < len(source):
+            char = source[index]
+            index += 1
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == "\n":
+                # Regex literals cannot span lines; treat the slash as text.
+                return index
+            elif in_class:
+                if char == "]":
+                    in_class = False
+            elif char == "[":
+                in_class = True
+            elif char == "/":
+                return index
+        return index
+
     def property_value_end(index: int) -> int:
         curly = bracket = paren = 0
         while index < len(source):
@@ -345,6 +395,9 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
             if source.startswith("/*", index):
                 close = source.find("*/", index + 2)
                 index = len(source) if close < 0 else close + 2
+                continue
+            if char == "/" and starts_regex(index):
+                index = skip_regex(index)
                 continue
             if char == "{":
                 curly += 1
@@ -459,6 +512,9 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
         if source.startswith("/*", index):
             close = source.find("*/", index + 2)
             index = len(source) if close < 0 else close + 2
+            continue
+        if source[index] == "/" and starts_regex(index):
+            index = skip_regex(index)
             continue
         if source.startswith("tools.exec_command", index):
             before_ok = index == 0 or not (source[index - 1].isalnum() or source[index - 1] in "_$.")
