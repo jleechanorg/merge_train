@@ -29,9 +29,13 @@ actually lands in instead of falling back to the hook's outer cwd.
 2. Every pre-existing scanner test keeps passing unchanged — in particular the
    ambiguity cases (getter, shorthand, computed key, spread, duplicate key,
    template interpolation, named options object) still yield no context.
-3. Division expressions are not mistaken for regex literals: `a / b / c` before a
-   `workdir` property still resolves that property.
-4. `python3 -m pytest tests/ -q` is green.
+3. Slash role is decided from the previous *token*, not its last character:
+   `origin / 2`, `begin / 2`, `value++ / 2` and `{} / 2` stay division and still
+   resolve a following `workdir`; a slash whose role is undecidable marks the
+   whole scan unresolved rather than picking a repository.
+4. A regex preceded by a block comment is still recognised as a regex, and a
+   regex that never closes leaves no previously found path trusted.
+5. `python3 -m pytest tests/ -q` is green.
 
 ## User stories
 
@@ -63,8 +67,20 @@ a live call cannot make an arbitrary local test repository have overlapping PRs.
 ## Risk
 
 The scanner now decides whether `/` opens a regex from the previous token. A wrong
-decision could swallow source up to the next `/` and hide a `workdir` property. The
-blast radius is bounded: the scanner never evaluates text, an unrecognised slash
-keeps the previous opaque treatment, and any resulting ambiguity still fails open
-with the existing "cannot identify checkout" path rather than denying. Mitigation is
-the division-expression acceptance case plus the unchanged ambiguity tests.
+decision can swallow source up to a later `/` and hide a `workdir` property, and —
+worse — can leave an *earlier* property trusted where JavaScript's duplicate-key
+semantics select a later one. That is wrong-repository attribution, not merely a
+missed property, and it is the failure this document must state plainly.
+
+Mitigations, in order of strength: the scanner never evaluates text; a slash whose
+role is undecidable (`+`, `-`, `}`, unterminated comment) marks the whole scan
+unresolved, which fails open with the existing "cannot identify checkout" path; an
+unterminated regex sets the same ambiguity signal; and no input becomes *less*
+ambiguous than it was before this change. `+`/`-`/`}` were removed from the
+regex-preceder set precisely because the first revision guessed there and a review
+finding showed it producing a wrong retained path (`origin / 2` with duplicate
+`workdir` keys).
+
+Residual, pre-existing and unchanged: a regex immediately after a block comment was
+previously unrecognised and could leave a stale earlier path trusted. It is now
+recognised, and the duplicate-key case therefore resolves to ambiguity.

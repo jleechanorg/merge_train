@@ -331,30 +331,58 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                 break
         return index
 
-    def starts_regex(index: int) -> bool:
-        """True when the ``/`` at ``index`` opens a regex literal.
+    # Set when a slash's role cannot be decided, so the whole scan is untrusted.
+    # Callers then fail open instead of keeping a possibly wrong workdir.
+    ambiguous_scan = [False]
+    regex_preceders = frozenset("(,=:[!&|?;*%<>~^")
+    value_enders = frozenset(")]\"'`")
+    regex_keywords = frozenset((
+        "return", "typeof", "case", "in", "of", "new", "delete", "void", "yield",
+    ))
 
-        JavaScript decides this from the previous token. Only the common
-        operator and keyword forms are recognised; any other slash stays
-        ordinary text, so an unrecognised case keeps the previous opaque
-        treatment rather than inventing a literal.
-        """
+    def previous_token_char(index: int) -> tuple[int, bool]:
+        """Char before ``index``, skipping whitespace and block comments."""
         previous = index - 1
-        while previous >= 0 and source[previous].isspace():
-            previous -= 1
-        if previous < 0:
-            return True
-        if source[previous] in "(,=:[!&|?{};+-*%<>~^":
-            return True
-        return any(
-            source[: previous + 1].endswith(keyword)
-            for keyword in (
-                "return", "typeof", "case", "in", "of", "new", "delete", "void", "yield"
-            )
-        )
+        while previous >= 0:
+            while previous >= 0 and source[previous].isspace():
+                previous -= 1
+            if previous >= 1 and source[previous] == "/" and source[previous - 1] == "*":
+                open_at = source.rfind("/*", 0, previous - 1)
+                if open_at < 0:
+                    return -1, True
+                previous = open_at - 1
+                continue
+            break
+        return previous, False
 
-    def skip_regex(index: int) -> int:
-        """Return the index just past the regex literal starting at ``index``.
+    def slash_role(index: int) -> str:
+        """Classify the ``/`` at ``index`` as ``regex``, ``division`` or unknown.
+
+        The decision uses the previous token, never its last character alone:
+        an identifier ending in ``in`` (``origin``, ``begin``) is division, and
+        ``+``/``-``/``}`` are honestly undecidable without a parser. Guessing
+        one of those wrong is how a duplicate ``workdir`` became a *wrong*
+        repository instead of an ambiguous one.
+        """
+        previous, uncertain = previous_token_char(index)
+        if uncertain:
+            return "ambiguous"
+        if previous < 0:
+            return "regex"
+        char = source[previous]
+        if char in regex_preceders:
+            return "regex"
+        if char in value_enders:
+            return "division"
+        if char.isalnum() or char in "_$":
+            start = previous
+            while start >= 0 and (source[start].isalnum() or source[start] in "_$"):
+                start -= 1
+            return "regex" if source[start + 1: previous + 1] in regex_keywords else "division"
+        return "ambiguous"
+
+    def skip_regex(index: int) -> tuple[int, bool]:
+        """Return ``(index_after, closed)`` for the regex literal at ``index``.
 
         Without this, a quote or comma inside ``/.../`` desynchronised the
         scanner, which is how a `workdir` property written after a regex was
@@ -369,17 +397,17 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                 escaped = False
             elif char == "\\":
                 escaped = True
-            elif char == "\n":
-                # Regex literals cannot span lines; treat the slash as text.
-                return index
+            elif char in "\n\r\u2028\u2029":
+                # Regex literals cannot span lines; the slash was ordinary text.
+                return index, False
             elif in_class:
                 if char == "]":
                     in_class = False
             elif char == "[":
                 in_class = True
             elif char == "/":
-                return index
-        return index
+                return index, True
+        return index, False
 
     def property_value_end(index: int) -> int:
         curly = bracket = paren = 0
@@ -396,8 +424,16 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                 close = source.find("*/", index + 2)
                 index = len(source) if close < 0 else close + 2
                 continue
-            if char == "/" and starts_regex(index):
-                index = skip_regex(index)
+            if char == "/":
+                role = slash_role(index)
+                if role == "regex":
+                    index, closed = skip_regex(index)
+                    if not closed:
+                        ambiguous_scan[0] = True
+                    continue
+                if role == "ambiguous":
+                    ambiguous_scan[0] = True
+                index += 1
                 continue
             if char == "{":
                 curly += 1
@@ -513,9 +549,17 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
             close = source.find("*/", index + 2)
             index = len(source) if close < 0 else close + 2
             continue
-        if source[index] == "/" and starts_regex(index):
-            index = skip_regex(index)
-            continue
+        if source[index] == "/":
+            role = slash_role(index)
+            if role == "regex":
+                index, closed = skip_regex(index)
+                if not closed:
+                    ambiguous_scan[0] = True
+                continue
+            if role == "ambiguous":
+                ambiguous_scan[0] = True
+                index += 1
+                continue
         if source.startswith("tools.exec_command", index):
             before_ok = index == 0 or not (source[index - 1].isalnum() or source[index - 1] in "_$.")
             after = index + len("tools.exec_command")
@@ -543,7 +587,7 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
                         recognized_workdir = True
                         unresolved_workdir = True
         index += 1
-    return recognized_workdir, unresolved_workdir, results
+    return recognized_workdir, unresolved_workdir or ambiguous_scan[0], results
 
 
 def _nested_exec_sources(payload: dict, tool_input: dict) -> list[str]:

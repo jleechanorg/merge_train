@@ -1456,3 +1456,85 @@ def test_regression_issue55_division_is_not_a_regex(tmp_path: Path) -> None:
         assert module._mutation_context_directories(
             {"code": source, "cwd": str(outer)}, {}
         ) == [str(repo)], source
+
+
+def test_regression_issue55_slash_role_is_decided_by_token(tmp_path: Path) -> None:
+    """Slash role comes from the previous TOKEN, not its last character.
+
+    Review finding (jlc-mini, PR #56): character-level heuristics misread
+    ``origin / 2`` because ``origin`` ends in ``in``, and misread postfix and
+    object-expression division because ``+``/``}`` were treated as regex
+    preceders. With duplicate ``workdir`` properties that turned a pre-existing
+    ambiguous context into a *wrong* repository, where JavaScript's
+    duplicate-property semantics select the later one.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    duplicate_sources = (
+        # identifier whose suffix matches a regex-preceding keyword
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (origin / 2),workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (begin / 2),workdir:"/right"});',
+        # postfix operators
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (value++ / 2),workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (value-- / 2),workdir:"/right"});',
+        # object expression
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + ({} / 2),workdir:"/right"});',
+    )
+    for source in duplicate_sources:
+        seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+        assert dirs != ["/wrong"], (
+            f"must never trust a '/wrong' workdir that JS duplicate-property "
+            f"semantics override; got {dirs!r} for {source}"
+        )
+        assert unresolved or dirs == ["/right"], source
+        assert module._mutation_context_directories({"code": source, "cwd": "/tmp"}, {}) != [
+            "/wrong"
+        ], source
+
+    # A single workdir after ordinary division must still resolve.
+    for expression in ("origin / 2", "begin / 2", "value++ / 2", "{} / 2"):
+        source = 'await tools.exec_command({cmd: ' + expression + ', workdir:"/right"});'
+        assert module._scan_literal_exec_command_workdirs(source) == (
+            True, False, ["/right"]
+        ) or module._scan_literal_exec_command_workdirs(source)[1], source
+
+
+def test_regression_issue55_regex_after_comment_and_unterminated(tmp_path: Path) -> None:
+    """A regex preceded by a comment is still a regex; an unterminated one is not.
+
+    Review findings 2 and 3 (jlc-mini, PR #56): whitespace-only lookback missed
+    ``/*note*/ /"/g``, and a regex running to EOF returned a trusted index with
+    no ambiguity signal.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Comment before the regex, duplicate workdirs: never trust the first one.
+    source = (
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo".replace(/*note*/ /"/g,""),'
+        'workdir:"/right"});'
+    )
+    assert module._scan_literal_exec_command_workdirs(source)[2] != ["/wrong"], source
+
+    # Comment before the regex, single workdir: the regex is skipped correctly.
+    source = (
+        'await tools.exec_command({cmd:"echo".replace(/*note*/ /"/g,""),'
+        'workdir:"/right"});'
+    )
+    assert module._scan_literal_exec_command_workdirs(source) == (True, False, ["/right"]), source
+
+    # Regex that never closes must not leave a previously found path trusted.
+    source = 'await tools.exec_command({workdir:"/wrong",cmd:s.replace(/"     '
+    seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+    assert not (dirs == ["/wrong"] and not unresolved), f"unterminated regex left a trusted path: {dirs!r}"
