@@ -1538,3 +1538,60 @@ def test_regression_issue55_regex_after_comment_and_unterminated(tmp_path: Path)
     source = 'await tools.exec_command({workdir:"/wrong",cmd:s.replace(/"     '
     seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
     assert not (dirs == ["/wrong"] and not unresolved), f"unterminated regex left a trusted path: {dirs!r}"
+
+
+def test_regression_issue55_keyword_operand_and_nested_comment(tmp_path: Path) -> None:
+    """Binary-operator keywords and property access are not regex preceders.
+
+    Second review round (jlc-mini, PR #56): ``of / 2`` and ``obj.in / 2`` were
+    still guessed as regex, and a block comment whose body contains ``/*``
+    defeated the backward search for the comment opener, retaining a stale
+    ``/wrong`` workdir in all three cases.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    sources = (
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (of / 2),workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (obj.in / 2),workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo".replace(/* a /* b */ /"/g,""),'
+        'workdir:"/right"});',
+    )
+    for source in sources:
+        seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+        assert dirs != ["/wrong"], f"stale '/wrong' retained for {source}: {dirs!r}"
+        assert unresolved or dirs == ["/right"], source
+        assert module._mutation_context_directories({"code": source, "cwd": "/tmp"}, {}) != [
+            "/wrong"
+        ], source
+
+
+def test_regression_issue55_ambiguity_without_a_recognised_call(tmp_path: Path) -> None:
+    """An unresolved scan must not fall back to the outer cwd when nothing matched.
+
+    Second review round (jlc-mini, PR #56) finding 2: the scan returned
+    ``(False, True, [])`` for an undecidable slash outside any
+    ``tools.exec_command`` call, and ``_mutation_context_directories`` ignored the
+    ambiguity because ``recognized_workdir`` was False, selecting the outer cwd.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Genuinely unterminated literals: `/"/` would close, so it proves nothing.
+    for source in ('await x.replace(/"abc', 'await x.replace(/* open /* nested */ /"abc'):
+        seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+        assert not seen and unresolved, (seen, unresolved, dirs)
+        context = module._mutation_context_directories({"code": source, "cwd": "/outer"}, {})
+        assert context == [], (
+            f"ambiguity ignored when no call was recognised; got {context!r} for {source!r}"
+        )

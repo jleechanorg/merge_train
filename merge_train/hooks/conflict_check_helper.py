@@ -336,37 +336,68 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
     ambiguous_scan = [False]
     regex_preceders = frozenset("(,=:[!&|?;*%<>~^")
     value_enders = frozenset(")]\"'`")
+    # Keywords after which a regex literal is the only valid reading.
     regex_keywords = frozenset((
-        "return", "typeof", "case", "in", "of", "new", "delete", "void", "yield",
+        "return", "typeof", "case", "new", "delete", "void", "yield", "throw",
     ))
+    # Binary-operator keywords take a value, which may or may not be a regex.
+    ambiguous_keywords = frozenset(("in", "of", "instanceof"))
 
-    def previous_token_char(index: int) -> tuple[int, bool]:
-        """Char before ``index``, skipping whitespace and block comments."""
-        previous = index - 1
-        while previous >= 0:
-            while previous >= 0 and source[previous].isspace():
-                previous -= 1
-            if previous >= 1 and source[previous] == "/" and source[previous - 1] == "*":
-                open_at = source.rfind("/*", 0, previous - 1)
-                if open_at < 0:
-                    return -1, True
-                previous = open_at - 1
+    def build_previous_significant() -> list:
+        """Index of the previous significant character, for every position.
+
+        Built in one forward pass so that a comment or string *body* cannot
+        shift the answer. A backward search for a comment opener is defeated by
+        a body containing ``/*``, which retained a stale workdir in review.
+        """
+        previous = [-1] * (len(source) + 1)
+        last = -1
+        index = 0
+        while index < len(source):
+            previous[index] = last
+            char = source[index]
+            if char.isspace():
+                index += 1
                 continue
-            break
-        return previous, False
+            if source.startswith("//", index):
+                end = source.find("\n", index + 2)
+                end = len(source) if end < 0 else end
+                for position in range(index, end):
+                    previous[position] = last
+                index = end
+                continue
+            if source.startswith("/*", index):
+                close = source.find("*/", index + 2)
+                end = len(source) if close < 0 else close + 2
+                for position in range(index, end):
+                    previous[position] = last
+                index = end
+                continue
+            if char in ("'", '"', "`"):
+                end = min(skip_quoted(index), len(source))
+                for position in range(index, end):
+                    previous[position] = last
+                last = end - 1
+                index = end
+                continue
+            last = index
+            index += 1
+        previous[len(source)] = last
+        return previous
+
+    previous_significant = build_previous_significant()
 
     def slash_role(index: int) -> str:
         """Classify the ``/`` at ``index`` as ``regex``, ``division`` or unknown.
 
         The decision uses the previous token, never its last character alone:
-        an identifier ending in ``in`` (``origin``, ``begin``) is division, and
-        ``+``/``-``/``}`` are honestly undecidable without a parser. Guessing
-        one of those wrong is how a duplicate ``workdir`` became a *wrong*
-        repository instead of an ambiguous one.
+        an identifier ending in a keyword (``origin``, ``begin``) is division,
+        ``obj.in`` is property access, and binary-operator keywords such as
+        ``in``/``of`` are genuinely undecidable because the operand may be a
+        regex. Guessing those wrong is how a duplicate ``workdir`` became a
+        *wrong* repository instead of an ambiguous one.
         """
-        previous, uncertain = previous_token_char(index)
-        if uncertain:
-            return "ambiguous"
+        previous = previous_significant[index] if index < len(previous_significant) else -1
         if previous < 0:
             return "regex"
         char = source[previous]
@@ -378,7 +409,14 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
             start = previous
             while start >= 0 and (source[start].isalnum() or source[start] in "_$"):
                 start -= 1
-            return "regex" if source[start + 1: previous + 1] in regex_keywords else "division"
+            word = source[start + 1: previous + 1]
+            if start >= 0 and source[start] == ".":
+                return "division"
+            if word in regex_keywords:
+                return "regex"
+            if word in ambiguous_keywords:
+                return "ambiguous"
+            return "division"
         return "ambiguous"
 
     def skip_regex(index: int) -> tuple[int, bool]:
@@ -697,7 +735,7 @@ def _mutation_context_directories(payload: dict, tool_input: dict) -> list[str]:
                                      payload.get("workdir"), payload.get("cwd"))
         if isinstance(directory, str) and directory
     ]
-    if nested_seen and nested_unresolved:
+    if nested_unresolved:
         return []
     if nested_seen:
         candidates = []
