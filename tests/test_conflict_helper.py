@@ -1595,3 +1595,37 @@ def test_regression_issue55_ambiguity_without_a_recognised_call(tmp_path: Path) 
         assert context == [], (
             f"ambiguity ignored when no call was recognised; got {context!r} for {source!r}"
         )
+
+
+def test_regression_issue55_property_access_with_whitespace(tmp_path: Path) -> None:
+    """`.`-property access is division even with whitespace before the keyword.
+
+    Third review round (jlc-mini, PR #56): the dot check only looked at the
+    character immediately before the identifier, so ``obj. return / 2`` (and the
+    newline variant) was read as a regex and duplicate ``workdir`` keys then
+    trusted the stale first path.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    duplicates = (
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (obj. return / 2),'
+        'workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (obj.\n  return / 2),'
+        'workdir:"/right"});',
+    )
+    for source in duplicates:
+        seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+        assert dirs != ["/wrong"], f"stale '/wrong' retained for {source!r}: {dirs!r}"
+        assert unresolved or dirs == ["/right"], source
+
+    for expression in ("obj. return / 2", "obj.\n  return / 2"):
+        source = 'await tools.exec_command({cmd: ' + expression + ', workdir:"/right"});'
+        assert module._scan_literal_exec_command_workdirs(source) == (
+            True, False, ["/right"]
+        ), source

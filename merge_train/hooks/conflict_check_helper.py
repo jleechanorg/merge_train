@@ -410,7 +410,12 @@ def _scan_literal_exec_command_workdirs(source: str) -> tuple[bool, bool, list[s
             while start >= 0 and (source[start].isalnum() or source[start] in "_$"):
                 start -= 1
             word = source[start + 1: previous + 1]
-            if start >= 0 and source[start] == ".":
+            # `obj. return` is property access even with whitespace after the
+            # dot, so the dot must be found across whitespace, not only adjacent.
+            before = start
+            while before >= 0 and source[before].isspace():
+                before -= 1
+            if before >= 0 and source[before] == ".":
                 return "division"
             if word in regex_keywords:
                 return "regex"

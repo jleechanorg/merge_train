@@ -84,3 +84,21 @@ finding showed it producing a wrong retained path (`origin / 2` with duplicate
 Residual, pre-existing and unchanged: a regex immediately after a block comment was
 previously unrecognised and could leave a stale earlier path trusted. It is now
 recognised, and the duplicate-key case therefore resolves to ambiguity.
+
+## Known residual limits (reviewed, documented, not fixed here)
+
+Both were reported by the independent `/dot` reviewer and are **pre-existing** — they
+are not caused by this change, and each returns the same result on the base commit:
+
+1. The previous-token table treats `//` and `/*` appearing inside a regex character
+   class as the start of a comment, because the table cannot know a slash opened a
+   regex without the very classification it is used for. A source that puts a comment
+   marker inside a regex class and also carries duplicate `workdir` keys can therefore
+   still retain an earlier path.
+2. Lexical completeness for the `regex_preceders` set `( , = : [ ! & | ? ; * % < > ~ ^`
+   is argued, not proven. An adversarial review found no counterexample attributable
+   solely to that set, which is weaker than a proof.
+
+Neither residual is new, and no reported case makes any input *less* safe than the
+base commit: the safety property claimed here is "never worse than base, and better
+for the reported inputs", not "complete JavaScript lexing".
