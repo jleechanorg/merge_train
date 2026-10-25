@@ -1386,3 +1386,248 @@ def test_valid_json_with_unexpected_tool_input_shape_allows_cleanly(tmp_path: Pa
     assert hook_output.get("permissionDecision") != "deny"
     assert "helper failed" in hook_output["additionalContext"]
     assert "helper failed" in output["systemMessage"]
+
+
+def test_regression_issue55_regex_literal_before_nested_workdir(tmp_path: Path) -> None:
+    """A JS regex literal must not desync the nested-workdir scan.
+
+    Issue #55: a ``/.../`` literal containing a quote character made the
+    scanner treat the rest of the value as a string, so a ``workdir:``
+    property written after it was never read and the check fell back to the
+    hook's outer cwd — the wrong-checkout class #54 set out to remove.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / "regex-target"
+    outer = tmp_path / "regex-outer"
+    for directory in (repo, outer):
+        directory.mkdir()
+        subprocess.run(["git", "init", str(directory)], check=True, capture_output=True)
+
+    sources = (
+        # Quote characters inside a character class used to open a string.
+        'await tools.exec_command({cmd: "x".replace(/[\'"]/g, ""), workdir: "'
+        + str(repo) + '"});',
+        # Escaped slash inside the class, then a string argument.
+        'await tools.exec_command({cmd: label.split(/[\\/]/)[0], workdir: "'
+        + str(repo) + '"});',
+        # Regex escape sequences before the property.
+        'await tools.exec_command({cmd: s.replace(/\\s+/g, " ").replace(/["\']/g, ""), '
+        'workdir: "' + str(repo) + '"});',
+    )
+    for source in sources:
+        assert module._scan_literal_exec_command_workdirs(source) == (True, False, [str(repo)]), source
+        assert module._mutation_context_directories(
+            {"code": source, "cwd": str(outer)}, {}
+        ) == [str(repo)], source
+
+
+def test_regression_issue55_division_is_not_a_regex(tmp_path: Path) -> None:
+    """Division stays division: the fix must not swallow text up to a later slash.
+
+    Acceptance case 3 of docs/nested_workdir_regex_literal_spec.md.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / "div-target"
+    outer = tmp_path / "div-outer"
+    for directory in (repo, outer):
+        directory.mkdir()
+        subprocess.run(["git", "init", str(directory)], check=True, capture_output=True)
+
+    for expression in ("total / count / 2", "a / b", "(x) / 2"):
+        source = (
+            'await tools.exec_command({cmd: ' + expression + ', workdir: "'
+            + str(repo) + '"});'
+        )
+        assert module._scan_literal_exec_command_workdirs(source) == (True, False, [str(repo)]), source
+        assert module._mutation_context_directories(
+            {"code": source, "cwd": str(outer)}, {}
+        ) == [str(repo)], source
+
+
+def test_regression_issue55_slash_role_is_decided_by_token(tmp_path: Path) -> None:
+    """Slash role comes from the previous TOKEN, not its last character.
+
+    Review finding (jlc-mini, PR #56): character-level heuristics misread
+    ``origin / 2`` because ``origin`` ends in ``in``, and misread postfix and
+    object-expression division because ``+``/``}`` were treated as regex
+    preceders. With duplicate ``workdir`` properties that turned a pre-existing
+    ambiguous context into a *wrong* repository, where JavaScript's
+    duplicate-property semantics select the later one.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    duplicate_sources = (
+        # identifier whose suffix matches a regex-preceding keyword
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (origin / 2),workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (begin / 2),workdir:"/right"});',
+        # postfix operators
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (value++ / 2),workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (value-- / 2),workdir:"/right"});',
+        # object expression
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + ({} / 2),workdir:"/right"});',
+    )
+    for source in duplicate_sources:
+        seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+        assert dirs != ["/wrong"], (
+            f"must never trust a '/wrong' workdir that JS duplicate-property "
+            f"semantics override; got {dirs!r} for {source}"
+        )
+        assert unresolved or dirs == ["/right"], source
+        assert module._mutation_context_directories({"code": source, "cwd": "/tmp"}, {}) != [
+            "/wrong"
+        ], source
+
+    # A single workdir after ordinary division must still resolve.
+    for expression in ("origin / 2", "begin / 2", "value++ / 2", "{} / 2"):
+        source = 'await tools.exec_command({cmd: ' + expression + ', workdir:"/right"});'
+        assert module._scan_literal_exec_command_workdirs(source) == (
+            True, False, ["/right"]
+        ) or module._scan_literal_exec_command_workdirs(source)[1], source
+
+
+def test_regression_issue55_regex_after_comment_and_unterminated(tmp_path: Path) -> None:
+    """A regex preceded by a comment is still a regex; an unterminated one is not.
+
+    Review findings 2 and 3 (jlc-mini, PR #56): whitespace-only lookback missed
+    ``/*note*/ /"/g``, and a regex running to EOF returned a trusted index with
+    no ambiguity signal.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Comment before the regex, duplicate workdirs: never trust the first one.
+    source = (
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo".replace(/*note*/ /"/g,""),'
+        'workdir:"/right"});'
+    )
+    assert module._scan_literal_exec_command_workdirs(source)[2] != ["/wrong"], source
+
+    # Comment before the regex, single workdir: the regex is skipped correctly.
+    source = (
+        'await tools.exec_command({cmd:"echo".replace(/*note*/ /"/g,""),'
+        'workdir:"/right"});'
+    )
+    assert module._scan_literal_exec_command_workdirs(source) == (True, False, ["/right"]), source
+
+    # Regex that never closes must not leave a previously found path trusted.
+    source = 'await tools.exec_command({workdir:"/wrong",cmd:s.replace(/"     '
+    seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+    assert not (dirs == ["/wrong"] and not unresolved), f"unterminated regex left a trusted path: {dirs!r}"
+
+
+def test_regression_issue55_keyword_operand_and_nested_comment(tmp_path: Path) -> None:
+    """Binary-operator keywords and property access are not regex preceders.
+
+    Second review round (jlc-mini, PR #56): ``of / 2`` and ``obj.in / 2`` were
+    still guessed as regex, and a block comment whose body contains ``/*``
+    defeated the backward search for the comment opener, retaining a stale
+    ``/wrong`` workdir in all three cases.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    sources = (
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (of / 2),workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (obj.in / 2),workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo".replace(/* a /* b */ /"/g,""),'
+        'workdir:"/right"});',
+    )
+    for source in sources:
+        seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+        assert dirs != ["/wrong"], f"stale '/wrong' retained for {source}: {dirs!r}"
+        assert unresolved or dirs == ["/right"], source
+        assert module._mutation_context_directories({"code": source, "cwd": "/tmp"}, {}) != [
+            "/wrong"
+        ], source
+
+
+def test_regression_issue55_ambiguity_without_a_recognised_call(tmp_path: Path) -> None:
+    """An unresolved scan must not fall back to the outer cwd when nothing matched.
+
+    Second review round (jlc-mini, PR #56) finding 2: the scan returned
+    ``(False, True, [])`` for an undecidable slash outside any
+    ``tools.exec_command`` call, and ``_mutation_context_directories`` ignored the
+    ambiguity because ``recognized_workdir`` was False, selecting the outer cwd.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Genuinely unterminated literals: `/"/` would close, so it proves nothing.
+    for source in ('await x.replace(/"abc', 'await x.replace(/* open /* nested */ /"abc'):
+        seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+        assert not seen and unresolved, (seen, unresolved, dirs)
+        context = module._mutation_context_directories({"code": source, "cwd": "/outer"}, {})
+        assert context == [], (
+            f"ambiguity ignored when no call was recognised; got {context!r} for {source!r}"
+        )
+
+
+def test_regression_issue55_property_access_with_whitespace(tmp_path: Path) -> None:
+    """`.`-property access is division even with whitespace before the keyword.
+
+    Third review round (jlc-mini, PR #56): the dot check only looked at the
+    character immediately before the identifier, so ``obj. return / 2`` (and the
+    newline variant) was read as a regex and duplicate ``workdir`` keys then
+    trusted the stale first path.
+    """
+    import importlib.util
+
+    helper = _helper_path_for_test()
+    spec = importlib.util.spec_from_file_location("conflict_check_helper", helper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    duplicates = (
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (obj. return / 2),'
+        'workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (obj.\n  return / 2),'
+        'workdir:"/right"});',
+        'await tools.exec_command({workdir:"/wrong",cmd:"echo " + (obj./*note*/return / 2),'
+        'workdir:"/right"});',
+    )
+    for source in duplicates:
+        seen, unresolved, dirs = module._scan_literal_exec_command_workdirs(source)
+        assert dirs != ["/wrong"], f"stale '/wrong' retained for {source!r}: {dirs!r}"
+        assert unresolved or dirs == ["/right"], source
+
+    for expression in ("obj. return / 2", "obj.\n  return / 2", "obj./*note*/return / 2"):
+        source = 'await tools.exec_command({cmd: ' + expression + ', workdir:"/right"});'
+        assert module._scan_literal_exec_command_workdirs(source) == (
+            True, False, ["/right"]
+        ), source
