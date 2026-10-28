@@ -1386,3 +1386,74 @@ def test_valid_json_with_unexpected_tool_input_shape_allows_cleanly(tmp_path: Pa
     assert hook_output.get("permissionDecision") != "deny"
     assert "helper failed" in hook_output["additionalContext"]
     assert "helper failed" in output["systemMessage"]
+
+
+def _trunk_repo(tmp_path: Path, name: str, branch_edit: str) -> tuple[Path, dict]:
+    """Repo whose ``origin/main`` and feature branch both edit ``shared.py``."""
+    import os
+
+    repo = tmp_path / name
+    Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
+    repo.mkdir()
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=str(repo), check=True, capture_output=True,
+        )
+
+    git("init", "-b", "main")
+    git("remote", "add", "origin", f"https://github.com/test/{name}.git")
+    (repo / "shared.py").write_text("a\nb\nc\n")
+    git("add", ".")
+    git("commit", "-m", "base")
+    git("checkout", "-b", "feature")
+    (repo / "shared.py").write_text(branch_edit)
+    git("commit", "-am", "feature edit")
+    git("checkout", "main")
+    (repo / "shared.py").write_text("a\nmain-side\nc\n")
+    git("commit", "-am", "main edit")
+    git("update-ref", "refs/remotes/origin/main", "main")
+    git("checkout", "feature")
+    _make_fake_gh(tmp_path, "[]")
+    return repo, {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+
+
+def _run_edit_hook(repo: Path, env: dict) -> subprocess.CompletedProcess:
+    payload = json.dumps({
+        "tool_name": "Edit",
+        "tool_input": {"file_path": str(repo / "other.py")},
+    }).encode()
+    return subprocess.run(
+        [sys.executable, str(_helper_path_for_test())], input=payload,
+        capture_output=True, cwd=str(repo), env=env,
+    )
+
+
+def test_branch_conflicting_with_origin_main_warns_even_with_no_open_prs(
+    tmp_path: Path,
+) -> None:
+    """The branch itself drifting into a conflict with trunk must be surfaced.
+
+    Regression: the hook only compared the edited file against other open PRs,
+    so a branch that already conflicted with origin/main (PR #10350: 64 files)
+    produced no warning at all.
+    """
+    repo, env = _trunk_repo(tmp_path, "trunkconflict", "a\nfeature-side\nc\n")
+    result = _run_edit_hook(repo, env)
+
+    assert result.returncode == 0, result.stderr.decode()
+    output = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    assert "permissionDecision" not in output.get("hookSpecificOutput", {}), output
+    message = output["systemMessage"]
+    assert "origin/main" in message and "shared.py" in message, message
+    Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
+
+
+def test_branch_that_merges_cleanly_with_origin_main_stays_silent(tmp_path: Path) -> None:
+    repo, env = _trunk_repo(tmp_path, "trunkclean", "a\nb\nc\nfeature-tail\n")
+    result = _run_edit_hook(repo, env)
+
+    assert result.returncode == 0, result.stderr.decode()
+    assert result.stdout.decode().strip() == "", result.stdout.decode()
+    Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
