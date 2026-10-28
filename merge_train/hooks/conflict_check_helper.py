@@ -630,6 +630,43 @@ def _mutation_context_directories(payload: dict, tool_input: dict) -> list[str]:
     return unique if len(unique) == 1 else []
 
 
+def _trunk_conflict_files(repo_path: Path) -> list:
+    """Files where HEAD cannot merge cleanly into the local ``origin/main`` ref.
+
+    Uses the ``git merge-tree --write-tree`` exit code (1 == conflicts); output
+    is never grepped for markers. Returns ``[]`` when clean or when the check
+    cannot run (no ref, git < 2.38), so it can only add a warning.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "merge-tree", "--write-tree", "--name-only", "-z",
+             "HEAD", "origin/main"],
+            capture_output=True, text=True, check=False, cwd=repo_path, timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if proc.returncode != 1:
+        return []
+    parts = proc.stdout.split("\0")
+    first_block = parts[: parts.index("")] if "" in parts else parts
+    return [p for p in first_block[1:] if p]
+
+
+def _trunk_conflict_note(repo_path: Path, current_branch: str) -> str:
+    """One-line warning when this branch already conflicts with origin/main."""
+    if not current_branch or current_branch in ("main", "master"):
+        return ""
+    files = _trunk_conflict_files(repo_path)
+    if not files:
+        return ""
+    shown = ", ".join(files[:10]) + (", ..." if len(files) > 10 else "")
+    return (
+        f"branch '{current_branch}' conflicts with origin/main in "
+        f"{len(files)} file{'' if len(files) == 1 else 's'} ({shown}); "
+        "merge or rebase main and re-plan before adding more."
+    )
+
+
 def _normalize_rel(
     file_path: str, repo_path: Path, context_dirs: list[str] | None = None
 ) -> str | None:
@@ -800,6 +837,8 @@ def _main(runtime: str = "claude") -> None:
         capture_output=True, text=True, check=False, cwd=repo_path,
     ).stdout.strip()
 
+    trunk_note = _trunk_conflict_note(repo_path, current_branch)
+
     # Detect remote OWNER/REPO for `gh --repo` scoping.
     # NOTE: the regex below matches github.com remotes only. For non-
     # GitHub remotes (gitlab.example.com, self-hosted Gitea, etc.) the
@@ -898,6 +937,14 @@ def _main(runtime: str = "claude") -> None:
                 diff_proc = subprocess.run(
                     diff_cmd, capture_output=True, text=True, check=False, cwd=repo_path
                 )
+                if diff_proc.returncode != 0 and repo_remote:
+                    # `gh pr diff` refuses very large PRs; the paginated files
+                    # API has no such cap (up to 3000 files).
+                    diff_proc = subprocess.run(
+                        ["gh", "api", f"repos/{repo_remote}/pulls/{num}/files",
+                         "--paginate", "--jq", ".[].filename"],
+                        capture_output=True, text=True, check=False, cwd=repo_path,
+                    )
                 if diff_proc.returncode != 0:
                     return (num, None)
                 files = [f.strip() for f in diff_proc.stdout.splitlines() if f.strip()]
@@ -933,7 +980,10 @@ def _main(runtime: str = "claude") -> None:
         return
 
     if not prs_data and not unchecked:
-        _silent_approve(runtime)
+        if trunk_note:
+            _emit("allow", f"merge_train: {trunk_note}", runtime)
+        else:
+            _silent_approve(runtime)
         return
 
     # Check every target path against other open PRs. Symbol-level line ranges
@@ -963,6 +1013,9 @@ def _main(runtime: str = "claude") -> None:
         reason = f"merge_train: {paths_label} — conflict: " + "; ".join(
             f"PR#{pr_num}/{detail}" for pr_num, _, detail in conflicts
         )
+        if trunk_note:
+            full_msg += "\n  " + trunk_note
+            reason += "; " + trunk_note
 
         if enforcement_bool:
             # Block: deny — the tool is prevented. User sees reason in chat.
@@ -993,9 +1046,14 @@ def _main(runtime: str = "claude") -> None:
             "allow",
             f"merge_train: {paths_label} — conflict check incomplete; "
             f"{len(unchecked)} open PR{'' if len(unchecked) == 1 else 's'} could not be "
-            f"diffed ({unread}); allowing. Re-run after GitHub recovers.",
+            f"diffed ({unread}); allowing. Re-run after GitHub recovers."
+            + (f" {trunk_note}" if trunk_note else ""),
             runtime,
         )
+        return
+
+    if trunk_note:
+        _emit("allow", f"merge_train: {trunk_note}", runtime)
         return
 
     # No conflicts — silent approve. No systemMessage to avoid noise on every edit.
