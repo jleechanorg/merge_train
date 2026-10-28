@@ -659,7 +659,7 @@ def _trunk_conflict_note(repo_path: Path, current_branch: str) -> str:
     files = _trunk_conflict_files(repo_path)
     if not files:
         return ""
-    shown = ", ".join(files[:5]) + (", ..." if len(files) > 5 else "")
+    shown = ", ".join(files[:10]) + (", ..." if len(files) > 10 else "")
     return (
         f"branch '{current_branch}' conflicts with origin/main in "
         f"{len(files)} file{'' if len(files) == 1 else 's'} ({shown}); "
@@ -937,6 +937,14 @@ def _main(runtime: str = "claude") -> None:
                 diff_proc = subprocess.run(
                     diff_cmd, capture_output=True, text=True, check=False, cwd=repo_path
                 )
+                if diff_proc.returncode != 0 and repo_remote:
+                    # `gh pr diff` refuses very large PRs; the paginated files
+                    # API has no such cap (up to 3000 files).
+                    diff_proc = subprocess.run(
+                        ["gh", "api", f"repos/{repo_remote}/pulls/{num}/files",
+                         "--paginate", "--jq", ".[].filename"],
+                        capture_output=True, text=True, check=False, cwd=repo_path,
+                    )
                 if diff_proc.returncode != 0:
                     return (num, None)
                 files = [f.strip() for f in diff_proc.stdout.splitlines() if f.strip()]

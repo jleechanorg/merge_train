@@ -1457,3 +1457,88 @@ def test_branch_that_merges_cleanly_with_origin_main_stays_silent(tmp_path: Path
     assert result.returncode == 0, result.stderr.decode()
     assert result.stdout.decode().strip() == "", result.stdout.decode()
     Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
+
+
+def test_too_large_pr_diff_falls_back_to_paginated_files_api(tmp_path: Path) -> None:
+    """`gh pr diff` refuses very large PRs; their files must still be checked.
+
+    Regression: PRs #10577/#10569 (hundreds of files) always reported "check
+    incomplete", so the biggest conflict sources were never compared.
+    """
+    import os
+
+    helper = _helper_path_for_test()
+    repo = tmp_path / "bigdiff"
+    Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
+    repo.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/test/bigdiff.git"],
+        cwd=str(repo), check=True, capture_output=True,
+    )
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$2\" = \"list\" ]; then\n"
+        "  printf '%s\\n' '[{\"number\":77,\"headRefName\":\"other\",\"headRefOid\":\"oid77\"}]'\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [ \"$2\" = \"diff\" ]; then\n"
+        "  echo 'HTTP 406: diff exceeded the maximum number of files (300)' >&2\n"
+        "  exit 1\n"
+        "fi\n"
+        "if [ \"$1\" = \"api\" ]; then\n"
+        "  printf '%s\\n' shared.py other.py\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n"
+    )
+    fake_gh.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    payload = json.dumps({
+        "tool_name": "Edit",
+        "tool_input": {"file_path": str(repo / "shared.py")},
+    }).encode()
+    result = subprocess.run(
+        [sys.executable, str(helper)], input=payload, capture_output=True,
+        cwd=str(repo), env=env,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    message = output["systemMessage"]
+    assert "incomplete" not in message, message
+    assert "PR#77" in message and "shared.py" in message, message
+    Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
+
+
+def test_trunk_warning_lists_up_to_ten_files(tmp_path: Path) -> None:
+    repo, env = _trunk_repo(tmp_path, "trunkmany", "a\nfeature-side\nc\n")
+    import re as _re
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=str(repo), check=True, capture_output=True,
+        )
+
+    for i in range(12):
+        (repo / f"f{i:02d}.py").write_text("base\n")
+    git("add", ".")
+    git("commit", "-m", "more base files on feature")
+    git("checkout", "main")
+    for i in range(12):
+        (repo / f"f{i:02d}.py").write_text("main\n")
+    git("add", ".")
+    git("commit", "-m", "main edits")
+    git("update-ref", "refs/remotes/origin/main", "main")
+    git("checkout", "feature")
+    for i in range(12):
+        (repo / f"f{i:02d}.py").write_text("feat\n")
+    git("commit", "-am", "feature edits")
+
+    result = _run_edit_hook(repo, env)
+    message = json.loads(result.stdout.decode().strip().splitlines()[-1])["systemMessage"]
+    assert "13 files" in message, message
+    assert len(_re.findall(r"\b\w+\.py\b", message)) == 10, message
+    Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
