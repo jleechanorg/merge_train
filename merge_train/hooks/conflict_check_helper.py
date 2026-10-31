@@ -283,12 +283,20 @@ def _apply_patch_anchor(patch: str) -> str | None:
     Codex writes hunks as a bare ``@@`` followed by context and ``-`` lines,
     with no line numbers, so the hunk body is the only way to locate the edit
     in the working tree.
+
+    A patch with more than one hunk returns ``None``: a single contiguous range
+    cannot describe disjoint hunks, and using only the first one would let a
+    conflict in a later hunk resolve to an empty symbol overlap and suppress
+    the warning entirely. Multi-hunk patches therefore keep the whole-file
+    fallback.
     """
+    hunks = [ln for ln in patch.splitlines() if ln.startswith("@@")]
+    if len(hunks) > 1:
+        return None
+
     body: list[str] = []
     for line in patch.splitlines():
         if line.startswith("@@"):
-            if body:
-                break
             continue
         if line.startswith("***"):
             continue
@@ -301,9 +309,30 @@ def _apply_patch_anchor(patch: str) -> str | None:
     return "\n".join(body) if body else None
 
 
+def _patch_text(tool_name: str, tool_input: dict, payload: dict) -> str:
+    """Return the patch body for a patch-style tool, or an empty string.
+
+    Mirrors :func:`_extract_paths`: the text may arrive on the tool input or on
+    the top-level payload, and may be a list of chunks.
+    """
+    if tool_name != "apply_patch":
+        return ""
+    raw = (
+        tool_input.get("patch")
+        or tool_input.get("command")
+        or payload.get("patch")
+        or payload.get("command")
+        or ""
+    )
+    if isinstance(raw, list):
+        raw = "\n".join(str(chunk) for chunk in raw)
+    return str(raw)
+
+
 def _derive_line_range(
     tool_name: str,
     tool_input: dict,
+    payload: dict,
     repo_path: Path,
     rel_path: str,
 ) -> tuple[int | None, int | None]:
@@ -314,6 +343,11 @@ def _derive_line_range(
     derived range the symbol-level branch is unreachable and every warning
     degrades to whole-file.
     """
+    # Symbol mode only applies to Python paths (see _collect_conflicts_for_path);
+    # for anything else the range is unused, so skip the file read entirely.
+    if not is_python_path(rel_path):
+        return None, None
+
     target = repo_path / rel_path
     try:
         if not target.is_file():
@@ -323,11 +357,8 @@ def _derive_line_range(
         return None, None
 
     anchor = tool_input.get("old_string") or tool_input.get("old_str")
-    if not anchor and tool_name == "apply_patch":
-        patch = tool_input.get("patch") or tool_input.get("command") or ""
-        if isinstance(patch, list):
-            patch = "\n".join(str(p) for p in patch)
-        anchor = _apply_patch_anchor(str(patch))
+    if not anchor:
+        anchor = _apply_patch_anchor(_patch_text(tool_name, tool_input, payload))
 
     span = _locate_anchor(source, str(anchor)) if anchor else None
     return span if span else (None, None)
@@ -1030,9 +1061,9 @@ def _main(runtime: str = "claude") -> None:
             fetched: dict = {}
             if pending:
                 with ThreadPoolExecutor(max_workers=MAX_FETCH_WORKERS) as pool:
-                    for num, payload in pool.map(_fetch, pending):
-                        if payload:
-                            fetched[num] = payload
+                    for num, pr_record in pool.map(_fetch, pending):
+                        if pr_record:
+                            fetched[num] = pr_record
                         else:
                             unchecked.append(num)
             prs_data = dict(fetched)
@@ -1074,7 +1105,7 @@ def _main(runtime: str = "claude") -> None:
         sl = start_line if single_path else None
         el = end_line if single_path else None
         if single_path and (sl is None or el is None):
-            sl, el = _derive_line_range(tool_name, tool_input, repo_path, rel_path)
+            sl, el = _derive_line_range(tool_name, tool_input, payload, repo_path, rel_path)
         conflicts.extend(
             _collect_conflicts_for_path(
                 rel_path, sl, el, prs_data, repo_path, repo_remote, cache_file

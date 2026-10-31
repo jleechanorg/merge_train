@@ -279,3 +279,61 @@ def test_write_payload_stays_whole_file(tmp_path: Path) -> None:
 
     assert rc == 0
     assert "whole-file 'mod.py'" in stdout, stdout
+
+
+def test_multi_hunk_single_file_patch_still_warns(tmp_path: Path) -> None:
+    """A multi-hunk patch must not truncate to its first hunk.
+
+    Regression for the silent-suppression hole found in review: using only hunk
+    1's span makes ``our_symbols`` non-empty, so ``whole_file_lock`` is cleared
+    and a conflict in hunk 2 resolves to an empty overlap — the hook emitted
+    nothing at all. Disjoint hunks cannot be one range, so this must fall back
+    to whole-file and still warn.
+    """
+    repo = _make_repo(tmp_path, "symmultihunk")
+    env = _fake_gh(tmp_path)
+    patch = (
+        "*** Begin Patch\n"
+        "*** Update File: mod.py\n"
+        "@@\n"
+        " def alpha(x):\n"
+        "-    return x + 1\n"
+        "+    return x + 2\n"
+        "@@\n"
+        " def beta(y):\n"
+        "-    return y * 2\n"
+        "+    return y * 5\n"
+        "*** End Patch\n"
+    )
+    payload = {"tool_name": "apply_patch", "cwd": str(repo), "tool_input": {"patch": patch}}
+    stdout, stderr, rc = _run(repo, payload, env)
+
+    assert rc == 0
+    assert stdout.strip(), f"multi-hunk patch silently suppressed the warning; stderr={stderr!r}"
+    assert "whole-file 'mod.py'" in stdout, stdout
+
+
+def test_patch_text_on_top_level_payload_is_used(tmp_path: Path) -> None:
+    """Some runtimes put the patch body on the payload, not the tool input."""
+    repo = _make_repo(tmp_path, "sympayloadpatch")
+    env = _fake_gh(tmp_path)
+    patch = (
+        "*** Begin Patch\n"
+        "*** Update File: mod.py\n"
+        "@@\n"
+        " def beta(y):\n"
+        "-    return y * 2\n"
+        "+    return y * 5\n"
+        "*** End Patch\n"
+    )
+    payload = {
+        "tool_name": "apply_patch",
+        "cwd": str(repo),
+        "patch": patch,
+        "tool_input": {"file_path": str(repo / "mod.py")},
+    }
+    stdout, _stderr, rc = _run(repo, payload, env)
+
+    assert rc == 0
+    assert "symbols in 'mod.py'" in stdout, stdout
+    assert "beta" in stdout, stdout
