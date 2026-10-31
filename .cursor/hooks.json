@@ -2,7 +2,8 @@
   "hooks": {
     "preToolUse": [
       {
-        "command": "bash ~/.local/bin/conflict-warn-pre-tool.sh"
+        "command": "bash $HOME/.local/bin/conflict-warn-pre-tool.sh --runtime cursor",
+        "matcher": "Edit|Write|StrReplace|Delete|EditNotebook"
       }
     ],
     "subagentStart": [
