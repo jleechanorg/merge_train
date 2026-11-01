@@ -65,7 +65,12 @@ for _p in (
 _IMPORT_FAILED = False
 try:
     from merge_train.symbol_discovery import symbols_from_files_in_pr
-    from merge_train.symbols import extract_symbols, is_python_path
+    from merge_train.symbols import (
+        extract_markdown_symbols,
+        extract_symbols,
+        is_python_path,
+        language_for_path,
+    )
 except ImportError:  # pragma: no cover — fail-safe fallback
     _IMPORT_FAILED = True
 
@@ -343,9 +348,9 @@ def _derive_line_range(
     derived range the symbol-level branch is unreachable and every warning
     degrades to whole-file.
     """
-    # Symbol mode only applies to Python paths (see _collect_conflicts_for_path);
-    # for anything else the range is unused, so skip the file read entirely.
-    if not is_python_path(rel_path):
+    # Symbol mode applies to every language that has an extractor; for anything
+    # else the range is unused, so skip the file read entirely.
+    if language_for_path(rel_path) is None:
         return None, None
 
     target = repo_path / rel_path
@@ -792,6 +797,55 @@ def _normalize_rel(
     return None
 
 
+def _symbols_for_source(source: str, language: str, rel_path: str) -> list:
+    """Extract local-side symbols with the same extractor the PR side uses.
+
+    Naming parity is load-bearing: ``_collect_conflicts_for_path`` clears
+    ``whole_file_lock`` as soon as the local side finds a symbol, so if the two
+    sides named the same symbol differently the intersection would be empty and
+    the hook would emit nothing at all instead of warning.
+    """
+    if language == "python":
+        return extract_symbols(source)
+    if language == "markdown":
+        return extract_markdown_symbols(source, file_stem=Path(rel_path).stem)
+
+    from merge_train.lang_extractors import extract_symbols_for_language
+
+    return _extend_declaration_only_symbols(
+        extract_symbols_for_language(source, language)
+    )
+
+
+def _extend_declaration_only_symbols(symbols: list) -> list:
+    """Give declaration-only symbols a body range.
+
+    Without a tree-sitter grammar the non-Python extractors fall back to regex and
+    report ``end == start`` (the declaration line only). An edit anchored in the
+    function body would then never overlap the symbol, so the local side would find
+    no symbol and the warning would stay whole-file for every non-Python edit. The
+    body therefore runs until the next declaration (or EOF).
+    """
+    ordered = sorted(symbols, key=lambda sym: sym.start)
+    out = []
+    for index, sym in enumerate(ordered):
+        if sym.end > sym.start:
+            out.append(sym)
+            continue
+        next_start = ordered[index + 1].start if index + 1 < len(ordered) else 10**9
+        out.append(_replace_symbol_end(sym, max(sym.start, next_start - 1)))
+    return out
+
+
+def _replace_symbol_end(sym, end: int):
+    try:
+        import dataclasses
+
+        return dataclasses.replace(sym, end=end)
+    except Exception:
+        return sym
+
+
 def _collect_conflicts_for_path(
     rel_path: str,
     start_line,
@@ -803,23 +857,22 @@ def _collect_conflicts_for_path(
 ) -> list:
     """Return conflict tuples ``(pr_num, pr_branch, detail)`` for one path.
 
-    Performs symbol-level locking when line ranges are available and the file
-    is Python; otherwise falls back to whole-file locking. ``detail`` embeds
-    ``rel_path`` so callers can aggregate across multiple paths.
+    Performs symbol-level locking when line ranges are available and the file's
+    language has an extractor; otherwise falls back to whole-file locking.
+    ``detail`` embeds ``rel_path`` so callers can aggregate across multiple paths.
     """
     our_symbols: set = set()
-    is_python = is_python_path(rel_path)
+    language = language_for_path(rel_path)
     whole_file_lock = True
 
-    if is_python and start_line is not None and end_line is not None:
+    if language is not None and start_line is not None and end_line is not None:
         try:
             start_l = int(start_line)
             end_l = int(end_line)
             file_on_disk = repo_path / rel_path
             if file_on_disk.exists():
-                source = file_on_disk.read_text()
-                symbols = extract_symbols(source)
-                for sym in symbols:
+                source = file_on_disk.read_text(errors="replace")
+                for sym in _symbols_for_source(source, language, rel_path):
                     if sym.overlaps(start_l, end_l):
                         our_symbols.add(sym.name)
                 if our_symbols:
