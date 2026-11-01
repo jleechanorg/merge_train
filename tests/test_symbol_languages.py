@@ -123,7 +123,7 @@ def _make_repo(tmp_path: Path, name: str, rel_path: str, body: str) -> Path:
         check=True,
         capture_output=True,
     )
-    (repo / rel_path).write_text(body)
+    (repo / rel_path).write_text(body, encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=str(repo), check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=str(repo), check=True, capture_output=True)
     Path(f"/tmp/merge_train_cache_{repo.name}.json").unlink(missing_ok=True)
@@ -135,6 +135,7 @@ def _fake_gh(tmp_path: Path, rel_path: str, diff: str, head_body: str) -> dict:
     script.write_text(
         "#!/usr/bin/env python3\n"
         "import sys\n"
+        "sys.stdout.reconfigure(encoding='utf-8')\n"
         "pr_list = '[{\"number\": 900, \"headRefName\": \"other\", \"headRefOid\": \"abc\"}]'\n"
         f"diff = {diff!r}\n"
         f"head = {head_body!r}\n"
@@ -380,6 +381,10 @@ def test_non_ascii_symbol_names_survive_decoding(tmp_path: Path) -> None:
     rel_path = "uni.ts"
     repo = _make_repo(tmp_path, "langunicode", rel_path, UNICODE_TS)
     env = _fake_gh(tmp_path, rel_path, UNICODE_TS_DIFF, UNICODE_TS)
+    # Run under a non-UTF-8 locale: that is the only condition in which a
+    # locale-dependent codec would actually diverge, so this is what makes the
+    # test a guard for the UTF-8 pin rather than a smoke test.
+    env = {**env, "LC_ALL": "en_US.ISO8859-1", "LANG": "en_US.ISO8859-1"}
     stdout = _run(repo, _edit(repo, rel_path, "  return x + 1;", "  return x + 2;"), env)
 
     assert stdout.strip(), "non-ASCII symbol produced no warning"
