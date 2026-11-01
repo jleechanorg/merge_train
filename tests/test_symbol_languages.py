@@ -274,3 +274,77 @@ def test_local_and_pr_side_symbol_names_agree_per_language() -> None:
         assert any("beta" in name for name in headings), headings
     finally:
         sys.path.remove(str(repo_root))
+
+
+# A long body whose last line is within the diff's 3-line context of the NEXT
+# declaration. Both sides must agree on the extended range, or the PR side
+# attributes the hunk to `beta` while the local side attributes the edit to
+# `alpha` — the intersection is then empty and the hook emits nothing.
+LONG_TS = """export function alpha(x: number): number {
+  const a = x + 1;
+  const b = a * 2;
+  const c = b - 1;
+  const d = c / 2;
+  const e = d + 3;
+  const f = e * e;
+  const g = f - 4;
+  return g;
+}
+
+export function beta(y: number): number {
+  return y * 2;
+}
+"""
+
+LONG_TS_DIFF = """diff --git a/long.ts b/long.ts
+--- a/long.ts
++++ b/long.ts
+@@ -6,7 +6,7 @@
+   const e = d + 3;
+   const f = e * e;
+   const g = f - 4;
+-  return g;
++  return g + 1;
+ }
+ 
+ export function beta(y: number): number {
+"""
+
+
+def test_body_edit_next_to_another_declaration_still_warns(tmp_path: Path) -> None:
+    """Regression: a body edit must not be silenced by neighbour attribution.
+
+    The PR's hunk context reaches ``beta``'s declaration but never ``alpha``'s, so
+    a PR side using raw declaration-only ranges resolves ``{beta}`` while the local
+    side resolves ``{alpha}``. Empty intersection plus a cleared ``whole_file_lock``
+    means no warning at all - a real same-line conflict hidden. Both sides now share
+    one range normaliser, so the hunk overlaps ``alpha`` as well.
+    """
+    rel_path = "long.ts"
+    repo = _make_repo(tmp_path, "langneighbour", rel_path, LONG_TS)
+    env = _fake_gh(tmp_path, rel_path, LONG_TS_DIFF, LONG_TS)
+    stdout = _run(repo, _edit(repo, rel_path, "  return g;", "  return g + 1;"), env)
+
+    assert stdout.strip(), "body edit was silently suppressed (neighbour attribution)"
+    assert f"symbols in '{rel_path}'" in stdout, stdout
+    assert "alpha" in stdout, stdout
+
+
+def test_both_sides_share_one_range_normaliser() -> None:
+    """The local and PR sides must normalise ranges through the same function.
+
+    A duplicated normaliser is how the two sides drift apart; this asserts the
+    shared helper exists and is the one symbol_discovery imports.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root))
+    try:
+        from merge_train import symbol_discovery, symbols
+
+        assert hasattr(symbols, "extend_declaration_only_symbols")
+        source = Path(symbol_discovery.__file__).read_text()
+        assert "extend_declaration_only_symbols" in source, (
+            "symbol_discovery must normalise PR-side ranges with the shared helper"
+        )
+    finally:
+        sys.path.remove(str(repo_root))

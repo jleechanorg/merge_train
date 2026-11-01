@@ -349,6 +349,7 @@ def symbols_from_pr_diff(
 
         # Multi-language: use lang_extractors for all other supported types
         from merge_train.lang_extractors import extract_symbols_for_language
+        from merge_train.symbols import extend_declaration_only_symbols
 
         lang = language_for_path(path)
         if lang is None:
@@ -362,7 +363,9 @@ def symbols_from_pr_diff(
         if not content:
             continue
         try:
-            symbols = extract_symbols_for_language(content, lang)
+            symbols = extend_declaration_only_symbols(
+                extract_symbols_for_language(content, lang)
+            )
             touched: set[str] = set()
             for sym in symbols:
                 for hunk in hunks:
@@ -444,6 +447,7 @@ def symbols_from_files_in_pr(
 
         # Multi-language: use lang_extractors for all other supported types
         from merge_train.lang_extractors import extract_symbols_for_language
+        from merge_train.symbols import extend_declaration_only_symbols
 
         lang = language_for_path(path)
         if lang is None:
@@ -457,7 +461,9 @@ def symbols_from_files_in_pr(
         if not content:
             continue
         try:
-            symbols = extract_symbols_for_language(content, lang)
+            symbols = extend_declaration_only_symbols(
+                extract_symbols_for_language(content, lang)
+            )
             touched: set[str] = set()
             for sym in symbols:
                 for hunk in hunks:

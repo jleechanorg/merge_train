@@ -60,12 +60,20 @@ for _p in (
     if _p.exists():
         sys.path.insert(0, str(_p))
 
+# If this helper lives inside a source checkout, that checkout's package wins:
+# a worktree's hook must exercise the worktree's code. Installs under
+# ~/.local/bin have no sibling package and keep resolving the uv tool install.
+_checkout_root = Path(__file__).resolve().parents[2]
+if (_checkout_root / "merge_train" / "__init__.py").is_file():
+    sys.path.insert(0, str(_checkout_root))
+
 # Optional imports — fail-safe if the package isn't installed. main() reports
 # the failure in the active runtime's output shape.
 _IMPORT_FAILED = False
 try:
     from merge_train.symbol_discovery import symbols_from_files_in_pr
     from merge_train.symbols import (
+        extend_declaration_only_symbols,
         extract_markdown_symbols,
         extract_symbols,
         is_python_path,
@@ -812,38 +820,9 @@ def _symbols_for_source(source: str, language: str, rel_path: str) -> list:
 
     from merge_train.lang_extractors import extract_symbols_for_language
 
-    return _extend_declaration_only_symbols(
+    return extend_declaration_only_symbols(
         extract_symbols_for_language(source, language)
     )
-
-
-def _extend_declaration_only_symbols(symbols: list) -> list:
-    """Give declaration-only symbols a body range.
-
-    Without a tree-sitter grammar the non-Python extractors fall back to regex and
-    report ``end == start`` (the declaration line only). An edit anchored in the
-    function body would then never overlap the symbol, so the local side would find
-    no symbol and the warning would stay whole-file for every non-Python edit. The
-    body therefore runs until the next declaration (or EOF).
-    """
-    ordered = sorted(symbols, key=lambda sym: sym.start)
-    out = []
-    for index, sym in enumerate(ordered):
-        if sym.end > sym.start:
-            out.append(sym)
-            continue
-        next_start = ordered[index + 1].start if index + 1 < len(ordered) else 10**9
-        out.append(_replace_symbol_end(sym, max(sym.start, next_start - 1)))
-    return out
-
-
-def _replace_symbol_end(sym, end: int):
-    try:
-        import dataclasses
-
-        return dataclasses.replace(sym, end=end)
-    except Exception:
-        return sym
 
 
 def _collect_conflicts_for_path(
