@@ -850,7 +850,10 @@ def _collect_conflicts_for_path(
             end_l = int(end_line)
             file_on_disk = repo_path / rel_path
             if file_on_disk.exists():
-                source = file_on_disk.read_text(errors="replace")
+                # Explicit UTF-8: the PR side decodes GitHub content as UTF-8,
+                # and a locale-dependent codec here could name a symbol
+                # differently on both sides and empty the intersection.
+                source = file_on_disk.read_text(encoding="utf-8", errors="replace")
                 for sym in _symbols_for_source(source, language, rel_path):
                     if sym.overlaps(start_l, end_l):
                         our_symbols.add(sym.name)

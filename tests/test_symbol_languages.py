@@ -348,3 +348,42 @@ def test_both_sides_share_one_range_normaliser() -> None:
         )
     finally:
         sys.path.remove(str(repo_root))
+
+
+UNICODE_TS = """export function caf\u00e9(x: number): number {
+  return x + 1;
+}
+
+export function beta(y: number): number {
+  return y * 2;
+}
+"""
+
+UNICODE_TS_DIFF = """diff --git a/uni.ts b/uni.ts
+--- a/uni.ts
++++ b/uni.ts
+@@ -1,3 +1,3 @@
+ export function caf\u00e9(x: number): number {
+-  return x + 1;
++  return x + 2;
+ }
+"""
+
+
+def test_non_ascii_symbol_names_survive_decoding(tmp_path: Path) -> None:
+    """Non-ASCII identifiers must name the same symbol on both sides.
+
+    Both sides now decode explicitly as UTF-8. A locale-dependent codec would risk
+    naming the symbol differently on each side, which empties the intersection while
+    ``whole_file_lock`` is already cleared - silence instead of a warning.
+    """
+    rel_path = "uni.ts"
+    repo = _make_repo(tmp_path, "langunicode", rel_path, UNICODE_TS)
+    env = _fake_gh(tmp_path, rel_path, UNICODE_TS_DIFF, UNICODE_TS)
+    stdout = _run(repo, _edit(repo, rel_path, "  return x + 1;", "  return x + 2;"), env)
+
+    assert stdout.strip(), "non-ASCII symbol produced no warning"
+    # The hook emits JSON, so non-ASCII names arrive \u-escaped; decode first.
+    message = json.loads(stdout.splitlines()[-1])["systemMessage"]
+    assert f"symbols in '{rel_path}'" in message, message
+    assert "caf\u00e9" in message, message
