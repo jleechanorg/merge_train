@@ -200,6 +200,7 @@ def test_archived_bundles_have_consistent_metadata_and_passing_scenarios(
 ) -> None:
     """Every sidecar-backed archive records metadata and passed scenarios."""
     _require_bundle(evidence_dir / "metadata.json")
+    _require_bundle(evidence_dir / "run.json")
     meta = json.loads((evidence_dir / "metadata.json").read_text())
     _archival_metadata_checks(meta)
     scenarios = json.loads((evidence_dir / "run.json").read_text()).get("scenarios", [])
@@ -209,7 +210,6 @@ def test_archived_bundles_have_consistent_metadata_and_passing_scenarios(
 
 def test_v04_bundle_scenarios_all_passed() -> None:
     """All run.json scenarios must have passed=True."""
-    _require_bundle(EVIDENCE_V04)
     run_json = EVIDENCE_V04 / "run.json"
     _require_bundle(run_json)
     data = json.loads(run_json.read_text())
@@ -219,7 +219,6 @@ def test_v04_bundle_scenarios_all_passed() -> None:
 
 def test_v04_hook_behavior_scenarios_present() -> None:
     """Phase 2 scenarios must be present in run.json."""
-    _require_bundle(EVIDENCE_V04)
     run_json = EVIDENCE_V04 / "run.json"
     _require_bundle(run_json)
     data = json.loads(run_json.read_text())
@@ -234,13 +233,12 @@ def test_v04_hook_behavior_scenarios_present() -> None:
 
 def test_v04_checksums_valid() -> None:
     """All sha256 sidecars in v0.4 bundle must be valid."""
-    _require_bundle(EVIDENCE_V04)
+    _require_bundle(EVIDENCE_V04 / "checksums.txt")
     _bundle_sha256_checks(EVIDENCE_V04)
 
 
 def test_v04_agent_transcripts_present() -> None:
     """20 slot transcripts with sidecars must exist."""
-    _require_bundle(EVIDENCE_V04)
     transcript_dir = EVIDENCE_V04 / "agent_transcripts"
     _require_bundle(transcript_dir)
     transcripts = sorted(transcript_dir.glob("slot-*.log"))
@@ -277,13 +275,14 @@ def test_v04_ao_prs_created() -> None:
 
 def test_v04_ao_checksums_valid() -> None:
     """All sha256 sidecars in AO bundle must be valid."""
-    _require_bundle(EVIDENCE_V04_AO)
+    _require_bundle(EVIDENCE_V04_AO / "checksums.txt")
     _bundle_sha256_checks(EVIDENCE_V04_AO)
 
 
 def test_v05_ao_bundle_proves_15_slots() -> None:
     """v0.5 AO bundle must prove 15 slots created PRs through ao spawn."""
-    _require_bundle(EVIDENCE_V05_AO)
+    _require_bundle(EVIDENCE_V05_AO / "metadata.json")
+    _require_bundle(EVIDENCE_V05_AO / "run.json")
     metadata = json.loads((EVIDENCE_V05_AO / "metadata.json").read_text())
     assert metadata.get("orchestration_mode") == "ao_spawn"
     assert metadata.get("slots") == 15
@@ -310,13 +309,14 @@ def test_v05_ao_bundle_proves_15_slots() -> None:
 
 def test_v05_ao_checksums_valid() -> None:
     """All sha256 sidecars in 15-slot AO bundle must be valid."""
-    _require_bundle(EVIDENCE_V05_AO)
+    _require_bundle(EVIDENCE_V05_AO / "checksums.txt")
     _bundle_sha256_checks(EVIDENCE_V05_AO)
 
 
 def test_v06_ao_bundle_proves_20_slots() -> None:
     """v0.6 AO bundle must prove 20 slots orchestrated via ao spawn with >=10 PRs."""
-    _require_bundle(EVIDENCE_V06_AO)
+    _require_bundle(EVIDENCE_V06_AO / "metadata.json")
+    _require_bundle(EVIDENCE_V06_AO / "run.json")
     metadata = json.loads((EVIDENCE_V06_AO / "metadata.json").read_text())
     assert metadata.get("orchestration_mode") == "ao_spawn"
     assert metadata.get("slots") == 20
@@ -413,3 +413,42 @@ def test_require_bundle_skips_what_sparse_hides_and_fails_what_is_gone(tmp_path:
         _require_bundle(repo / "evidence" / "v9" / "never-tracked.json", repo_root=repo)
     if isinstance(raised.value, pytest.skip.Exception):
         pytest.fail("_require_bundle skipped a never-tracked path; that hides a real deletion")
+
+
+REQUIRED_TRACKED_EVIDENCE = (
+    "evidence/v0.3/checksums.txt",
+    "evidence/v0.4/metadata.json",
+    "evidence/v0.4/run.json",
+    "evidence/v0.4/checksums.txt",
+    "evidence/v0.4-ao/metadata.json",
+    "evidence/v0.4-ao/run.json",
+    "evidence/v0.4-ao/prs.json",
+    "evidence/v0.4-ao/checksums.txt",
+    "evidence/v0.5-ao/metadata.json",
+    "evidence/v0.5-ao/run.json",
+    "evidence/v0.5-ao/checksums.txt",
+    "evidence/v0.6-ao/metadata.json",
+    "evidence/v0.6-ao/run.json",
+    "evidence/v0.6-ao/checksums.txt",
+)
+
+
+def test_required_evidence_files_are_tracked_in_git() -> None:
+    """A committed deletion must fail even where sparse checkout hides the tree.
+
+    The per-bundle tests cannot catch this on a sparse checkout: the first guard
+    satisfies ``_require_bundle`` by skipping, so a deleted sibling further down the
+    same test is never examined. Asking the git index instead is materialisation
+    independent, so it protects a full checkout, a sparse one and CI identically.
+    """
+    tracked = set(
+        subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "ls-files", "--", "evidence"],
+            capture_output=True, text=True, check=True,
+        ).stdout.splitlines()
+    )
+    missing = [rel for rel in REQUIRED_TRACKED_EVIDENCE if rel not in tracked]
+    assert missing == [], (
+        "these evidence files are no longer tracked in git (deleted, not merely "
+        f"sparse-hidden): {missing}"
+    )
