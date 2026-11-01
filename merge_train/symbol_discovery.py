@@ -92,7 +92,7 @@ def symbols_from_staged_diff(
         proc = subprocess.run(
             ["git", "diff", "--staged", "--name-only", "--diff-filter=ACMRT"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             check=False,
             cwd=str(cwd) if cwd else None,
         )
@@ -134,7 +134,7 @@ def _gh_pr_diff(pr_number: int, repo: Optional[str] = None) -> str:
         proc = subprocess.run(
             cmd,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             check=False,
         )
     except FileNotFoundError:
@@ -170,7 +170,7 @@ def _gh_pr_head_ref(pr_number: int, repo: Optional[str] = None) -> str:
             ".headRefName",
         ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
         return proc.stdout.strip()
     except (FileNotFoundError, subprocess.SubprocessError):
         return ""
@@ -199,7 +199,7 @@ def _gh_file_content_at_ref(
                 f"repos/{repo}/contents/{path}?ref={ref}",
             ],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             check=False,
         )
         if proc.returncode == 0 and proc.stdout:
@@ -212,7 +212,7 @@ def _gh_file_content_at_ref(
         proc = subprocess.run(
             ["gh", "api", f"repos/{repo}/contents/{path}?ref={ref}"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             check=False,
         )
         if proc.returncode != 0:
@@ -259,7 +259,7 @@ def _detect_repo_from_git_remote(cwd: Optional[Path] = None) -> Optional[str]:
         proc = subprocess.run(
             ["git", "remote", "get-url", "origin"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             check=False,
             cwd=str(cwd) if cwd else None,
         )
@@ -349,6 +349,7 @@ def symbols_from_pr_diff(
 
         # Multi-language: use lang_extractors for all other supported types
         from merge_train.lang_extractors import extract_symbols_for_language
+        from merge_train.symbols import extend_declaration_only_symbols
 
         lang = language_for_path(path)
         if lang is None:
@@ -362,7 +363,9 @@ def symbols_from_pr_diff(
         if not content:
             continue
         try:
-            symbols = extract_symbols_for_language(content, lang)
+            symbols = extend_declaration_only_symbols(
+                extract_symbols_for_language(content, lang)
+            )
             touched: set[str] = set()
             for sym in symbols:
                 for hunk in hunks:
@@ -444,6 +447,7 @@ def symbols_from_files_in_pr(
 
         # Multi-language: use lang_extractors for all other supported types
         from merge_train.lang_extractors import extract_symbols_for_language
+        from merge_train.symbols import extend_declaration_only_symbols
 
         lang = language_for_path(path)
         if lang is None:
@@ -457,7 +461,9 @@ def symbols_from_files_in_pr(
         if not content:
             continue
         try:
-            symbols = extract_symbols_for_language(content, lang)
+            symbols = extend_declaration_only_symbols(
+                extract_symbols_for_language(content, lang)
+            )
             touched: set[str] = set()
             for sym in symbols:
                 for hunk in hunks:

@@ -87,6 +87,36 @@ LANG_EXTENSIONS = {
 }
 
 
+def extend_declaration_only_symbols(symbols: list) -> list:
+    """Give declaration-only symbols a body range.
+
+    Without a tree-sitter grammar the non-Python extractors fall back to regex and
+    report ``end == start`` (the declaration line only). A hunk or edit landing in
+    the function body would then never overlap the symbol, so whole-file locking
+    would persist and the per-symbol precision would never engage.
+
+    Both sides of the conflict comparison MUST use this same normalisation. If one
+    side extends and the other does not, the two sides name different symbols and
+    the intersection is empty while ``whole_file_lock`` is already cleared — the
+    hook then emits nothing at all instead of warning.
+    """
+    ordered = sorted(symbols, key=lambda sym: sym.start)
+    out = []
+    for index, sym in enumerate(ordered):
+        if sym.end > sym.start:
+            out.append(sym)
+            continue
+        next_start = ordered[index + 1].start if index + 1 < len(ordered) else 10**9
+        end = max(sym.start, next_start - 1)
+        try:
+            import dataclasses
+
+            out.append(dataclasses.replace(sym, end=end))
+        except Exception:
+            out.append(sym)
+    return out
+
+
 def language_for_path(path: str) -> str | None:
     """Return the language identifier for a file path, or None if unsupported.
 
