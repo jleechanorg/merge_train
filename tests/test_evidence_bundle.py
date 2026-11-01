@@ -110,7 +110,7 @@ def test_v03_agent_transcripts_have_checksum_sidecars() -> None:
 
 
 def test_v03_checksums_cover_all_required_artifact_files() -> None:
-    _require_bundle(EVIDENCE_V03)
+    _require_bundle(EVIDENCE_V03 / "checksums.txt")
     checksum_lines = (EVIDENCE_V03 / "checksums.txt").read_text().splitlines()
     checksum_paths = {
         line.split(maxsplit=1)[1] for line in checksum_lines if line.strip()
@@ -178,7 +178,6 @@ def _bundle_sha256_checks(evidence_dir: Path) -> None:
 
 def test_v04_bundle_exists() -> None:
     """v0.4 evidence bundle must exist (proves E2E rerun at HEAD debeaf9a)."""
-    _require_bundle(EVIDENCE_V04)
     _require_bundle(EVIDENCE_V04 / "metadata.json")
 
 
@@ -200,7 +199,7 @@ def test_archived_bundles_have_consistent_metadata_and_passing_scenarios(
     evidence_dir: Path,
 ) -> None:
     """Every sidecar-backed archive records metadata and passed scenarios."""
-    _require_bundle(evidence_dir)
+    _require_bundle(evidence_dir / "metadata.json")
     meta = json.loads((evidence_dir / "metadata.json").read_text())
     _archival_metadata_checks(meta)
     scenarios = json.loads((evidence_dir / "run.json").read_text()).get("scenarios", [])
@@ -256,7 +255,6 @@ def test_v04_agent_transcripts_present() -> None:
 
 def test_v04_ao_bundle_exists() -> None:
     """AO orchestration evidence bundle must exist (proves ao spawn drives area-lock)."""
-    _require_bundle(EVIDENCE_V04_AO)
     _require_bundle(EVIDENCE_V04_AO / "run.json")
 
 
@@ -338,7 +336,7 @@ def test_v06_ao_bundle_proves_20_slots() -> None:
 
 def test_v06_ao_checksums_valid() -> None:
     """All sha256 sidecars in 20-slot AO bundle must be valid."""
-    _require_bundle(EVIDENCE_V06_AO)
+    _require_bundle(EVIDENCE_V06_AO / "checksums.txt")
     _bundle_sha256_checks(EVIDENCE_V06_AO)
 
 
@@ -396,10 +394,22 @@ def test_require_bundle_skips_what_sparse_hides_and_fails_what_is_gone(tmp_path:
         subprocess.run(cmd, check=True, capture_output=True)
 
     present = repo / "docs" / "readme.md"
-    _require_bundle(present, repo_root=repo)  # no raise
+    # An existing artifact must return quietly. Asserting it here keeps a helper
+    # that skips everything from turning this file green by skipping.
+    try:
+        _require_bundle(present, repo_root=repo)
+    except pytest.skip.Exception:
+        pytest.fail("_require_bundle skipped an artifact that exists")
+    except pytest.fail.Exception:
+        pytest.fail("_require_bundle failed an artifact that exists")
 
     with pytest.raises(pytest.skip.Exception):
         _require_bundle(repo / "evidence" / "v9" / "metadata.json", repo_root=repo)
 
-    with pytest.raises(pytest.fail.Exception):
+    # Catch both outcomes and assert which one happened: pytest.raises(fail) alone
+    # lets a skip escape as a SKIP, which would report green while nothing was
+    # checked - the exact vacuous pass this file exists to stop.
+    with pytest.raises((pytest.fail.Exception, pytest.skip.Exception)) as raised:
         _require_bundle(repo / "evidence" / "v9" / "never-tracked.json", repo_root=repo)
+    if isinstance(raised.value, pytest.skip.Exception):
+        pytest.fail("_require_bundle skipped a never-tracked path; that hides a real deletion")
