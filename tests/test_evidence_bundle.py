@@ -43,19 +43,20 @@ def _sparse_checkout_excludes(path: Path, repo_root: Path | None = None) -> bool
         return False
 
 
-def _require_bundle(path: Path) -> None:
+def _require_bundle(path: Path, repo_root: Path | None = None) -> None:
     """Skip when sparse checkout hid the artifact; fail when it is genuinely gone."""
     if path.exists():
         return
-    if _sparse_checkout_excludes(path):
+    root = repo_root or REPO_ROOT
+    if _sparse_checkout_excludes(path, repo_root=repo_root):
         pytest.skip(
-            f"{path.relative_to(REPO_ROOT).as_posix()} is tracked but excluded by this "
+            f"{path.relative_to(root).as_posix()} is tracked but excluded by this "
             "checkout's sparse-checkout patterns; run `git sparse-checkout add evidence` "
             "to materialise it locally (CI checks out the full tree)"
         )
     pytest.fail(
-        f"{path.relative_to(REPO_ROOT).as_posix()} is missing from the repository; "
-        "restore it with `git checkout -- evidence/`"
+        f"{path.relative_to(root).as_posix()} is missing from the repository; "
+        "restore it from a commit that still has it, e.g. `git checkout <sha> -- evidence/`"
     )
 
 
@@ -211,8 +212,7 @@ def test_v04_bundle_scenarios_all_passed() -> None:
     """All run.json scenarios must have passed=True."""
     _require_bundle(EVIDENCE_V04)
     run_json = EVIDENCE_V04 / "run.json"
-    if not run_json.is_file():
-        return
+    _require_bundle(run_json)
     data = json.loads(run_json.read_text())
     failed = [s["name"] for s in data.get("scenarios", []) if not s.get("passed")]
     assert failed == [], f"v0.4 scenarios failed: {failed}"
@@ -222,8 +222,7 @@ def test_v04_hook_behavior_scenarios_present() -> None:
     """Phase 2 scenarios must be present in run.json."""
     _require_bundle(EVIDENCE_V04)
     run_json = EVIDENCE_V04 / "run.json"
-    if not run_json.is_file():
-        return
+    _require_bundle(run_json)
     data = json.loads(run_json.read_text())
     names = {s["name"] for s in data.get("scenarios", [])}
     assert (
@@ -263,8 +262,7 @@ def test_v04_ao_bundle_exists() -> None:
 
 def test_v04_ao_scenarios_all_passed() -> None:
     """AO bundle run.json: all scenarios must have passed=True."""
-    if not (EVIDENCE_V04_AO / "run.json").is_file():
-        return
+    _require_bundle(EVIDENCE_V04_AO / "run.json")
     data = json.loads((EVIDENCE_V04_AO / "run.json").read_text())
     assert data.get("orchestration_mode") == "ao_spawn", "unexpected orchestration_mode"
     failed = [s["name"] for s in data.get("scenarios", []) if not s.get("passed")]
@@ -273,8 +271,7 @@ def test_v04_ao_scenarios_all_passed() -> None:
 
 def test_v04_ao_prs_created() -> None:
     """AO bundle prs.json: all slots must have real PR URLs."""
-    if not (EVIDENCE_V04_AO / "prs.json").is_file():
-        return
+    _require_bundle(EVIDENCE_V04_AO / "prs.json")
     slots = json.loads((EVIDENCE_V04_AO / "prs.json").read_text())
     no_pr = [s["slot"] for s in slots if not s.get("pr_url")]
     assert no_pr == [], f"AO slots missing PRs: {no_pr}"
@@ -341,8 +338,7 @@ def test_v06_ao_bundle_proves_20_slots() -> None:
 
 def test_v06_ao_checksums_valid() -> None:
     """All sha256 sidecars in 20-slot AO bundle must be valid."""
-    if not EVIDENCE_V06_AO.is_dir():
-        return
+    _require_bundle(EVIDENCE_V06_AO)
     _bundle_sha256_checks(EVIDENCE_V06_AO)
 
 
@@ -374,3 +370,36 @@ def test_sparse_checkout_detection_distinguishes_hidden_from_missing(tmp_path: P
 
     # A path that was never tracked must not be excused as sparse-hidden.
     assert _sparse_checkout_excludes(repo / "evidence" / "v9" / "absent.json", repo_root=repo) is False
+
+    # A tracked, in-pattern file that is simply deleted from disk must NOT be
+    # excused as sparse-hidden: it carries an 'H' bit, not 'S'. Without this the
+    # detector could pass by treating any tracked path as hidden.
+    (repo / "docs" / "readme.md").unlink()
+    assert _sparse_checkout_excludes(repo / "docs" / "readme.md", repo_root=repo) is False
+
+
+def test_require_bundle_skips_what_sparse_hides_and_fails_what_is_gone(tmp_path: Path) -> None:
+    """``_require_bundle`` must route the two cases to different outcomes."""
+    repo = tmp_path / "guard_repo"
+    (repo / "evidence" / "v9").mkdir(parents=True)
+    (repo / "evidence" / "v9" / "metadata.json").write_text("{}")
+    (repo / "docs").mkdir()
+    (repo / "docs" / "readme.md").write_text("x")
+    for cmd in (
+        ["git", "init", "-q", str(repo)],
+        ["git", "-C", str(repo), "config", "user.email", "t@t"],
+        ["git", "-C", str(repo), "config", "user.name", "t"],
+        ["git", "-C", str(repo), "add", "."],
+        ["git", "-C", str(repo), "commit", "-qm", "init"],
+        ["git", "-C", str(repo), "sparse-checkout", "set", "docs"],
+    ):
+        subprocess.run(cmd, check=True, capture_output=True)
+
+    present = repo / "docs" / "readme.md"
+    _require_bundle(present, repo_root=repo)  # no raise
+
+    with pytest.raises(pytest.skip.Exception):
+        _require_bundle(repo / "evidence" / "v9" / "metadata.json", repo_root=repo)
+
+    with pytest.raises(pytest.fail.Exception):
+        _require_bundle(repo / "evidence" / "v9" / "never-tracked.json", repo_root=repo)
