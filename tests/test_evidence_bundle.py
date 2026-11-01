@@ -16,6 +16,49 @@ EVIDENCE_V05_AO = REPO_ROOT / "evidence" / "v0.5-ao"
 EVIDENCE_V06_AO = REPO_ROOT / "evidence" / "v0.6-ao"
 
 
+def _sparse_checkout_excludes(path: Path, repo_root: Path | None = None) -> bool:
+    """True when git deliberately does not materialise *path* in this checkout.
+
+    A sparse checkout skips tracked files without deleting them, so a bundle can be
+    present in the repository and absent from the working tree. Treating that as a
+    missing bundle reports repo breakage that does not exist, and it masks the real
+    baseline: on this machine 198 tracked files under evidence/ are skip-worktree'd,
+    which turned 11 passing tests into local failures.
+    """
+    try:
+        root = repo_root or REPO_ROOT
+        setting = subprocess.run(
+            ["git", "-C", str(root), "config", "--bool", "core.sparseCheckout"],
+            capture_output=True, text=True, check=False,
+        ).stdout.strip()
+        if setting != "true":
+            return False
+        rel = path.relative_to(root).as_posix()
+        listed = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-v", rel],
+            capture_output=True, text=True, check=False,
+        ).stdout
+        return any(line.startswith("S ") for line in listed.splitlines())
+    except (OSError, ValueError):
+        return False
+
+
+def _require_bundle(path: Path) -> None:
+    """Skip when sparse checkout hid the artifact; fail when it is genuinely gone."""
+    if path.exists():
+        return
+    if _sparse_checkout_excludes(path):
+        pytest.skip(
+            f"{path.relative_to(REPO_ROOT).as_posix()} is tracked but excluded by this "
+            "checkout's sparse-checkout patterns; run `git sparse-checkout add evidence` "
+            "to materialise it locally (CI checks out the full tree)"
+        )
+    pytest.fail(
+        f"{path.relative_to(REPO_ROOT).as_posix()} is missing from the repository; "
+        "restore it with `git checkout -- evidence/`"
+    )
+
+
 def _archive_guard_script() -> str:
     workflow = (REPO_ROOT / ".github/workflows/evidence-guard.yml").read_text()
     return workflow.split("      - name: Verify archival sha256 sidecars\n        run: |\n", 1)[1]
@@ -52,6 +95,7 @@ def test_archive_guard_fails_when_a_declared_bundle_lacks_metadata() -> None:
 
 def test_v03_agent_transcripts_have_checksum_sidecars() -> None:
     transcript_dir = EVIDENCE_V03 / "agent_transcripts"
+    _require_bundle(transcript_dir)
     transcripts = sorted(transcript_dir.glob("slot-*.log"))
 
     assert len(transcripts) == 20
@@ -65,6 +109,7 @@ def test_v03_agent_transcripts_have_checksum_sidecars() -> None:
 
 
 def test_v03_checksums_cover_all_required_artifact_files() -> None:
+    _require_bundle(EVIDENCE_V03)
     checksum_lines = (EVIDENCE_V03 / "checksums.txt").read_text().splitlines()
     checksum_paths = {
         line.split(maxsplit=1)[1] for line in checksum_lines if line.strip()
@@ -132,12 +177,8 @@ def _bundle_sha256_checks(evidence_dir: Path) -> None:
 
 def test_v04_bundle_exists() -> None:
     """v0.4 evidence bundle must exist (proves E2E rerun at HEAD debeaf9a)."""
-    assert (
-        EVIDENCE_V04.is_dir()
-    ), "evidence/v0.4/ missing — rerun scripts/e2e_md_area_lock_runner.py at current HEAD"
-    assert (
-        EVIDENCE_V04 / "metadata.json"
-    ).is_file(), "evidence/v0.4/metadata.json missing"
+    _require_bundle(EVIDENCE_V04)
+    _require_bundle(EVIDENCE_V04 / "metadata.json")
 
 
 def _archival_metadata_checks(metadata: dict[str, object]) -> None:
@@ -158,6 +199,7 @@ def test_archived_bundles_have_consistent_metadata_and_passing_scenarios(
     evidence_dir: Path,
 ) -> None:
     """Every sidecar-backed archive records metadata and passed scenarios."""
+    _require_bundle(evidence_dir)
     meta = json.loads((evidence_dir / "metadata.json").read_text())
     _archival_metadata_checks(meta)
     scenarios = json.loads((evidence_dir / "run.json").read_text()).get("scenarios", [])
@@ -167,8 +209,7 @@ def test_archived_bundles_have_consistent_metadata_and_passing_scenarios(
 
 def test_v04_bundle_scenarios_all_passed() -> None:
     """All run.json scenarios must have passed=True."""
-    if not EVIDENCE_V04.is_dir():
-        return
+    _require_bundle(EVIDENCE_V04)
     run_json = EVIDENCE_V04 / "run.json"
     if not run_json.is_file():
         return
@@ -179,8 +220,7 @@ def test_v04_bundle_scenarios_all_passed() -> None:
 
 def test_v04_hook_behavior_scenarios_present() -> None:
     """Phase 2 scenarios must be present in run.json."""
-    if not EVIDENCE_V04.is_dir():
-        return
+    _require_bundle(EVIDENCE_V04)
     run_json = EVIDENCE_V04 / "run.json"
     if not run_json.is_file():
         return
@@ -196,18 +236,15 @@ def test_v04_hook_behavior_scenarios_present() -> None:
 
 def test_v04_checksums_valid() -> None:
     """All sha256 sidecars in v0.4 bundle must be valid."""
-    if not EVIDENCE_V04.is_dir():
-        return
+    _require_bundle(EVIDENCE_V04)
     _bundle_sha256_checks(EVIDENCE_V04)
 
 
 def test_v04_agent_transcripts_present() -> None:
     """20 slot transcripts with sidecars must exist."""
-    if not EVIDENCE_V04.is_dir():
-        return
+    _require_bundle(EVIDENCE_V04)
     transcript_dir = EVIDENCE_V04 / "agent_transcripts"
-    if not transcript_dir.is_dir():
-        return
+    _require_bundle(transcript_dir)
     transcripts = sorted(transcript_dir.glob("slot-*.log"))
     assert len(transcripts) == 20, f"expected 20 transcripts, got {len(transcripts)}"
     missing_sidecars = [
@@ -220,10 +257,8 @@ def test_v04_agent_transcripts_present() -> None:
 
 def test_v04_ao_bundle_exists() -> None:
     """AO orchestration evidence bundle must exist (proves ao spawn drives area-lock)."""
-    assert (
-        EVIDENCE_V04_AO.is_dir()
-    ), "evidence/v0.4-ao/ missing — run scripts/e2e_ao_orchestrated_runner.py"
-    assert (EVIDENCE_V04_AO / "run.json").is_file(), "evidence/v0.4-ao/run.json missing"
+    _require_bundle(EVIDENCE_V04_AO)
+    _require_bundle(EVIDENCE_V04_AO / "run.json")
 
 
 def test_v04_ao_scenarios_all_passed() -> None:
@@ -247,17 +282,13 @@ def test_v04_ao_prs_created() -> None:
 
 def test_v04_ao_checksums_valid() -> None:
     """All sha256 sidecars in AO bundle must be valid."""
-    if not EVIDENCE_V04_AO.is_dir():
-        return
+    _require_bundle(EVIDENCE_V04_AO)
     _bundle_sha256_checks(EVIDENCE_V04_AO)
 
 
 def test_v05_ao_bundle_proves_15_slots() -> None:
     """v0.5 AO bundle must prove 15 slots created PRs through ao spawn."""
-    assert EVIDENCE_V05_AO.is_dir(), (
-        "evidence/v0.5-ao/ missing — run scripts/e2e_ao_orchestrated_runner.py "
-        "--slots 15 --kill-session-after-pr"
-    )
+    _require_bundle(EVIDENCE_V05_AO)
     metadata = json.loads((EVIDENCE_V05_AO / "metadata.json").read_text())
     assert metadata.get("orchestration_mode") == "ao_spawn"
     assert metadata.get("slots") == 15
@@ -284,17 +315,13 @@ def test_v05_ao_bundle_proves_15_slots() -> None:
 
 def test_v05_ao_checksums_valid() -> None:
     """All sha256 sidecars in 15-slot AO bundle must be valid."""
-    if not EVIDENCE_V05_AO.is_dir():
-        return
+    _require_bundle(EVIDENCE_V05_AO)
     _bundle_sha256_checks(EVIDENCE_V05_AO)
 
 
 def test_v06_ao_bundle_proves_20_slots() -> None:
     """v0.6 AO bundle must prove 20 slots orchestrated via ao spawn with >=10 PRs."""
-    assert EVIDENCE_V06_AO.is_dir(), (
-        "evidence/v0.6-ao/ missing — run scripts/e2e_ao_orchestrated_runner.py "
-        "--slots 20 --kill-session-after-pr"
-    )
+    _require_bundle(EVIDENCE_V06_AO)
     metadata = json.loads((EVIDENCE_V06_AO / "metadata.json").read_text())
     assert metadata.get("orchestration_mode") == "ao_spawn"
     assert metadata.get("slots") == 20
@@ -317,3 +344,33 @@ def test_v06_ao_checksums_valid() -> None:
     if not EVIDENCE_V06_AO.is_dir():
         return
     _bundle_sha256_checks(EVIDENCE_V06_AO)
+
+
+def test_sparse_checkout_detection_distinguishes_hidden_from_missing(tmp_path: Path) -> None:
+    """The detector must separate a sparse-hidden file from a genuinely absent one."""
+    repo = tmp_path / "sparse_repo"
+    (repo / "evidence" / "v9").mkdir(parents=True)
+    (repo / "evidence" / "v9" / "metadata.json").write_text("{}")
+    (repo / "docs").mkdir()
+    (repo / "docs" / "readme.md").write_text("x")
+    for cmd in (
+        ["git", "init", "-q", str(repo)],
+        ["git", "-C", str(repo), "config", "user.email", "t@t"],
+        ["git", "-C", str(repo), "config", "user.name", "t"],
+        ["git", "-C", str(repo), "add", "."],
+        ["git", "-C", str(repo), "commit", "-qm", "init"],
+    ):
+        subprocess.run(cmd, check=True, capture_output=True)
+
+    hidden = repo / "evidence" / "v9" / "metadata.json"
+    assert _sparse_checkout_excludes(hidden, repo_root=repo) is False, "no sparse yet"
+
+    subprocess.run(
+        ["git", "-C", str(repo), "sparse-checkout", "set", "docs"],
+        check=True, capture_output=True,
+    )
+    assert not hidden.exists(), "sparse checkout should have hidden the tracked file"
+    assert _sparse_checkout_excludes(hidden, repo_root=repo) is True
+
+    # A path that was never tracked must not be excused as sparse-hidden.
+    assert _sparse_checkout_excludes(repo / "evidence" / "v9" / "absent.json", repo_root=repo) is False
