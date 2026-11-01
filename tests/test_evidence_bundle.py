@@ -417,6 +417,8 @@ def test_require_bundle_skips_what_sparse_hides_and_fails_what_is_gone(tmp_path:
 
 REQUIRED_TRACKED_EVIDENCE = (
     "evidence/v0.3/checksums.txt",
+    "evidence/v0.3/metadata.json",
+    "evidence/v0.3/run.json",
     "evidence/v0.4/metadata.json",
     "evidence/v0.4/run.json",
     "evidence/v0.4/checksums.txt",
