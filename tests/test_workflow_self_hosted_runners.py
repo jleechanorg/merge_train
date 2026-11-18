@@ -65,6 +65,12 @@ def test_no_github_hosted_runners_in_workflows() -> None:
                     f"{wf_path.name}:{job_id} matrix contains hosted runner {m_str!r}"
                 )
 
+            job_env = job_cfg.get("env") or {}
+            for env_str in _flatten_strings(job_env):
+                assert "runner." not in env_str, (
+                    f"{wf_path.name}:{job_id}.env cannot reference runner context: {env_str!r}"
+                )
+
 
 def test_tests_workflow_covers_linux_and_native_macos() -> None:
     tests_wf = yaml.safe_load((WORKFLOWS_DIR / "tests.yml").read_text(encoding="utf-8"))

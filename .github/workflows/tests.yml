@@ -67,7 +67,6 @@ jobs:
     name: pytest (macOS native)
     runs-on: [self-hosted-native-macos]
     env:
-      GIT_CONFIG_GLOBAL: ${{ runner.temp }}/gitconfig-macos
       GIT_AUTHOR_NAME: merge_train CI
       GIT_AUTHOR_EMAIL: ci@merge-train.test
       GIT_COMMITTER_NAME: merge_train CI
@@ -81,6 +80,8 @@ jobs:
 
       - name: Configure isolated git identity (for tests that init tmp repos)
         run: |
+          export GIT_CONFIG_GLOBAL="${RUNNER_TEMP}/gitconfig-macos"
+          echo "GIT_CONFIG_GLOBAL=${GIT_CONFIG_GLOBAL}" >> "$GITHUB_ENV"
           git config --global user.email "ci@merge-train.test"
           git config --global user.name "merge_train CI"
 
