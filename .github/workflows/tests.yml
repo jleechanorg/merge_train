@@ -19,6 +19,7 @@ jobs:
     name: pytest (py${{ matrix.python-version }} on linux)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, self-hosted-mikey]
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -75,6 +76,7 @@ jobs:
     name: pytest (macOS native)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted-native-macos]
+    timeout-minutes: 20
     env:
       GIT_AUTHOR_NAME: merge_train CI
       GIT_AUTHOR_EMAIL: ci@merge-train.test
@@ -140,7 +142,8 @@ jobs:
     name: install.sh smoke (self-hosted linux)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, self-hosted-mikey]
-    needs: [pytest, pytest-macos]
+    timeout-minutes: 20
+    needs: [pytest]
     steps:
       - name: Checkout merge_train
         uses: actions/checkout@v4
@@ -158,38 +161,96 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
+      - name: Create isolated smoke environment and target repo
+        run: |
+          RUNNER_REAL_HOME="$HOME"
+          SMOKE_DIR="$(mktemp -d "${RUNNER_TEMP}/installer-smoke.XXXXXX")"
+          SMOKE_HOME="${SMOKE_DIR}/home"
+          mkdir -p \
+            "$SMOKE_HOME/.local/bin" \
+            "$SMOKE_DIR/uv-tools" \
+            "$SMOKE_HOME/.config" \
+            "$SMOKE_HOME/.local/share" \
+            "$SMOKE_DIR/cache" \
+            "$SMOKE_DIR/target_repo"
+          {
+            echo "RUNNER_REAL_HOME=${RUNNER_REAL_HOME}"
+            echo "SMOKE_DIR=${SMOKE_DIR}"
+            echo "SMOKE_HOME=${SMOKE_HOME}"
+            echo "UV_TOOL_DIR=${SMOKE_DIR}/uv-tools"
+            echo "UV_TOOL_BIN_DIR=${SMOKE_HOME}/.local/bin"
+            echo "XDG_CONFIG_HOME=${SMOKE_HOME}/.config"
+            echo "XDG_DATA_HOME=${SMOKE_HOME}/.local/share"
+            echo "XDG_CACHE_HOME=${SMOKE_DIR}/cache"
+          } >> "$GITHUB_ENV"
+          git -C "$SMOKE_DIR/target_repo" init -q -b main
+          cat > "$SMOKE_DIR/snapshot-home.sh" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          base="$1"
+          for rel in .local/bin .claude .codex .gemini .config/opencode; do
+            target="$base/$rel"
+            if [ -L "$target" ]; then
+              printf 'SYMLINK %s -> %s\n' "$rel" "$(readlink "$target")"
+            elif [ -d "$target" ]; then
+              printf 'DIR %s\n' "$rel"
+              find "$target" -maxdepth 3 \( -type f -o -type l \) | LC_ALL=C sort | while IFS= read -r item; do
+                if [ -L "$item" ]; then
+                  printf '  L %s -> %s\n' "$item" "$(readlink "$item")"
+                else
+                  printf '  F %s %s\n' "$(sha256sum "$item" | awk '{print $1}')" "$item"
+                fi
+              done
+            elif [ -e "$target" ]; then
+              printf 'FILE %s %s\n' "$(sha256sum "$target" | awk '{print $1}')" "$target"
+            else
+              printf 'ABSENT %s\n' "$rel"
+            fi
+          done
+          EOF
+          chmod +x "$SMOKE_DIR/snapshot-home.sh"
+          "$SMOKE_DIR/snapshot-home.sh" "$RUNNER_REAL_HOME" > "$SMOKE_DIR/real-home-before.txt"
+
       - name: Set up Python 3.12 venv
         run: |
           VENV_DIR="${RUNNER_TEMP}/venv-smoke"
           uv venv --clear "$VENV_DIR" --python "3.12"
-          # GITHUB_PATH prepends each line, so write $VENV_DIR/bin LAST for highest precedence.
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          # GITHUB_PATH prepends each line, so write $SMOKE_HOME/.local/bin LAST for highest precedence.
           echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
-
-      - name: Create a fresh target repo
-        run: |
-          SMOKE_DIR="$(mktemp -d "${RUNNER_TEMP}/installer-smoke.XXXXXX")"
-          echo "SMOKE_DIR=${SMOKE_DIR}" >> "$GITHUB_ENV"
-          mkdir -p "$SMOKE_DIR/target_repo"
-          cd "$SMOKE_DIR/target_repo"
-          git init -q -b main
+          echo "$SMOKE_HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run install.sh against the target repo
+        env:
+          HOME: ${{ env.SMOKE_HOME }}
         run: ./merge_train/install.sh "$SMOKE_DIR/target_repo"
 
       - name: Verify install artifacts
+        env:
+          HOME: ${{ env.SMOKE_HOME }}
         run: |
           set +o pipefail
           test -L "$SMOKE_DIR/target_repo/.git/hooks/pre-commit" || { echo "hook not symlinked"; exit 1; }
+          RESOLVED_PC="$(command -v predict-conflicts || true)"
+          if [ "$RESOLVED_PC" != "$SMOKE_HOME/.local/bin/predict-conflicts" ]; then
+            echo "expected predict-conflicts at $SMOKE_HOME/.local/bin/predict-conflicts, got ${RESOLVED_PC:-<missing>}"
+            exit 1
+          fi
+          test -f "$SMOKE_HOME/.local/bin/predict-spawn-check.sh" || { echo "predict-spawn-check.sh missing from SMOKE_HOME"; exit 1; }
           predict-conflicts --help | head -5
+          "$SMOKE_DIR/snapshot-home.sh" "$RUNNER_REAL_HOME" > "$SMOKE_DIR/real-home-after.txt"
+          diff -u "$SMOKE_DIR/real-home-before.txt" "$SMOKE_DIR/real-home-after.txt"
 
       - name: Re-run install.sh (idempotency check)
+        env:
+          HOME: ${{ env.SMOKE_HOME }}
         run: ./merge_train/install.sh "$SMOKE_DIR/target_repo" 2>&1 | tee "$SMOKE_DIR/rerun.log"
         # The re-run must NOT clobber the hook.
 
       - name: Confirm idempotent — hook untouched
         run: |
           grep -q "already symlinked" "$SMOKE_DIR/rerun.log"
+          "$SMOKE_DIR/snapshot-home.sh" "$RUNNER_REAL_HOME" > "$SMOKE_DIR/real-home-after-rerun.txt"
+          diff -u "$SMOKE_DIR/real-home-before.txt" "$SMOKE_DIR/real-home-after-rerun.txt"
 
       - name: Clean up isolated smoke venv
         if: always()
