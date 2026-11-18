@@ -17,7 +17,8 @@ concurrency:
 jobs:
   pytest:
     name: pytest (py${{ matrix.python-version }} on linux)
-    runs-on: [self-hosted, self-hosted-mikey]
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, self-hosted-mikey]
     strategy:
       fail-fast: false
       matrix:
@@ -29,8 +30,10 @@ jobs:
           fetch-depth: 8  # evidence freshness tests allow bundles up to 5 commits behind HEAD
           persist-credentials: false
 
-      - name: Configure git identity (for tests that init tmp repos)
+      - name: Configure isolated git identity (for tests that init tmp repos)
         run: |
+          export GIT_CONFIG_GLOBAL="${RUNNER_TEMP}/gitconfig-${{ matrix.python-version }}"
+          echo "GIT_CONFIG_GLOBAL=${GIT_CONFIG_GLOBAL}" >> "$GITHUB_ENV"
           git config --global user.email "ci@merge-train.test"
           git config --global user.name "merge_train CI"
 
@@ -64,12 +67,13 @@ jobs:
       - name: Clean up isolated venv
         if: always()
         run: |
-          if [ -n "${RUNNER_TEMP:-}" ] && [ -d "${RUNNER_TEMP}/venv-${{ matrix.python-version }}" ]; then
-            rm -rf "${RUNNER_TEMP}/venv-${{ matrix.python-version }}"
+          if [ -n "${RUNNER_TEMP:-}" ]; then
+            rm -rf "${RUNNER_TEMP}/venv-${{ matrix.python-version }}" "${RUNNER_TEMP}/gitconfig-${{ matrix.python-version }}"
           fi
 
   pytest-macos:
     name: pytest (macOS native)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted-native-macos]
     env:
       GIT_AUTHOR_NAME: merge_train CI
@@ -103,19 +107,27 @@ jobs:
             "$VENV_DIR/bin/pip" install -q --upgrade pip
             "$VENV_DIR/bin/pip" install -q -e '.[dev]'
           fi
-          echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "$HOME/bin" >> "$GITHUB_PATH"
+          echo "VENV_PYTHON=${VENV_DIR}/bin/python" >> "$GITHUB_ENV"
+          # GITHUB_PATH prepends each line, so the LAST line written has highest precedence.
           echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          if [ -d "$HOME/.nvm/versions/node/v22.22.0/bin" ]; then
+            echo "$HOME/.nvm/versions/node/v22.22.0/bin" >> "$GITHUB_PATH"
+          fi
+          echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
 
       - name: Show versions
         run: |
           set +o pipefail
-          python --version
+          python -c 'import os, sys; assert os.path.realpath(sys.prefix) == os.path.realpath(os.environ["RUNNER_TEMP"] + "/venv-macos"), (sys.prefix, sys.executable); print(sys.version, sys.executable)'
+          "$VENV_PYTHON" -c 'import os, sys; assert os.path.realpath(sys.prefix) == os.path.realpath(os.environ["RUNNER_TEMP"] + "/venv-macos"), (sys.prefix, sys.executable); print(sys.version, sys.executable)'
+          node --version || true
           git --version
 
       - name: Run pytest
-        run: python -m pytest tests/ -q
+        run: |
+          "$VENV_PYTHON" -m pytest tests/ -q
 
       - name: Clean up isolated macOS venv
         if: always()
@@ -126,7 +138,8 @@ jobs:
 
   installer-smoke:
     name: install.sh smoke (self-hosted linux)
-    runs-on: [self-hosted, self-hosted-mikey]
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, self-hosted-mikey]
     needs: [pytest, pytest-macos]
     steps:
       - name: Checkout merge_train
@@ -135,8 +148,10 @@ jobs:
           path: merge_train
           persist-credentials: false
 
-      - name: Configure git identity
+      - name: Configure isolated git identity
         run: |
+          export GIT_CONFIG_GLOBAL="${RUNNER_TEMP}/gitconfig-smoke"
+          echo "GIT_CONFIG_GLOBAL=${GIT_CONFIG_GLOBAL}" >> "$GITHUB_ENV"
           git config --global user.email "ci@merge-train.test"
           git config --global user.name "merge_train CI"
 
@@ -147,35 +162,41 @@ jobs:
         run: |
           VENV_DIR="${RUNNER_TEMP}/venv-smoke"
           uv venv --clear "$VENV_DIR" --python "3.12"
-          echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
+          # GITHUB_PATH prepends each line, so write $VENV_DIR/bin LAST for highest precedence.
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
 
       - name: Create a fresh target repo
         run: |
-          mkdir -p target_repo
-          cd target_repo
+          SMOKE_DIR="$(mktemp -d "${RUNNER_TEMP}/installer-smoke.XXXXXX")"
+          echo "SMOKE_DIR=${SMOKE_DIR}" >> "$GITHUB_ENV"
+          mkdir -p "$SMOKE_DIR/target_repo"
+          cd "$SMOKE_DIR/target_repo"
           git init -q -b main
 
       - name: Run install.sh against the target repo
-        run: ./merge_train/install.sh "$(pwd)/target_repo"
+        run: ./merge_train/install.sh "$SMOKE_DIR/target_repo"
 
       - name: Verify install artifacts
         run: |
           set +o pipefail
-          test -L target_repo/.git/hooks/pre-commit || { echo "hook not symlinked"; exit 1; }
+          test -L "$SMOKE_DIR/target_repo/.git/hooks/pre-commit" || { echo "hook not symlinked"; exit 1; }
           predict-conflicts --help | head -5
 
       - name: Re-run install.sh (idempotency check)
-        run: ./merge_train/install.sh "$(pwd)/target_repo" 2>&1 | tee rerun.log
+        run: ./merge_train/install.sh "$SMOKE_DIR/target_repo" 2>&1 | tee "$SMOKE_DIR/rerun.log"
         # The re-run must NOT clobber the hook.
 
       - name: Confirm idempotent — hook untouched
         run: |
-          grep -q "already symlinked" rerun.log
+          grep -q "already symlinked" "$SMOKE_DIR/rerun.log"
 
       - name: Clean up isolated smoke venv
         if: always()
         run: |
-          if [ -n "${RUNNER_TEMP:-}" ] && [ -d "${RUNNER_TEMP}/venv-smoke" ]; then
-            rm -rf "${RUNNER_TEMP}/venv-smoke"
+          if [ -n "${RUNNER_TEMP:-}" ]; then
+            rm -rf "${RUNNER_TEMP}/venv-smoke" "${RUNNER_TEMP}/gitconfig-smoke"
+          fi
+          if [ -n "${SMOKE_DIR:-}" ] && [ -d "${SMOKE_DIR}" ]; then
+            rm -rf "${SMOKE_DIR}"
           fi
