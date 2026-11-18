@@ -16,35 +16,33 @@ concurrency:
 
 jobs:
   pytest:
-    name: pytest (py${{ matrix.python-version }} on ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: pytest (py${{ matrix.python-version }} on linux)
+    runs-on: [self-hosted, self-hosted-mikey]
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
         python-version: ["3.10", "3.11", "3.12"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 8  # evidence freshness tests allow bundles up to 5 commits behind HEAD
+          persist-credentials: false
 
       - name: Configure git identity (for tests that init tmp repos)
         run: |
           git config --global user.email "ci@merge-train.test"
           git config --global user.name "merge_train CI"
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Install package + dev deps
+      - name: Set up Python ${{ matrix.python-version }} venv and install package
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[dev]'
+          VENV_DIR="${RUNNER_TEMP}/venv-${{ matrix.python-version }}"
+          uv venv --clear "$VENV_DIR" --python "${{ matrix.python-version }}"
+          uv pip install --python "$VENV_DIR/bin/python" -e '.[dev]'
+          echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
 
       - name: Show versions
         # `head` closes the pipe early; under bash's default pipefail this
@@ -53,25 +51,83 @@ jobs:
           set +o pipefail
           python --version
           git --version
-          pip show merge_train | head -5
+          uv pip show --python "${RUNNER_TEMP}/venv-${{ matrix.python-version }}/bin/python" merge_train | head -5
 
       - name: Run pytest
         run: python -m pytest tests/ -q
 
+      - name: Clean up isolated venv
+        if: always()
+        run: |
+          if [ -n "${RUNNER_TEMP:-}" ] && [ -d "${RUNNER_TEMP}/venv-${{ matrix.python-version }}" ]; then
+            rm -rf "${RUNNER_TEMP}/venv-${{ matrix.python-version }}"
+          fi
+
+  pytest-macos:
+    name: pytest (macOS native)
+    runs-on: [self-hosted-native-macos]
+    env:
+      GIT_CONFIG_GLOBAL: ${{ runner.temp }}/gitconfig-macos
+      GIT_AUTHOR_NAME: merge_train CI
+      GIT_AUTHOR_EMAIL: ci@merge-train.test
+      GIT_COMMITTER_NAME: merge_train CI
+      GIT_COMMITTER_EMAIL: ci@merge-train.test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 8  # evidence freshness tests allow bundles up to 5 commits behind HEAD
+          persist-credentials: false
+
+      - name: Configure isolated git identity (for tests that init tmp repos)
+        run: |
+          git config --global user.email "ci@merge-train.test"
+          git config --global user.name "merge_train CI"
+
+      - name: Set up isolated Python venv and install package
+        run: |
+          export PATH="$HOME/.local/bin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+          PY_BIN="$(command -v python3.12 || command -v python3.13 || command -v python3)"
+          VENV_DIR="${RUNNER_TEMP}/venv-macos"
+          if command -v uv >/dev/null 2>&1; then
+            uv venv --clear "$VENV_DIR" --python "$PY_BIN"
+            uv pip install --python "$VENV_DIR/bin/python" -e '.[dev]'
+          else
+            "$PY_BIN" -m venv --clear "$VENV_DIR"
+            "$VENV_DIR/bin/pip" install -q --upgrade pip
+            "$VENV_DIR/bin/pip" install -q -e '.[dev]'
+          fi
+          echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+
+      - name: Show versions
+        run: |
+          set +o pipefail
+          python --version
+          git --version
+
+      - name: Run pytest
+        run: python -m pytest tests/ -q
+
+      - name: Clean up isolated macOS venv
+        if: always()
+        run: |
+          if [ -n "${RUNNER_TEMP:-}" ]; then
+            rm -rf "${RUNNER_TEMP}/venv-macos" "${RUNNER_TEMP}/gitconfig-macos"
+          fi
+
   installer-smoke:
-    name: install.sh smoke (ubuntu-latest)
-    runs-on: ubuntu-latest
-    needs: pytest
+    name: install.sh smoke (self-hosted linux)
+    runs-on: [self-hosted, self-hosted-mikey]
+    needs: [pytest, pytest-macos]
     steps:
       - name: Checkout merge_train
         uses: actions/checkout@v4
         with:
           path: merge_train
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+          persist-credentials: false
 
       - name: Configure git identity
         run: |
@@ -80,6 +136,13 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.12 venv
+        run: |
+          VENV_DIR="${RUNNER_TEMP}/venv-smoke"
+          uv venv --clear "$VENV_DIR" --python "3.12"
+          echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Create a fresh target repo
         run: |
@@ -103,3 +166,10 @@ jobs:
       - name: Confirm idempotent — hook untouched
         run: |
           grep -q "already symlinked" rerun.log
+
+      - name: Clean up isolated smoke venv
+        if: always()
+        run: |
+          if [ -n "${RUNNER_TEMP:-}" ] && [ -d "${RUNNER_TEMP}/venv-smoke" ]; then
+            rm -rf "${RUNNER_TEMP}/venv-smoke"
+          fi
